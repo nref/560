@@ -6,71 +6,68 @@
 #include "transaction.h"
 
 bool_t
-xdr_transaction_t (XDR *xdrs, transaction_t *objp)
+xdr_transaction_t(xdrs, objp)
+	XDR *xdrs;
+	transaction_t *objp;
 {
-	register int32_t *buf;
-
+	int32_t *buf;
 
 	if (xdrs->x_op == XDR_ENCODE) {
-		buf = XDR_INLINE (xdrs, 3 * BYTES_PER_XDR_UNIT);
+		buf = (int32_t *)XDR_INLINE(xdrs, 3 * BYTES_PER_XDR_UNIT);
 		if (buf == NULL) {
-			 if (!xdr_int (xdrs, &objp->to))
-				 return FALSE;
-			 if (!xdr_int (xdrs, &objp->from))
-				 return FALSE;
-			 if (!xdr_int (xdrs, &objp->account))
-				 return FALSE;
-
+			if (!xdr_int(xdrs, &objp->to))
+				return (FALSE);
+			if (!xdr_int(xdrs, &objp->from))
+				return (FALSE);
+			if (!xdr_int(xdrs, &objp->account))
+				return (FALSE);
 		} else {
-		IXDR_PUT_LONG(buf, objp->to);
-		IXDR_PUT_LONG(buf, objp->from);
-		IXDR_PUT_LONG(buf, objp->account);
+			IXDR_PUT_LONG(buf, objp->to);
+			IXDR_PUT_LONG(buf, objp->from);
+			IXDR_PUT_LONG(buf, objp->account);
 		}
-		 if (!xdr_double (xdrs, &objp->value))
-			 return FALSE;
-		return TRUE;
+		if (!xdr_double(xdrs, &objp->value))
+			return (FALSE);
 	} else if (xdrs->x_op == XDR_DECODE) {
-		buf = XDR_INLINE (xdrs, 3 * BYTES_PER_XDR_UNIT);
+		buf = (int32_t *)XDR_INLINE(xdrs, 3 * BYTES_PER_XDR_UNIT);
 		if (buf == NULL) {
-			 if (!xdr_int (xdrs, &objp->to))
-				 return FALSE;
-			 if (!xdr_int (xdrs, &objp->from))
-				 return FALSE;
-			 if (!xdr_int (xdrs, &objp->account))
-				 return FALSE;
-
+			if (!xdr_int(xdrs, &objp->to))
+				return (FALSE);
+			if (!xdr_int(xdrs, &objp->from))
+				return (FALSE);
+			if (!xdr_int(xdrs, &objp->account))
+				return (FALSE);
 		} else {
-		objp->to = IXDR_GET_LONG(buf);
-		objp->from = IXDR_GET_LONG(buf);
-		objp->account = IXDR_GET_LONG(buf);
+			objp->to = IXDR_GET_LONG(buf);
+			objp->from = IXDR_GET_LONG(buf);
+			objp->account = IXDR_GET_LONG(buf);
 		}
-		 if (!xdr_double (xdrs, &objp->value))
-			 return FALSE;
-	 return TRUE;
+		if (!xdr_double(xdrs, &objp->value))
+			return (FALSE);
+	} else {
+		if (!xdr_int(xdrs, &objp->to))
+			return (FALSE);
+		if (!xdr_int(xdrs, &objp->from))
+			return (FALSE);
+		if (!xdr_int(xdrs, &objp->account))
+			return (FALSE);
+		if (!xdr_double(xdrs, &objp->value))
+			return (FALSE);
 	}
-
-	 if (!xdr_int (xdrs, &objp->to))
-		 return FALSE;
-	 if (!xdr_int (xdrs, &objp->from))
-		 return FALSE;
-	 if (!xdr_int (xdrs, &objp->account))
-		 return FALSE;
-	 if (!xdr_double (xdrs, &objp->value))
-		 return FALSE;
-	return TRUE;
+	return (TRUE);
 }
 
 bool_t
-xdr_result_t (XDR *xdrs, result_t *objp)
+xdr_result_t(xdrs, objp)
+	XDR *xdrs;
+	result_t *objp;
 {
-	register int32_t *buf;
 
-	 if (!xdr_double (xdrs, &objp->value))
-		 return FALSE;
-	 if (!xdr_int (xdrs, &objp->success))
-		 return FALSE;
-	 if (!xdr_array (xdrs, (char **)&objp->message.message_val, (u_int *) &objp->message.message_len, ~0,
-		sizeof (char), (xdrproc_t) xdr_char))
-		 return FALSE;
-	return TRUE;
+	if (!xdr_double(xdrs, &objp->value))
+		return (FALSE);
+	if (!xdr_int(xdrs, &objp->success))
+		return (FALSE);
+	if (!xdr_array(xdrs, (char **)&objp->msg.msg_val, (u_int *)&objp->msg.msg_len, ~0, sizeof(char), (xdrproc_t)xdr_char))
+		return (FALSE);
+	return (TRUE);
 }

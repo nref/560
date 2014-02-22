@@ -8,7 +8,7 @@ struct transaction_t {
 struct result_t {
 	double value;
 	int success;
-	char message<>;
+	char msg<>;
 };
 
 program TRANSACTION {
@@ -17,7 +17,7 @@ program TRANSACTION {
         result_t DEPOSIT(transaction_t) = 2;
         result_t WITHDRAW(transaction_t) = 3;
         result_t INQUIRY(transaction_t) = 4;
-		result_t STARTSESSION() = 8;
-    	result_t STOPSESSION() = 9;
+		result_t STARTSESSION() = 5;
+    	result_t STOPSESSION() = 6;
 	} = 1;
 } = 10101;
