@@ -1,0 +1,47 @@
+ l  ocalhost
+localhoasdkjfhcqot89ybcqoreifua
+localhost
+localhost inquiry
+localhost deposit
+localhost withdraw
+localhost transfer
+localhost ???? 
+  localhost
+		localhost
+
+localhost 1000 1000
+localhost inquiry 1000 55.55
+localhost deposit 1000 55.55
+localhost withdraw 1000 55.55
+localhost transfer 1000 55.55
+localhost ???? 1000 55.55
+  localhost 		1000 55.55
+		localhost	1000 55.55
+
+localhost 1000 55.55 11.11
+localhost inquiry 			1000 55.55 11.11
+localhost deposit 1000 55.55 11.11
+localhost withdraw 1000 55.55 11.11
+localhost transfer 1000 55.55 11.11
+localhost ????  1000 55.55 11.11
+  localhost 		1000 55.55 11.11
+		localhost	1000 55.55 11.11
+
+
+localhost inquiry 		1000
+localhost deposit 		1000 50.55
+localhost 		transfer 		1000 1001 50.55
+localhost transfer 	1000 1001 -100
+localhost withdraw 1000 	0.00
+localhost withdraw 	1000 	-0.000000000000
+
+localhostasdf inquiry 1000
+
+localhost inquiry 2005
+localhost inquiry 1995
+localhost inquiry -100
+localhost inquiry 1
+localhost inquiry 1000
+asdf这是一个测试字符串asdf
+
+google inquiry 2005

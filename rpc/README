@@ -1,0 +1,32 @@
+TO BUILD:
+
+In the root directory:
+
+> make
+
+TO RUN SERVER
+
+It is important to launch bankserver from ./bin so that it finds the accounts file.
+It is not necessary to give the server a port number. The OS chooses one.
+
+> cd ./bin
+> ./bankserver (exits after RPC registration; service continues to run)
+
+TO RUN CLIENT
+
+> ./bankclient input_file
+
+OR
+
+> ./bankclient [command]
+
+OUTPUT:
+
+Accounts balance is written to the text file /bin/accounts .
+Messages for user are printed to stdout/stderr .
+
+TO GET HELP:
+
+> ./bankclient 
+> ./bankclient -h
+> ./bankclient --help

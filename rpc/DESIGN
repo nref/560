@@ -1,0 +1,101 @@
+Doug Slater
+RPC Lab
+CS560 Spring 2014
+Dr. Cao
+
+DESIGN
+
+The server and client use rpcgen, the RPC protocol compiler. 
+
+EXCHANGE FORMAT
+
+rpcgen takes an exchange file (transaction.x) and outputs 
+
+	a header file 			transaction.h
+	the routines for the server 	transaction_svc.c 
+	the routines for the client 	transaction_clnt.c 
+	the exchange datatypes 		transaction_xdr.c
+
+transaction.x defines the data types and methods that the client and server both understand:
+
+struct transaction_t {
+	int to;		/* For transfer */
+	int from;	/* For transfer */
+	int account;	
+	double value;
+};
+
+struct result_t {
+	double value;
+	int success;
+	char msg<>;
+};
+
+program TRANSACTION {
+    version TVERS {
+    	result_t TRANSFER(transaction_t)= 1;
+        result_t DEPOSIT(transaction_t)	= 2;
+        result_t WITHDRAW(transaction_t)= 3;
+        result_t INQUIRY(transaction_t)	= 4;
+	result_t STARTSESSION()		= 5;
+    	result_t STOPSESSION()		= 6;
+	} = 1;
+} = 10101;
+
+RPC REGISTRATION
+
+bankserver registers an RPC service with the operating system which can then be called by  PROGRAM_NAME and VERSION_NUMBER over tcp or udp. The Unix RPC mechanism takes care of suspending the client after it makes a remote procedure call, transporting the data from the client to the server, calling the requested function on the server, waiting for the server to finish its work, transporting the response back to the client, and resuming the client.
+
+After launching bankserver, rpcinfo shows that the service is running:
+
+$ ./bankserver
+$ rpcinfo
+   program   version netid     address              service    owner
+   ...
+   10101        1     udp      0.0.0.0.249.242      atm        unknown
+   10101        1     tcp      0.0.0.0.206.139      atm        unknown
+
+$ rpcinfo --indirect atm 1
+Indirect succeeded. Service is available at address 127.0.0.1.206.139
+
+CLIENT
+
+From the client, we can call routines on the server by including transaction.h and calling  the respective function transfer(), deposit(), withdraw(), or inquiry() with the respective parameters. 
+
+SESSIONS
+
+My implementation uses the concept of a session. The client must open a session via the  RPC startsession() before transactions such as transfer/deposit/withdraw/inquiry can be done, and the client must close the session via the RPC stopsession() after it is done sending commands. The server then commits the changes during the session to a log file.
+
+ERRORS AND ACKNOWLEDGEMENTS
+
+The server may return a variety of errors as well as positive acknowledgements:
+
+char *msgErr[] = { "SERVICE NOT RUNNING", "ACCOUNT INVALID",
+		   "START FAIL", "WITHDRAW FAIL",
+		   "DEPOSIT FAIL", "TRANSFER FAIL",
+		   "INQUIRY FAIL", "STOP FAIL", 
+		   "POSITIVE AMOUNT REQUIRED",
+		   "NEGATIVE BALANCE DISALLOWED" };
+
+char *msgOk[]  = { "START OK", "WITHDRAW OK",
+		   "DEPOSIT OK", "TRANSFER OK",
+		   "INQUIRY OK", "STOP OK" };
+
+FILES
+
+The server writes debug log output to "bankserver_log" in the bin directory. When the server starts, it reads the "accounts_start" file to get the account starting balances. As the server executes transactions for the client, it updates the account file "accounts".
+
+File summary:
+bin/bankserver_log	Debug output
+bin/accounts		The accounts current balances
+bin/accounts_start	The accounts' initial balances
+
+To minimize writes, server updates the accounts file every two seconds.
+
+IMPROVEMENTS
+
+An improvement would be to enable the server to write the log file without closing a session. This would require abandoning the use of rpcgen and manually writing a custom main() function that fork()s a process that writes to the log intermittently and communicates with its parent to get the latest log data.
+
+A further improvement would be to build on the concept of a session to provide for authentication, encryption, and atomicity/synchronization.
+
+Finally, the server has at least one memory leak, and the client currently allocates memory for the entire file read instead of only for the current line.

@@ -1,0 +1,20 @@
+TO TEST:
+
+I wrote a program to randomly generate 100000 commands.
+> ./unit_test > utests
+> ./bankclient utests 
+
+I also wrote some commands which more thoughtfully stress the input validation:
+> ./bankclient manual_tests
+
+This script stress-tests the server. It forks 100 instances of bankclient on the output of unit_test, which generates file of 100000 commands, so 10^7 commands will be sent to the server.
+
+> ./stress_test.sh
+
+TO KILL SERVER INSTANCES
+
+> pkill bankserver 
+
+TO KILL ALL CLIENT INSTANCES
+
+> pkill bankclient
