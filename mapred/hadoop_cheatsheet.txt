@@ -1,0 +1,6 @@
+hadoop cheat sheet
+
+hadoop fs -put pg100.txt /
+hadoop jar ./hdc/hadoop-examples-1.2.1.jar wordcount /pg100.txt /out
+hadoop fs -ls /out 
+hadoop fs -get /out/part-r-00000 .
