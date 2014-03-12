@@ -9,7 +9,7 @@ import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.util.*;
 
-public class WordCount {
+public class FilterAndWordCount {
 
 	static List<String> stopwords = Arrays.asList("I  a  about  an  are as  at  be  by  com  for  from how in  is  it  of  on  or  that the  this to  was  what  when where the who  will  with the www".split(" "));
 	
@@ -72,8 +72,8 @@ public class WordCount {
 
     public static void main(String[] args) throws Exception {
 			
-		JobConf conf = new JobConf(WordCount.class);
-		conf.setJobName("wordcount");
+		JobConf conf = new JobConf(FilterAndWordCount.class);
+		conf.setJobName("FilterAndWordCount");
 		
 		conf.setOutputKeyClass(Text.class);
 		conf.setOutputValueClass(IntWritable.class);
