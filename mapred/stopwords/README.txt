@@ -1,29 +1,31 @@
 To build everythin in this directory:
 
-./build.sh
+	./build.sh
 
 To run everything in this directory on MapReduce:
 
-./run.sh
+	./run.sh
 
 To view results:
 
-./result.sh
+	./result.sh
 
-To do all of these:
+To do all three of these:
 
-./do.sh
+	./do.sh
 
 Source files: 
-FilterAndWordCount.java - Given a directory, count all the words in all of the files. This is a MapReduce job.
 
+	FilterAndWordCount.java
 
-generate_stopwords.py
+Given a directory, count all the words in all of the files. This is a MapReduce job.
 
-Given a 2-column tab-separated text file, output all words on stdout which are > 3 std devs above the mean, i.e.:
+	generate_stopwords.py
+
+Given a 2-column tab-separated text file, where the first column are words and the second column are word counts, output all words on stdout which are > 3 std devs above the mean, i.e.:
 
 a	50
 I	45
 government	1
 
-will output "government\n" on stdout
+will output "a\nI" on stdout
