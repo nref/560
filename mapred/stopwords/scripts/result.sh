@@ -1,1 +1,1 @@
-hadoop dfs -cat ../output/part-00000
+cat ../output/part-00000

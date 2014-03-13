@@ -1,31 +1,19 @@
-To build everythin in this directory:
+stopwords
+=========
+Generate "stop words" given a set of text files. Stop words are words that appear too often, in our case with greater frequency than 3 standard deviations above the mean word frequency.
 
-	./build.sh
+Instructions
+============
 
-To run everything in this directory on MapReduce:
+1. Put text files to be counted in ./input
+2. Build the Java MapReduce job:	
+	cd scripts; ./build.sh
+3. Run the Java MapReduce job and the python stop word generator:
+	cd scripts; ./run.sh
+4. View the results:
+	cd scripts; ./result.sh
+	(or look in ./output)
+	
+To do steps 2-4 at once:
 
-	./run.sh
-
-To view results:
-
-	./result.sh
-
-To do all three of these:
-
-	./do.sh
-
-Source files: 
-
-	FilterAndWordCount.java
-
-Given a directory, count all the words in all of the files. This is a MapReduce job.
-
-	generate_stopwords.py
-
-Given a 2-column tab-separated text file, where the first column are words and the second column are word counts, output all words on stdout which are > 3 std devs above the mean, i.e.:
-
-a	50
-I	45
-government	1
-
-will output "a\nI" on stdout
+	cd scripts; ./do.sh
