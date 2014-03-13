@@ -195,7 +195,7 @@ bool checkArgs(int argc, char* argv[]) {
 }
 
 int isValidCommand(usr_cmd_t* cmd, command_t* command) {
-	int cmdIdx = -1;
+	int cmdIdx = BAD_CMD;
 	
 	/* If incorrect number of fields provided */
 	if (!checkNumArgs(cmd))
@@ -225,8 +225,13 @@ command_t* parseCommand(usr_cmd_t* cmd) {
 	command->idx = isValidCommand(cmd, command);
 	
 	if (command->idx >= 0) {
-		checkExpectedNumArgs(cmd, minFields[command->idx]);
+		bool numArgsOK = checkExpectedNumArgs(cmd, minFields[command->idx]);
 		
+        if (!numArgsOK) {
+            command->idx = BAD_ARGS;
+            return command;
+        }
+        
 		if (!strcmp(cmdNames[CMD_TRANSFER],command->name)) {
 			t->account = atoi(argv[2]);
 			t->to = atoi(argv[3]);
@@ -334,8 +339,12 @@ bool tryDoCommand(usr_cmd_t* cmd) {
 	bool success = ATM_SUCCESS;
 	
 	command_t* command = parseCommand(cmd);
-	if (command->idx < 0) {
+	if (command->idx == BAD_CMD) {
 		printf("Invalid command \'%s\'\n",command->name);
+		success = ATM_FAILURE;
+	}
+    else if (command->idx == BAD_ARGS) {
+        printf("Invalid number of arguments for command \'%s\'\n",command->name);
 		success = ATM_FAILURE;
 	}
 	else if (!doCommand(command))
@@ -372,9 +381,7 @@ bool doFileCommands(char* file) {
 	while ((read = getline(&line, &len, f)) != -1) {
 	
 		/* Skip commented lines and blank lines */
-		if (line[0] == line_comment || line[0] == '\n' 
-									|| line[0] == ' ' 
-									|| line[0] == '\t') continue;
+		if (line[0] == line_comment || line[0] == '\n') continue;
 		
 		uint fieldCount = getNumFields(line); /* Field count */
 		if (fieldCount < 3) continue;

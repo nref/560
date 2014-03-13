@@ -21,6 +21,9 @@ typedef unsigned int uint;
 #define ATM_SUCCESS 1
 #define ATM_FAILURE 0
 
+#define BAD_ARGS -1
+#define BAD_CMD -2
+
 /* Command codes */
 #define CMD_TRANSFER 0
 #define CMD_DEPOSIT 1
@@ -86,7 +89,8 @@ extern usr_cmd_t* newCommand(uint, char**);	/* Allocate memory for an command */
 extern command_t* parseCommand(usr_cmd_t*); /* Convert user input to a transaction-ready structure */
 extern int isValidCommand(usr_cmd_t*, command_t*);	/* Check that the input is known */
 extern bool tryDoCommand(usr_cmd_t*);	/* Try to do a command */
-extern bool doCommand(command_t*);	/* Do a single command */
+extern bool doSingleCommand(usr_cmd_t*); /* Do a single command and close the session */
+extern bool doCommand(command_t*);	/* Do a single command and keep session open */
 extern bool doFileCommands(char*);	/* Read commands from file */
 extern void closeSessions();
 

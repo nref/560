@@ -33,15 +33,21 @@ result_t ret;
 bool init_done = false;
 
 result_t* _doTransfer(transaction_t *t) {
+	if (0. >= t->value)
+		return valueError();
+    
 	if (causesNegativeBalance(t->from, t->value))
 		return balanceError();
-	
+    
 	accounts_table[t->from - BASE] -= t->value;
 	accounts_table[t->to - BASE] += t->value;
 	return transferOk();
 }
 
 result_t* _doWithdrawal(transaction_t *t) {
+	if (0. >= t->value)
+		return valueError();
+    
 	if (causesNegativeBalance(t->from, t->value)) 
 		return balanceError();
 		
@@ -50,6 +56,9 @@ result_t* _doWithdrawal(transaction_t *t) {
 }
 
 result_t* _doDeposit(transaction_t *t) {
+	if (0. >= t->value)
+		return valueError();
+    
 	accounts_table[t->to - BASE] += t->value;
 	return depositOk();
 }
@@ -66,9 +75,6 @@ result_t* _doAction(transaction_t *t,
 {	
 	if (!init_done) 
 		return notStartedError();
-
-	if (0. > t->value)
-		return valueError();
 				
 	if (!isValidInput(account1, account2))		
 		return invalidAccountError();
@@ -122,9 +128,7 @@ bool readConfiguration() {
 	while ((read = getline(&line, &len, accounts_start)) != -1) {
 
 		/* Skip commented lines and blank lines */
-		if (line[0] == line_comment || line[0] == '\n' 
-									|| line[0] == ' ' 
-									|| line[0] == '\t') continue;
+		if (line[0] == line_comment || line[0] == '\n') continue;
 		
 		field = 0;
 		account_number = 0;
@@ -214,7 +218,8 @@ bool isValidAccount(int account, int dummy) {
 /* Return true if two account numbers are both valid */
 bool twoValidAccounts(int account1, int account2) {
 	return (isValidAccount(account1, BASE) &&
-			isValidAccount(account2, BASE));
+			isValidAccount(account2, BASE) &&
+            account1 != account2);
 }
 
 void msgCpy(char *msg) {
@@ -252,6 +257,7 @@ result_t* balanceError()		{ return defaultError(msgErr[9]); }
 
 result_t* defaultError(char* msg) {
 	msgCpy(msg);
+    ret.value = -99999.99;
 	ret.success = false;
 	return &ret;
 }

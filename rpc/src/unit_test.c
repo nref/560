@@ -7,11 +7,11 @@ char* test_hosts[] = { 	"localhost",
 						"localhost", "127.0.0.1", 
 						"localhost", "127.0.0.1", 
 						"localhost", "127.0.0.1", 
-						"localhost", "127.0.0.1", 						
+						"localhost", "127.0.0.1", 			
 						"localhost", "127.0.0.1", 
 						"localhost", "127.0.0.1", 
 						"localhost", "127.0.0.1", 
-						"google.com", "localhost" };
+						"google", "localhost" };
 
 char* cmds[] = { "transfer", "inquiry", "deposit", "withdraw" };
  
@@ -53,7 +53,7 @@ int main() {
 	
 	srand((unsigned)time(NULL));
 	
-	for (int i = 0; i < 500; i++) {
+	for (int i = 0; i < 100000; i++) {
 		randAcc1 = randRange(998, 1012);
 		randAcc2 = randRange(998, 1012);
 		randAmt = randRangeD(-50, 1000);
