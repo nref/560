@@ -1,9 +1,9 @@
 Source files
 ============ 
 
-1. InvertedIndex.java
+1. query.java
 
 Descriptions
 ============
 
-1. Given a set of files, produce an inverted index as described in the assignment.
+1. Query the inverted index as described in the assignment.

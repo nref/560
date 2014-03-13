@@ -9,18 +9,10 @@ import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.util.*;
 
-/*  Get a count of each word in a set of text files.
-    Split each word on any punctuation found by regex.
-    Trim leading and trailing whitespace of these split words
-    Make all these words lowercase
-    Recursively word count on the split words
- 
-    i.e. if Shakespear wrote, "MY Dar'ling dear",
-    we would get "my", "dar", "ling", and "dear"
+/*
  */
-public class FilterAndWordCount {
+public class InvertedIndex {
 
-//	static List<String> stopwords = Arrays.asList("I  a  about  an  are as  at  be  by  com  for  from how in  is  it  of  on  or  that the  this to  was  what  when where the who  will  with the www".split(" "));
 	
 	public static class Map extends MapReduceBase implements Mapper<LongWritable, Text, Text, IntWritable> {
         private final static IntWritable one = new IntWritable(1);
@@ -72,7 +64,7 @@ public class FilterAndWordCount {
 
     public static void main(String[] args) throws Exception {
 			
-		JobConf conf = new JobConf(FilterAndWordCount.class);
+		JobConf conf = new JobConf(InvertedIndex.class);
 		conf.setJobName("FilterAndWordCount");
 		
 		conf.setOutputKeyClass(Text.class);
