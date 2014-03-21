@@ -1,7 +1,8 @@
-hadoop fs -mkdir /user/cslater3/input
-hadoop fs -put ../input/*.cpy /user/cslater3/input
-hadoop fs -rmr /user/cslater3/output
-hadoop jar ../src/InvertedIndex.jar edu.utk.eecs.InvertedIndex /user/cslater3/input/*.cpy /user/cslater3/output
+hadoop fs -mkdir input # Will be /user/{username}/input
+hadoop fs -put ../input/*.cpy input
+hadoop fs -rmr output # Will be /user/{username}/output
+hadoop jar ../src/InvertedIndex.jar edu.utk.eecs.InvertedIndex input/*.cpy output
 rm ../output/part-00000
-hadoop fs -get /user/cslater3/output/part-00000 ../output/part-00000
-hadoop fs -rmr /user/cslater3/input
+hadoop fs -get output/part-00000 ../output/part-00000
+hadoop fs -rmr input
+rm ../input/*.cpy
