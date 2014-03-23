@@ -42,14 +42,19 @@ public class InvertedIndex {
         }
     }
 
-/*
-    public static class Reduce extends MapReduceBase implements Reducer<Text, IntWritable, Text, IntWritable> {
-        public void reduce(Text key, Iterator<IntWritable> values, OutputCollector<Text, IntWritable> output, Reporter reporter) throws IOException {
-            
-            output.collect(key, new IntWritable(sum));
+    public static class Reduce extends MapReduceBase implements Reducer<Text, Text, Text, Text> {
+        public void reduce(Text key, Iterator<Text> values, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
+			Text combinedDocID = new Text();
+			String docIDs = "";
+			
+			while(values.hasNext()){
+				Text val = values.next();
+				docIDs = val.toString() + "," ;
+			}
+			docIDs = docIDs.substring(0,docIDs.length()-1);
+            output.collect(key, new Text(docIDs));
         }
     }
-	*/
 
     public static void main(String[] args) throws Exception {
 			
@@ -60,8 +65,8 @@ public class InvertedIndex {
 		conf.setOutputValueClass(Text.class);
 		
 		conf.setMapperClass(Map.class);
-//		conf.setCombinerClass(Reduce.class);
-//		conf.setReducerClass(Reduce.class);
+		conf.setCombinerClass(Reduce.class);
+		conf.setReducerClass(Reduce.class);
 		
 		conf.setInputFormat(TextInputFormat.class);
 		conf.setOutputFormat(TextOutputFormat.class);
