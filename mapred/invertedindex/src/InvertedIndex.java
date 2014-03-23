@@ -34,10 +34,19 @@ public class InvertedIndex {
             StringTokenizer tokenizer = new StringTokenizer(remainder);
 
             while (tokenizer.hasMoreTokens()) {
-                
-                word.set(tokenizer.nextToken());
-                output.collect(word, docID);
+				word.set(tokenizer.nextToken());
 
+                // Split this word on all punctuation characters
+                // Also trim leading and trailing whitespace
+                // Also make lower-case
+                String clean = word.toString().replaceAll("[\\p{P}]", " ").trim().toLowerCase();
+                List<String> parts = new ArrayList<String>(Arrays.asList(clean.split(" ")));
+
+                // Each individual part needs to be mapped
+				for (String part : parts) {
+					word.set(clean);
+					output.collect(word, docID);
+				}
             }
         }
     }
@@ -51,7 +60,7 @@ public class InvertedIndex {
 				Text val = values.next();
 				docIDs = val.toString() + "," ;
 			}
-			docIDs = docIDs.substring(0,docIDs.length()-1);
+			docIDs = docIDs.substring(0,docIDs.length()-1); //to remove any hanging ',' characters
             output.collect(key, new Text(docIDs));
         }
     }
