@@ -44,7 +44,7 @@ public class InvertedIndex {
 
                 // Each individual part needs to be mapped
 				for (String part : parts) {
-					word.set(clean);
+					word.set(part);
 					output.collect(word, docID);
 				}
             }
@@ -53,14 +53,13 @@ public class InvertedIndex {
 
     public static class Reduce extends MapReduceBase implements Reducer<Text, Text, Text, Text> {
         public void reduce(Text key, Iterator<Text> values, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
-			Text combinedDocID = new Text();
 			String docIDs = "";
-			
 			while(values.hasNext()){
 				Text val = values.next();
-				docIDs = val.toString() + "," ;
+				if(val.toString() != "") {
+					docIDs += "," + val.toString();
+				}
 			}
-			docIDs = docIDs.substring(0,docIDs.length()-1); //to remove any hanging ',' characters
             output.collect(key, new Text(docIDs));
         }
     }
