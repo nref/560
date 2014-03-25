@@ -19,9 +19,21 @@ public class InvertedIndex {
         
         private Text word = new Text();
 		private Text docID = new Text();
+
+		public List<String> readLines(String filename) throws IOException {
+			FileReader fileReader = new FileReader(filename);
+			BufferedReader bufferedReader = new BufferedReader(fileReader);
+			List<String> lines = new ArrayList<String>();
+			String line = null;
+			while ((line = bufferedReader.readLine()) != null) {
+				lines.add(line);
+			}
+			bufferedReader.close();
+			return lines;
+		}
+
         
         public void map(LongWritable key, Text value, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
-            
             String line = value.toString();
 //            String lineNum = key.toString(); TODO: If we have time
 			String lineNum = line.substring(0, line.indexOf(' '));
@@ -46,8 +58,8 @@ public class InvertedIndex {
 
                 // Each individual part needs to be mapped
 				for (String part : parts) {
-					word.set(part);
-					output.collect(word, docID);
+						word.set(part);
+						output.collect(word, docID);
 				}
             }
         }
