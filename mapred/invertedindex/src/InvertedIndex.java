@@ -39,6 +39,8 @@ public class InvertedIndex {
                 // Split this word on all punctuation characters
                 // Also trim leading and trailing whitespace
                 // Also make lower-case
+				// TODO: This is not cleaning the whole line of punctuation"
+
                 String clean = word.toString().replaceAll("[\\p{P}]", " ").trim().toLowerCase();
                 List<String> parts = new ArrayList<String>(Arrays.asList(clean.split(" ")));
 
