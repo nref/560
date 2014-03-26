@@ -20,9 +20,10 @@ public class InvertedIndex {
         private Text word = new Text();
 		private Text docID = new Text();
 
-		public List<String> readLines(String filename) throws IOException {
-			FileReader fileReader = new FileReader(filename);
-			BufferedReader bufferedReader = new BufferedReader(fileReader);
+		public List<String> readLines(FSDataInputStream fileInputStream) throws IOException {
+			//FileReader fileReader = new FileReader(filename);
+			InputStreamReader hdfsInputStream = new InputStreamReader(fileInputStream);
+			BufferedReader bufferedReader = new BufferedReader(hdfsInputStream);
 			List<String> lines = new ArrayList<String>();
 			String line = null;
 			while ((line = bufferedReader.readLine()) != null) {
@@ -36,13 +37,24 @@ public class InvertedIndex {
         public void map(LongWritable key, Text value, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
             String line = value.toString();
 //            String lineNum = key.toString(); TODO: If we have time
-			String lineNum = line.substring(0, line.indexOf(' '));
+
+			System.out.println(line);
+			String lineNum = line.substring(0, line.indexOf(' ')).trim();
 			String remainder = line.substring(line.indexOf(' ')).trim();
+			System.out.println(lineNum);
+			System.out.println(remainder);
+
+			Configuration config = new Configuration();
+			config.set("fs.default.name","hdfs://hydra29.eecs.utk.edu:51211");
+			FileSystem dfs = FileSystem.get(config);
+			Path src = new Path(dfs.getWorkingDirectory()+"/input/stopwords.txt");
+			FSDataInputStream fs = dfs.open(src);
+			
+			List<String> stopwords = readLines(fs);
 
 			FileSplit fileSplit = (FileSplit)reporter.getInputSplit();
 			String filename = fileSplit.getPath().getName();
 			docID.set(filename+":"+lineNum);
-			
             StringTokenizer tokenizer = new StringTokenizer(remainder);
 
             while (tokenizer.hasMoreTokens()) {
@@ -52,14 +64,17 @@ public class InvertedIndex {
                 // Also trim leading and trailing whitespace
                 // Also make lower-case
 				// TODO: This is not cleaning the whole line of punctuation"
+				if( stopwords.contains(word.toString()) ) {
+					continue;
+				} else {
+					String clean = word.toString().replaceAll("[\\p{P}]", " ").trim().toLowerCase();
+					List<String> parts = new ArrayList<String>(Arrays.asList(clean.split(" ")));
 
-                String clean = word.toString().replaceAll("[\\p{P}]", " ").trim().toLowerCase();
-                List<String> parts = new ArrayList<String>(Arrays.asList(clean.split(" ")));
-
-                // Each individual part needs to be mapped
-				for (String part : parts) {
+					// Each individual part needs to be mapped
+					for (String part : parts) {
 						word.set(part);
 						output.collect(word, docID);
+					}
 				}
             }
         }
@@ -95,6 +110,7 @@ public class InvertedIndex {
 		
 		FileInputFormat.setInputPaths(conf, new Path(args[0]));
 		FileOutputFormat.setOutputPath(conf, new Path(args[1]));
+
 		
 		JobClient.runJob(conf);
     }
