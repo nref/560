@@ -41,10 +41,11 @@ public class InvertedIndex {
             
 			FileSplit fileSplit = (FileSplit)reporter.getInputSplit();
 			String filename = fileSplit.getPath().getName();
-			docID.set(filename+":"+lineNum);
+//			docID.set(filename+":"+lineNum);
 			
             StringTokenizer tokenizer = new StringTokenizer(remainder);
-            
+  
+            int fieldNum = 1;
             while (tokenizer.hasMoreTokens()) {
 				word.set(tokenizer.nextToken());
                 
@@ -57,8 +58,13 @@ public class InvertedIndex {
                 List<String> parts = new ArrayList<String>(Arrays.asList(clean.split(" ")));
                 
                 // Each individual part needs to be mapped
+
 				for (String part : parts) {
+                    
                     word.set(part);
+                    docID.set(filename + ":" + lineNum + ":" + Integer.toString(fieldNum));
+                     ++fieldNum;
+                    
                     output.collect(word, docID);
 				}
             }
@@ -87,7 +93,7 @@ public class InvertedIndex {
 		conf.setOutputValueClass(Text.class);
 		
 		conf.setMapperClass(Map.class);
-		conf.setCombinerClass(Reduce.class);
+//		conf.setCombinerClass(Reduce.class);
 		conf.setReducerClass(Reduce.class);
 		
 		conf.setInputFormat(TextInputFormat.class);
