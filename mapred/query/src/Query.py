@@ -401,16 +401,14 @@ def printSnippet(fileName, lineNum, fieldNum):
     
     # Get the relevant line, split into fields
     theLine = fLines[lineNum-1].strip().replace('\n', '').split(' ')
-    print theLine
 
 #    # Split on punctuation, recombine
-#    theLine2 = []
-#    theLine2 += [re.split('\W+',w) for w in theLine]
-#    theLine2 = [item for sublist in theLine2 for item in sublist]
-#    theLine2 = filter(None, theLine2)
-#
-##    theLine = theLine2
-#    print theLine
+    theLine2 = []
+    theLine2 += [re.split('\W+', word) for word in theLine]
+    theLine2 = [item for sublist in theLine2 for item in sublist]
+    theLine2 = filter(None, theLine2)
+
+    theLine = theLine2
 
     # Configure length of the text snippet
     s = 4
