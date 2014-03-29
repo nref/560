@@ -9,7 +9,7 @@ if [ ! -e ../../stopwords/output/stopwords.txt ]
       hadoop fs -put ../../stopwords/output/stopwords.txt other
       hadoop fs -rmr output # Will be /user/{username}/output
       hadoop jar ../src/InvertedIndex.jar edu.utk.eecs.InvertedIndex input/*.txt output
-      rm ../output/part-00000
-      hadoop fs -get output/part-00000 ../output/part-00000
+      rm ../output/part-*
+      hadoop fs -get output/part-* ../output/part-*
       hadoop fs -rmr input
 fi
