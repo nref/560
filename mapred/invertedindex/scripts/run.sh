@@ -10,6 +10,6 @@ if [ ! -e ../../stopwords/output/stopwords.txt ]
       hadoop fs -rmr output # Will be /user/{username}/output
       hadoop jar ../src/InvertedIndex.jar edu.utk.eecs.InvertedIndex input/*.txt output
       rm ../output/part-\*
-      hadoop fs -get output/part-\* ../output/part-\*
+      hadoop fs -get output/part-* ../output/part-*
       hadoop fs -rmr input
 fi

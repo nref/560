@@ -1,1 +1,1 @@
-cat ../output/part-\*
+cat ../output/part-*
