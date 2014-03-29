@@ -33,7 +33,7 @@ public class InvertedIndex {
 			String line = null;
 			stopwords = new HashMap<String,Object>();
             
-			System.out.println("Produced stopwords list");
+			//System.out.println("Produced stopwords list");
             
 			while ((line = br.readLine()) != null && line.trim().length() > 0) {
 				stopwords.put(line, null);
@@ -70,7 +70,7 @@ public class InvertedIndex {
 
 				for (String part : parts) {
 					if(stopwords.containsKey(part)) {
-						System.out.println("Got stopword: " + part);
+						//System.out.println("Got stopword: " + part);
 						continue;
 					}
 					word.set(part);
@@ -87,10 +87,16 @@ public class InvertedIndex {
 		public void reduce(Text key, Iterator<Text> values, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
 			String docIDs = "";
 
+            boolean first = true;
+            
 			while(values.hasNext()){
 				Text val = values.next();
 				if(val.toString() != "") {
-					docIDs += "," + val.toString();
+                    if (!first) {
+                        docIDs += ",";
+                        first = false;
+                    }
+					docIDs += val.toString();
 				}
 			}
 			output.collect(key, new Text(docIDs));
