@@ -18,6 +18,7 @@ public class InvertedIndex {
 	
 	public static class Map extends MapReduceBase implements Mapper<LongWritable, Text, Text, Text> {
         
+        private String username = com.sun.security.auth.module.UnixSystem().getUsername();
         private Text word = new Text();
 		private Text docID = new Text();
 		private HashMap<String, Object> stopwords = null;
@@ -54,7 +55,7 @@ public class InvertedIndex {
 		*/
 
 		public void readLines() throws IOException {
-			Path pt = new Path("hdfs://hydra29.eecs.utk.edu:51211/user/ccraig7/other/stopwords.txt");
+			Path pt = new Path("hdfs://hydra29.eecs.utk.edu:51211/user/"+username+"/other/stopwords.txt");
 			FileSystem fs = FileSystem.get(new Configuration());
 			BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(pt)));
 			List<String> lines = new ArrayList<String>();
