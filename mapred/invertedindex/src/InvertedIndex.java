@@ -2,6 +2,7 @@ package edu.utk.eecs;
 
 import java.io.*;
 import java.util.*;
+import java.net.*;
 
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.conf.*;
@@ -21,46 +22,54 @@ public class InvertedIndex {
 		private Text docID = new Text();
 		private HashMap<String, Object> stopwords = null;
 
-		public void setup(Context context) {
-			Configuration conf = context.getConfiguration();
+/*
+		@Override
+		public void configure(JobConf job){
 			//hardcoded or set it in the jobrunner class and retrieve via this key
-			String location = conf.get("fs.default.name");
-			if (location != null) {
-				BufferedReader br = null;
-				try {
-					FileSystem fs = FileSystem.get(conf);
-					//Hard code the path to the stop words file
-					Path path = new Path(location+"/other/stopwords.txt");
-					if (fs.exists(path)) {
-						stopwords = new HashMap<String, Object>();
-						FSDataInputStream fis = fs.open(path);
-						br = new BufferedReader(new InputStreamReader(fis));
-						String line = null;
-						while ((line = br.readLine()) != null && line.trim().length() > 0) {
-							stopwords.put(line, null);
-						}
+			String fs_uri = "hdfs://hydra29.eecs.utk.edu:51211";
+			System.out.println("In the setup node");
+			BufferedReader br = null;
+			try {
+				FileSystem fs = FileSystem.get(new URI(fs_uri), null, null);
+				//Hard code the path to the stop words file
+				Path path = new Path(fs.getHomeDirectory()+"/other/stopwords.txt");
+				if (fs.exists(path)) {
+					System.out.println("Actually produced a stopwords list");
+					stopwords = new HashMap<String, Object>();
+					FSDataInputStream fis = fs.open(path);
+					br = new BufferedReader(new InputStreamReader(fis));
+					String line = null;
+					while ((line = br.readLine()) != null && line.trim().length() > 0) {
+						stopwords.put(line, null);
 					}
 				}
-				catch (IOException e) {
-					e.printStackTrace();
-				} 
+			} catch (IOException e) {
+				e.printStackTrace();
+		    } catch (URISyntaxException e) {
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
 			}
 		}
+		*/
 
-		public List<String> readLines(String filename) throws IOException {
-			FileReader fileReader = new FileReader(filename);
-			BufferedReader bufferedReader = new BufferedReader(fileReader);
+		public void readLines() throws IOException {
+			Path pt = new Path("hdfs://hydra29.eecs.utk.edu:51211/user/ccraig7/other/stopwords.txt");
+			FileSystem fs = FileSystem.get(new Configuration());
+			BufferedReader br = new BufferedReader(new InputStreamReader(fs.open(pt)));
 			List<String> lines = new ArrayList<String>();
 			String line = null;
-			while ((line = bufferedReader.readLine()) != null) {
-				lines.add(line);
+			stopwords = new HashMap<String,Object>();
+			System.out.println("Actually produced a stopwords list");
+			while ((line = br.readLine()) != null && line.trim().length() > 0) {
+				stopwords.put(line, null);
 			}
-			bufferedReader.close();
-			return lines;
+			br.close();
 		}
 
 
 		public void map(LongWritable key, Text value, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
+			readLines(); //set the global stopwords
 			String line = value.toString();
 			//            String lineNum = key.toString(); TODO: If we have time
 			String lineNum = line.substring(0, line.indexOf(' '));
@@ -88,6 +97,7 @@ public class InvertedIndex {
 
 				for (String part : parts) {
 					if(stopwords.containsKey(part)) {
+						System.out.println("Got stopword: " + part);
 						continue;
 					}
 					word.set(part);
@@ -103,6 +113,12 @@ public class InvertedIndex {
 	public static class Reduce extends MapReduceBase implements Reducer<Text, Text, Text, Text> {
 		public void reduce(Text key, Iterator<Text> values, OutputCollector<Text, Text> output, Reporter reporter) throws IOException {
 			String docIDs = "";
+			//Configuration config = new Configuration();
+			//config.set("fs.default.name","hdfs://hydra29.eecs.utk.edu:51211");
+			//FileSystem dfs = FileSystem.get(config);
+			//Path src = new Path(dfs.getWorkingDirectory()+"/input/stopwords.txt");
+			//FSDataInputStream fs = dfs.open(src);
+			//List<String> stopwords = readLines(fs);
 			while(values.hasNext()){
 				Text val = values.next();
 				if(val.toString() != "") {
@@ -122,7 +138,6 @@ public class InvertedIndex {
 		conf.setOutputValueClass(Text.class);
 
 		conf.setMapperClass(Map.class);
-		//		conf.setCombinerClass(Reduce.class);
 		conf.setReducerClass(Reduce.class);
 
 		conf.setInputFormat(TextInputFormat.class);
