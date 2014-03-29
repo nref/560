@@ -15,6 +15,6 @@ if [ ! -e ../../stopwords/output/stopwords.txt ]
 
       hadoop jar ../src/InvertedIndex.jar edu.utk.eecs.InvertedIndex input/*.txt output
 
-      rm ../output/part-*
-      hadoop fs -get output/part-* ../output/part-*
+      rm ../output/part-00000
+      hadoop fs -get output/part--00000 ../output/part-00000
 fi
