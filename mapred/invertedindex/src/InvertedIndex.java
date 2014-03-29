@@ -94,8 +94,8 @@ public class InvertedIndex {
 				if(val.toString() != "") {
                     if (!first) {
                         docIDs += ",";
-                        first = false;
                     }
+                    first = false;
 					docIDs += val.toString();
 				}
 			}
