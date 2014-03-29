@@ -315,14 +315,14 @@ def Search(invKeys, invIdx, query, mode = AND):
 def SearchQUOTE(invKeys, invIdx, query):
     """
     Find all occurences of the quoted phrase in the query
-    Works for single words, e.g. "Hello" as well as "Hello World"
+    Works for single words, e.g. "Hello" as well as multiple, e.g. "Hello World"
     
     Note: QUOTE is a stricter version of AND
     in which the terms have a strict consecutive ordering.
     """
     queryResults = []
     matches = []
-    
+
     # Can't use Search() here because it returns dummy fieldNums
     for term in query:
         try:
@@ -344,7 +344,7 @@ def SearchQUOTE(invKeys, invIdx, query):
 
     # Flatten one level
     r = list(itertools.chain.from_iterable(queryResults))
-
+    
     for combo in itertools.combinations(r, len(query)): # All n-combinations of the docIDs
         # We have a perfect quote match if...
         #   the filenames match and
@@ -411,13 +411,13 @@ def printSnippet(fileName, lineNum, fieldNum):
     theLine = theLine2
 
     # Configure length of the text snippet
-    s = 4
-    snippetBegin = 0 if fieldNum - s < 0 else fieldNum - s
-    snippetEnd = len(theLine) if fieldNum + s > len(theLine) else fieldNum + s
-    
+    s = 8
+    snippetBegin = max(0, fieldNum - s)
+    snippetEnd = min(len(theLine), fieldNum + s)
+
     if fieldNum < 0:
         snippetBegin = 0
-        snippetEnd = snippetBegin + s
+        snippetEnd = snippetBegin + min(s, len(theLine))
     
     # Print the snippet
     
