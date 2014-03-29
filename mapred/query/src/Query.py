@@ -6,7 +6,7 @@ Department of Electrical Engineering and Computer Science
 University of Tennessee, Knoxville
 http://www.eecs.utk.edu/
 """
-import sys, os, itertools
+import sys, os, itertools, re
 
 # ASCII escape sequences for terminal colors
 HEADER = '\033[95m'
@@ -400,8 +400,18 @@ def printSnippet(fileName, lineNum, fieldNum):
         fLines += f.readlines()
     
     # Get the relevant line, split into fields
-    theLine = fLines[lineNum-1].replace('\n', '').split(' ')
-    
+    theLine = fLines[lineNum-1].strip().replace('\n', '').split(' ')
+    print theLine
+
+#    # Split on punctuation, recombine
+#    theLine2 = []
+#    theLine2 += [re.split('\W+',w) for w in theLine]
+#    theLine2 = [item for sublist in theLine2 for item in sublist]
+#    theLine2 = filter(None, theLine2)
+#
+##    theLine = theLine2
+#    print theLine
+
     # Configure length of the text snippet
     s = 4
     snippetBegin = 0 if fieldNum - s < 0 else fieldNum - s

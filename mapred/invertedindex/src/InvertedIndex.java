@@ -71,6 +71,7 @@ public class InvertedIndex {
 				for (String part : parts) {
 					if(stopwords.containsKey(part)) {
 						//System.out.println("Got stopword: " + part);
+                        ++fieldNum;
 						continue;
 					}
 					word.set(part);
