@@ -18,10 +18,10 @@
 static char* file = "fs";
 
 int fs_mkfs() {
-   	int i, ERR;
+   	int i, fp_no, ERR;
 	char out[BLKSIZE];
 	FILE* fp = fopen(file, "w");
-    
+
 /* Preallocate a contiguous file. Differs across platforms */
 #if defined(_WIN64) || defined(_WIN32)
 	LARGE_INTEGER offset;
@@ -30,15 +30,13 @@ int fs_mkfs() {
 	SetEndOfFile(fp);
 #elif __APPLE__	/* __MACH__ also works */
     fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*NBLOCKS};
-    ERR = fcntl((int)fp, F_PREALLOCATE, &store);
+    ERR = fcntl(fileno(fp), F_PREALLOCATE, &store);
 #elif __unix__
     ERR = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS);
 #endif
     
 	if (ERR < 0) { 
-		printf("allocation error: ");
-		fflush(stdout);
-		perror("");
+		perror("allocation error");
 		return ERR;
 	}
 	for (i = 0; i < NBLOCKS; i++) {
