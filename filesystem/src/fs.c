@@ -1,3 +1,11 @@
+/*
+ * Doug Slater and Christopher Craig
+ * mailto:cds@utk.edu, mailto:ccraig7@utk.edu
+ * CS560 Filesystem Lab submission
+ * Dr. Qing Cao
+ * University of Tennessee, Knoxville
+ */
+
 #include <fcntl.h>
 #include <stdio.h>
 #include "fs.h"
@@ -8,12 +16,12 @@ void mkfs() {
     
 	FILE* fp = fopen(file, "w");
     
-// Preallocate a contiguous file
+/* Preallocate a contiguous file. Differs across platforms */
 #ifdef __APPLE__
     fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*NBLOCKS};
     int OK = fcntl((int)fp, F_PREALLOCATE, &store);
 #else
-	int OK = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS); // Allocate space for the entire filesystem
+	int OK = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS);
 #endif
     
 	for (int i = 0; i < NBLOCKS; i++) {

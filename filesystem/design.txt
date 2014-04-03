@@ -1,3 +1,17 @@
+vim cheats
+
+hex viewer
+%!xxd
+%!xxd -r (reverts)
+
+pg down, up
+^F, ^B
+
+reload
+:e
+
+od print named chars
+od -a -x fs
 
 #define BLKSIZE 4096	// Block size in bytes
 #define NBLOCKS 25600	// Max num allocatable blocks 
