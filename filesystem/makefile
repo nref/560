@@ -31,7 +31,7 @@ sh: $(ODIR)/sh.o $(ODIR)/fs.o
 
 # Build objects from source
 $(ODIR)/sh.o: $(SDIR)/sh.c
-	$(CC) $(CFLAGS) -c -hexo $@ $^
+	$(CC) $(CFLAGS) -c -o $@ $^
 
 $(ODIR)/fs.o: $(SDIR)/fs.c
 	$(CC) $(CFLAGS) -c -o $@ $^
