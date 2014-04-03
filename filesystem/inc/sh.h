@@ -1,6 +1,6 @@
 #include "fs.h"
 
-#define SHBUFLEN 2014
+#define SHBUFLEN 1024
 
 extern int sh_mkfs();
 extern int sh_open(char* filename, char* mode);
