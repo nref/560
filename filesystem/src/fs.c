@@ -7,6 +7,7 @@
  */
 
 #include <fcntl.h>
+#include <errno.h>
 #include <stdio.h>
 #include "fs.h"
 
@@ -16,8 +17,8 @@
 
 static char* file = "fs";
 
-void mkfs() {
-   	int i, OK;
+int fs_mkfs() {
+   	int i, ERR;
 	char out[BLKSIZE];
 	FILE* fp = fopen(file, "w");
     
@@ -25,19 +26,27 @@ void mkfs() {
 #if defined(_WIN64) || defined(_WIN32)
 	LARGE_INTEGER offset;
 	offset.QuadPart = BLKSIZE*NBLOCKS;
-	OK = SetFilePointerEx(fp, offset, NULL, FILE_BEGIN);
+	ERR = SetFilePointerEx(fp, offset, NULL, FILE_BEGIN);
 	SetEndOfFile(fp);
 #elif __APPLE__	/* __MACH__ also works */
     fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*NBLOCKS};
-    OK = fcntl((int)fp, F_PREALLOCATE, &store);
+    ERR = fcntl((int)fp, F_PREALLOCATE, &store);
 #elif __unix__
-    OK = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS);
+    ERR = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS);
 #endif
     
+	if (ERR < 0) { 
+		printf("allocation error: ");
+		fflush(stdout);
+		perror("");
+		return ERR;
+	}
 	for (i = 0; i < NBLOCKS; i++) {
 		fseek(fp, BLKSIZE*i, SEEK_SET);
 
         sprintf(out, "-block %d-", i);
 		fputs(out, fp);
 	}
+
+	return 0;
 }
