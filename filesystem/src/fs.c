@@ -10,19 +10,24 @@
 #include <stdio.h>
 #include "fs.h"
 
+#if defined(_WIN64) || defined(_WIN32)
+#include <windows.h>
+#endif
+
 static char* file = "fs";
 
 void mkfs() {
-    
+   
 	FILE* fp = fopen(file, "w");
     
 /* Preallocate a contiguous file. Differs across platforms */
-#ifdef _WIN64
-#elseif _WIN32
-#elseif __APPLE__
+#if defined(_WIN64) || defined(_WIN32)
+	//SetFilePointerEx();	// TODO
+	//SetEndOfFile();		//
+#elif __APPLE__	/* __MACH__ also works */
     fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*NBLOCKS};
     int OK = fcntl((int)fp, F_PREALLOCATE, &store);
-#elseif __unix__
+#elif __unix__
     int OK = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS);
 #endif
     
