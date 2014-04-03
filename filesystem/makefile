@@ -1,7 +1,8 @@
-# RPC lab makefile
-# Doug Slater
-# mailto:cds@utk.edu
-# CS560 February 2014
+# Filesystem lab makefile
+# Doug Slater and Christopher Craig
+# mailto:cds@utk.edu, mailto:ccraig7@utk.edu
+# CS560 April 2014, Dr. Cao
+# University of Tennesse, Knoxville
 
 IDIR = ./inc
 SDIR = ./src
@@ -27,23 +28,12 @@ endef
 # Link objects into binaries
 sh: fs.o
 	$(cc-command)
-	
-# Each .o file depends on a .c and .h of the same name. 
-#$(CLIENTDEPS) $(SERVDEPS) $(ODIR)/%.o: $(SDIR)/%.c $(IDIR)/%.h 
 
 # Build all objects from source
-$(DEPS): $(patsubst %.o,$(SDIR)/%.c,$@) $(GENH)
+$(DEPS): $(patsubst %.o,$(SDIR)/%.c,$@)
 	$(CC) $(CFLAGS) -c -o $@ $(patsubst %.o,$(SDIR)/%.c,$@)	 
-
-# Generate source with rpcgen
-$(GENH) $(GENC): transaction.x
-	rpcgen transaction.x
-	mv $(GENH) $(IDIR)
-	mv $(GENC) $(SDIR)
 	
 clean: 
-	rm -f $(GENC:%=$(SDIR)/%)
-	rm -f $(IDIR)/$(GENH)
 	rm -f $(ODIR)/*
 	rm -f ./*.o
 	rm -f $(BIN:%=$(BDIR)/%)

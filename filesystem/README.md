@@ -1,7 +1,11 @@
-Filesystem lab submission
+Filesystem Lab Submission
 ===
 
 Doug Slater and Christopher Craig
-mailto:cds@utk.edu, mailto:ccraig7@utk.edu
-Dr. Cao, Spring 2014
+
+<a href="mailto:cds@utk.edu">mailto:cds@utk.edu</a><br>
+<a href="mailto:ccraig7@utk.edu">mailto:ccraig7@utk.edu</a>
+
+Dr. Qing Cao, Spring 2014
+
 University of Tennessee, Knoxville
