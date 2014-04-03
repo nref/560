@@ -17,24 +17,26 @@
 static char* file = "fs";
 
 void mkfs() {
-   
+   	int i, OK;
+	char out[BLKSIZE];
 	FILE* fp = fopen(file, "w");
     
 /* Preallocate a contiguous file. Differs across platforms */
 #if defined(_WIN64) || defined(_WIN32)
-	//SetFilePointerEx();	// TODO
-	//SetEndOfFile();		//
+	LARGE_INTEGER offset;
+	offset.QuadPart = BLKSIZE*NBLOCKS;
+	OK = SetFilePointerEx(fp, offset, NULL, FILE_BEGIN);
+	SetEndOfFile(fp);
 #elif __APPLE__	/* __MACH__ also works */
     fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*NBLOCKS};
-    int OK = fcntl((int)fp, F_PREALLOCATE, &store);
+    OK = fcntl((int)fp, F_PREALLOCATE, &store);
 #elif __unix__
-    int OK = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS);
+    OK = posix_fallocate(fp, 0, BLKSIZE*NBLOCKS);
 #endif
     
-	for (int i = 0; i < NBLOCKS; i++) {
+	for (i = 0; i < NBLOCKS; i++) {
 		fseek(fp, BLKSIZE*i, SEEK_SET);
-        
-        char out[BLKSIZE];
+
         sprintf(out, "-block %d-", i);
 		fputs(out, fp);
 	}

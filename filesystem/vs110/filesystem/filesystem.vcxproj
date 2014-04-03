@@ -44,7 +44,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <CompileAs>CompileAsC</CompileAs>
-      <AdditionalIncludeDirectories>\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\..\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -64,11 +64,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClInclude Include="\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\inc\fs.h" />
+    <ClInclude Include="..\..\inc\fs.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\src\fs.c" />
-    <ClCompile Include="\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\src\sh.c" />
+    <ClCompile Include="..\..\src\fs.c" />
+    <ClCompile Include="..\..\src\sh.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\makefile" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

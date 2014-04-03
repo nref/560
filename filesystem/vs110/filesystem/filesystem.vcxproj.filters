@@ -15,16 +15,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\inc\fs.h">
+    <ClInclude Include="..\..\inc\fs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\src\fs.c">
+    <ClCompile Include="..\..\src\fs.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\src\sh.c">
+    <ClCompile Include="..\..\src\sh.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\makefile" />
   </ItemGroup>
 </Project>
