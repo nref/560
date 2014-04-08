@@ -30,46 +30,46 @@ typedef struct block {
 typedef struct iblock {	
 
 	block* blocks[NBLOCKS];
-	struct iblock* iblocks;				// nth-level indirect blocks
+	struct iblock* iblocks;			// nth-level indirect blocks
 } iblock;
 
 typedef struct inode {
-	fs_ino_t num;						// Inode number
-	int nlinks;							// Number of hard links to the inode
-	int size;							// File size
-	int mode;							// 0 file, 1 directory, 2 link
+	fs_ino_t num;				// Inode number
+	int nlinks;				// Number of hard links to the inode
+	int size;				// File size
+	int mode;				// 0 file, 1 directory, 2 link
 
-	block* blocks[NBLOCKS];				// Direct blocks
-	iblock* iblocks[NIBLOCKS];			// First-level indirect blocks
+	block* blocks[NBLOCKS];			// Direct blocks
+	iblock* iblocks[NIBLOCKS];		// First-level indirect blocks
 } inode;
 
 typedef struct file {
-	fs_mode_t mode;						// 0 or 'r' read, 1 or 'w' write
-	int f_pos;							// Byte offset seek'ed to
-	inode* f_inode;						// pointer to the file's inode
+	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
+	int f_pos;				// Byte offset seek'ed to
+	inode* f_inode;				// pointer to the file's inode
 } file;
 
 typedef struct link {
-	inode ino;							// This link's inode
-	inode dest;							// inode pointing to
+	inode ino;				// This link's inode
+	inode dest;				// inode pointing to
 } link;
 
-typedef struct dirent {					// Directory entry
-	inode ino;							// Inode
+typedef struct dirent {				// Directory entry
+	inode ino;				// Inode
 	struct dirent* dirents[FS_MAXDIRS];	// Subdirs
-	file* files[FS_MAXFILES];			// Files in this dir
-	link* links[FS_MAXLINKS];			// Links in this dir
+	file* files[FS_MAXFILES];		// Files in this dir
+	link* links[FS_MAXLINKS];		// Links in this dir
 
 	int numDirs, numFiles, numLinks;
 
-	char name[FS_NAMEMAXLEN];			// filename
+	char name[FS_NAMEMAXLEN];		// filename
 } dirent;
 
 typedef struct filesystem {	
 	block* blocks[NBLOCKS];
 
-	block* superblock;					// Block 0
-	block* free_block_bitmap;			// Block 1. A map of free blocks
+	block* superblock;			// Block 0
+	block* free_block_bitmap;		// Block 1. A map of free blocks
 } filesystem;
 
 extern int fs_mkfs();

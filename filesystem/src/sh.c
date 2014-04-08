@@ -38,22 +38,22 @@ int main(int argc, char** argv) {
 	while (NULL != fgets(cmd, SH_BUFLEN-1, stdin)) {
 
 		if (NULL == cmd) { prompt(); continue; }		// Sanity check
-		cmd[strlen(cmd)-1] = '\0';						// Remove trailing newline
-		if (strlen(cmd) == 0) { prompt(); continue; }	// Repeat loop on empty input
+		cmd[strlen(cmd)-1] = '\0';				// Remove trailing newline
+		if (strlen(cmd) == 0) { prompt(); continue; }		// Repeat loop on empty input
 
 		// Get fields. Copy them because strtok replaces delimiter with '\0'
 		strcpy(cmd_cpy, cmd);
 		next_field = strtok(cmd_cpy, delimiter);		// Get first field
 
 		i = 0;
-		while (NULL != next_field) {					// While there is another field
+		while (NULL != next_field) {				// While there is another field
 			
-			fields[i] = (char*)malloc(					// Store this field
+			fields[i] = (char*)malloc(			// Store this field
 				strlen(next_field)*sizeof(char));
 			strcpy(fields[i], next_field);				
 			
 			next_field = strtok(NULL, delimiter);		// Get the next field
-			++i;										// Remember how many fields we have saved
+			++i;						// Remember how many fields we have saved
 		}
 
 		if (!strcmp(fields[0], "exit")) break;

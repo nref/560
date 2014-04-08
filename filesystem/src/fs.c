@@ -40,21 +40,21 @@ inode* ErrorInode() {
  * Return the inode at the end of this path or ErrorInode if not found.
  */ 
 inode* dir_recurse(dirent* dir, int depth, int pathFields, char* name, char* path[]) {
-	int i;													// Declaration here to satisfy Visual C compiler
+	int i;								// Declaration here to satisfy Visual C compiler
 
-	for (i = 0; i < dir->numDirs; i++)						// For each subdir at this level
+	for (i = 0; i < dir->numDirs; i++)				// For each subdir at this level
 	{
 		if (!strcmp(dir->dirents[i]->name, path[i])) {		// If we have a matching directory name
-			if (depth == pathFields)						// If we can't go any deeper
-				return &dir->dirents[i]->ino;				// Return the inode of the matching dir
-			else return dir_recurse(dir->dirents[i],		// Else recurse another level
-									depth+1, 
-									pathFields-1, 
-									name, 
-									&path[1]); 
+			if (depth == pathFields)			// If we can't go any deeper
+				return &dir->dirents[i]->ino;		// Return the inode of the matching dir
+			else return dir_recurse(dir->dirents[i],	// Else recurse another level
+						depth+1, 
+						pathFields-1, 
+						name, 
+						&path[1]); 
 		}
 	}
-	return ErrorInode();									// If nothing found, return a special error inode
+	return ErrorInode();					// If nothing found, return a special error inode
 }
 
 /*
@@ -65,11 +65,11 @@ inode* fs_stat(char* name) {
 	char* path[FS_MAXPATHFIELDS];
 	char* next_field = NULL;
 	char* name_cpy = (char*)malloc(strlen(name)*sizeof(char));
-	const char* delimiter = "/";				// Path separator. Who doesn't use "/" ?
-	int depth = 0;								// The depth of the path, e.g. depth of "/a/b/c" is 3
+	const char* delimiter = "/";		// Path separator. Who doesn't use "/" ?
+	int depth = 0;				// The depth of the path, e.g. depth of "/a/b/c" is 3
 
-	strcpy(name_cpy, name);						// Copy the path because strtok replaces delimieter with '\0'
-	if (NULL == &root) { return NULL; }			// No filesystem yet, bail!
+	strcpy(name_cpy, name);			// Copy the path because strtok replaces delimieter with '\0'
+	if (NULL == &root) { return NULL; }	// No filesystem yet, bail!
 
 	// Split the path on '/'
 	next_field = strtok(name_cpy, delimiter);
@@ -82,7 +82,7 @@ inode* fs_stat(char* name) {
 
 	if (depth == 0) return &(root->ino);		// Return if we are at the root
 	else return dir_recurse(root, 0, depth,
-							name, &path[1]);	// Else traverse the path, get matching inode
+				name, &path[1]);	// Else traverse the path, get matching inode
 
 	return ErrorInode();
 }
@@ -126,7 +126,7 @@ int fs_mkfs() {
 	fs->superblock = fs->blocks[0];
 	fs->free_block_bitmap = fs->blocks[1];
 
-	memset(fs->superblock->data, 0, BLKSIZE);				// Zero-out the superblock
+	memset(fs->superblock->data, 0, BLKSIZE);			// Zero-out the superblock
 	memset(fs->free_block_bitmap->data, 0, BLKSIZE);		// Zero-out the free block
 
 	for (i = 0; i < MAXBLOCKS; i++) {
@@ -136,7 +136,7 @@ int fs_mkfs() {
 		else if (i==1) fputs(fs->free_block_bitmap->data, fp);
 		else {
 			block* newBlock = (block*)malloc(sizeof(block));	// Make a new block
-			memset(newBlock, 0, BLKSIZE);						// Zero it out
+			memset(newBlock, 0, BLKSIZE);				// Zero it out
 
 			sprintf(newBlock->data, "-block %d-", i);
 			fputs(newBlock->data, fp);
