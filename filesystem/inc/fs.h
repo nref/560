@@ -6,7 +6,7 @@
 #define NBLOCKS_IBLOCK 8			// Number of direct blocks an indirect block can point to
 #define NIBLOCKS 8				// Number of indirect blocks an indirect block can point to
 
-#define MAXFILEBLOCKS NBLOCKS^2*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
+#define MAXFILEBLOCKS NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
 
 #define FS_NAMEMAXLEN 256			// Max length of a directory or file name
 #define FS_MAXPATHLEN 65535			// Maximum path length == sizeof(uint16)-1 == 2^16-1
@@ -29,11 +29,13 @@ typedef unsigned long fs_ino_t;			// Inode number is just a ulong
 typedef unsigned int fs_mode_t;			// File mode is just an int (0 =='r', 1 =='w')
 
 typedef struct block {
+	int num;
 	char data[BLKSIZE];
 } block;
 
 typedef struct iblock1 {	
-	block* blocks[NBLOCKS_IBLOCK];		// 1st-level indirect blocks
+	/*block* blocks[NBLOCKS_IBLOCK];*/	// 1st-level indirect blocks
+	int blocks[NBLOCKS_IBLOCK];
 } iblock;
 
 typedef struct iblock2 {	
@@ -51,7 +53,8 @@ typedef struct inode {
 	int nblocks;				// File size in blocks
 	int mode;				// 0 file, 1 directory, 2 link
 
-	block* blocks[NBLOCKS];			// Directly addressible blocks (8 of them)
+	/*block* blocks[NBLOCKS];*/		// Directly addressable blocks (8 of them)
+	int blocks[NBLOCKS];
 
 	struct iblock1* ib1;			/* Singly indirected blocks. 
 						 * NBLOCKS_IBLOCK addressable blocks 

@@ -17,11 +17,14 @@
 #include <windows.h>
 #endif
 
-char* fname = "fs";		/* The name our filesystem will have on disk */
-filesystem* fs;			/* Pointer to the in-memory representation of the fs, e.g. freelist && superblock */
-dirent* root;			/* Pointer to the root directory entry */
-dir_data* root_data;		/* Pointer to root directory data */
-int blocksAllocated[MAXFILEBLOCKS]; // Indices of allocated blocks
+char* fname = "fs";			/* The name our filesystem will have on disk */
+filesystem* fs;				/* Pointer to the in-memory representation of the fs, 
+					 * e.g. freelist && superblock 
+					 */
+dirent* root;				/* Pointer to the root directory entry */
+dir_data* root_data;			/* Pointer to root directory data */
+int free_blocks_base;			/* Index of lowest free block */
+FILE* fp;				/* Pointer to the file containing the filesystem */
 
 /* 
  * Return an inode the fields of which obviously indicate a problem
@@ -101,161 +104,167 @@ int fs_mkdirent(char* currentdir, char* dirname) {
 	return FS_ERR;
 }
 
+block* fs_newBlock() {
+	block* b = (block*)malloc(sizeof(block));
+	memset(b->data, 0, BLKSIZE);	// Zero-out
+	return b;
+}
+
 int fs_openfs() {
-	FILE* fp = fopen(fname, "w+");
+	FILE* fp = fopen(fname, "r");
 	if (NULL == fp) return FS_ERR;
 
 	if (root) free(root);
-	root = (dirent*)malloc(sizeof(dirent));
-
+	if (root_data) free(root_data);
 	if (NULL != fs) free(fs);
 	if (NULL != fs->blocks) {
 		if (NULL != fs->blocks[0]) free(fs->blocks[0]);
 		if (NULL != fs->blocks[1]) free(fs->blocks[1]);
 	}
 
+	root = (dirent*)malloc(sizeof(dirent));
+	root_data = (dir_data*)malloc(sizeof(dir_data));
 	fs = (filesystem*)malloc(sizeof(filesystem));
-	fs->blocks[0] = (block*)malloc(sizeof(block));
-	fs->blocks[1] = (block*)malloc(sizeof(block));
 
+	fs->blocks[0] = fs_newBlock();
+	fs->blocks[1] = fs_newBlock();
 	fs->superblock = fs->blocks[0];
 	fs->free_block_bitmap = fs->blocks[1];
 
-	memset(fs->superblock->data, 0, BLKSIZE);			// Zero-out the superblock
-	memset(fs->free_block_bitmap->data, 0, BLKSIZE);		// Zero-out the free block
-
 	fseek(fp, 0, SEEK_SET);						// Read the superblock
 	fread(	fs->superblock->data,					// stored on disk back into memory
-		sizeof(fs->superblock->data[0]), BLKSIZE, fp);
+		sizeof(char), BLKSIZE, fp);
 
 	fseek(fp, BLKSIZE, SEEK_SET);
 	fread(	fs->free_block_bitmap->data,				// Also read the free block bitmap
-		sizeof(fs->free_block_bitmap->data[0]), BLKSIZE, fp);	// from disk into memory
+		sizeof(char), BLKSIZE, fp);				// from disk into memory
 
-	printf("%ld %ld %ld\n", sizeof(*root), sizeof(dirent), sizeof(fs->superblock->data));
+	printf("%ld %ld %ld\n", sizeof(*root), sizeof(dirent), sizeof(fs->superblock->data));	// Copy into root struct
 	memcpy(root, fs->superblock->data, sizeof(*root));
+
+	fseek(fp, 2*BLKSIZE, SEEK_SET);					// Also read the 3rd block into root_data
+	fread(root_data, sizeof(char), sizeof(*root_data), fp); 
 
 	if (!strcmp(root->name,"/"))					// If the root is named "/"
 		return FS_OK;
 	return FS_ERR;
 }
 
-// Traverse the free block array and return the index of first free element
-int fs_allocate_block() {
+/* Traverse the free block array and return a block 
+ * whose field num is the index of the first free bock */
+block* fs_allocate_block() {
 	int i;
-	int base = 2;	// Blocks 0 and 1 are superblock and free map
-	for (i = base; i < MAXBLOCKS; i++)
+
+	/* One char in the free block map represents 
+	 * 8 blocks (char == 1 byte == 8 bits) 
+	 */
+	char* eightBlocks;
+	block* newBlock;
+
+	for (i = free_blocks_base; i < MAXBLOCKS; i++)
 	{
-		if (fs->free_block_bitmap->data[i] == 0x0) { 
-			fs->free_block_bitmap->data[i]++;	// TODO: Does this increment by 1 bit?
-			return i;
+		eightBlocks = &fs->free_block_bitmap->data[i];
+		if (*eightBlocks < 0x07) { 
+			free_blocks_base = i + *eightBlocks;
+			++(*eightBlocks);
+
+			newBlock = fs_newBlock();
+			newBlock->num = free_blocks_base;
+			return newBlock;
 		}
 	}
-	return FS_ERR;
+	return NULL;
 }
 
-int fs_mkfs() {
-   	int i, j, k, l, ERR;
-	int blocksNeeded;
-	FILE* fp = fopen(fname, "w+");
+int fs_free_block(block* blk) {
+	if (fs->free_block_bitmap->data[blk->num] == 0x0)
+		return FS_ERR;	/* Block already free */
+
+	--fs->free_block_bitmap->data[blk->num];
+	free_blocks_base = blk->num;
+	return FS_OK;
+}
 
 /* Preallocate a contiguous file. Differs across platforms */
+int fs_preallocate() {
+	int ERR;
+	FILE* fp = fopen(fname, "w");
+
 #if defined(_WIN64) || defined(_WIN32)
 	LARGE_INTEGER offset;
 	offset.QuadPart = BLKSIZE*MAXBLOCKS;
 	ERR = SetFilePointerEx(fp, offset, NULL, FILE_BEGIN);
 	SetEndOfFile(fp);
 #elif __APPLE__	/* __MACH__ also works */
-    fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*MAXBLOCKS};
-    ERR = fcntl(fileno(fp), F_PREALLOCATE, &store);
+	fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*MAXBLOCKS};
+	ERR = fcntl(fileno(fp), F_PREALLOCATE, &store);
 #elif __unix__
-    ERR = posix_fallocate(fp, 0, BLKSIZE*MAXBLOCKS);
+	ERR = posix_fallocate(fp, 0, BLKSIZE*MAXBLOCKS);
 #endif
     
+	fclose(fp);
+
 	if (ERR < 0) { 
 		perror("allocation error");
 		return ERR;
 	}
 
-	fs = (filesystem*)malloc(sizeof(filesystem));
-	fs->blocks[0] = (block*)malloc(sizeof(block));
-	fs->blocks[1] = (block*)malloc(sizeof(block));
+	return ERR;
+}
 
-	fs->superblock = fs->blocks[0];
-	fs->free_block_bitmap = fs->blocks[1];
+/* Allocate @param numBlocks blocks if possible 
+ * Store indices in @param blocks
+ */
+int fs_allocate_blocks(int numBlocks, int* blocks) {
+	int i;
+	memset(blocks, 0, MAXFILEBLOCKS);	// Zero out indices of allocated blocks
 
-	memset(fs->superblock->data, 0, BLKSIZE);			// Zero-out the superblock
-	memset(fs->free_block_bitmap->data, 0, BLKSIZE);		// Zero-out the free block
-
-	// Write filesystem to disk
-	for (i = 0; i < MAXBLOCKS; i++) {
-		fseek(fp, BLKSIZE*i, SEEK_SET);
-
-		if (i==0) fwrite(fs->superblock->data, sizeof(fs->superblock->data[0]), BLKSIZE, fp);
-		else if (i==1) 	fwrite(fs->free_block_bitmap->data, sizeof(fs->free_block_bitmap->data[0]), BLKSIZE, fp);
-		else {
-			block* newBlock = (block*)malloc(sizeof(block));	// Make a new block
-			memset(newBlock, 0, BLKSIZE);				// Zero it out
-
-			sprintf(newBlock->data, "-block %d-", i);
-			fputs(newBlock->data, fp);
-		}
+	for (i = 0; i < numBlocks; i++)	{	// Allocate free blocks
+		block* newBlock = fs_allocate_block();
+		blocks[i] = newBlock->num;
+		free(newBlock);
 	}
 
-	// Setup root directory entry
-	root = (dirent*)malloc(sizeof(dirent));
-	root_data = (dir_data*)malloc(sizeof(dir_data));
+	return FS_OK;
+}
 
-	strcpy(root->name, "/");
-	root->ino.num = 1;
-	root->ino.nlinks = 0;
-	root->ino.mode = FS_DIR;
-	root->ino.size = BLKSIZE;
+/* Fill @param numBlocks from @param blocks into the inode @param ino
+ * block indices. Spill into Indirect block pointers, 
+ * doubly-indirected block pointers, and triply-indirected block 
+ * pointers as needed.
+ */
+int fs_fill_inode_block_pointers(inode* ino, int numBlocks, int* blocks) {
+	int i,j,k,l;
 
-	root_data->numDirs = 0;
-	root_data->numFiles = 0;
-	root_data->numLinks = 0;
-
-	// How many free blocks do we need?
-	blocksNeeded = sizeof(*root_data)/BLKSIZE + 1;		// + 1 because we allocate the ceiling
-	
-	memset(blocksAllocated, 0, MAXFILEBLOCKS);		// Zero out indices of allocated blocks
-
-	for (i = 0; i < blocksNeeded; i++)			// Allocate free blocks
-		blocksAllocated[i] = fs_allocate_block();
-
-	// Fill in pointers to allocated blocks
+	// Fill in indices to allocated blocks
 	for (i = 0; i < NBLOCKS; i++)
 	{
-		if (i == blocksNeeded) break;			// Allocated all blocks needed
-		root->ino.blocks[i] = 
-			&fs->free_block_bitmap[blocksAllocated[i]];	// Put in the inode the address of the allocated block
+		if (i == numBlocks) break;					
+			ino->blocks[i] = blocks[i];		// Put in the inode the address of the allocated block
 	}
 	
-	if (i < blocksNeeded) {					// If we used up all the direct blocks
+	if (i < numBlocks) {					// If we used up all the direct blocks
 								// Start using indirect blocks
 		for (j = 0; j < NBLOCKS_IBLOCK; j++, i++)	
 		{
-			if (i == blocksNeeded) break;
-			root->ino.ib1->blocks[j] = 
-				&fs->free_block_bitmap[blocksAllocated[i]];
+			if (i == numBlocks) break;
+				ino->ib1->blocks[j] = blocks[i];
 		}
 	}
 
-	if (i < blocksNeeded) {					// If we used up all the singly indirected blocks
+	if (i < numBlocks) {					// If we used up all the singly indirected blocks
 								// Start using doubly indirected blocks
 		for (k = 0; j < NIBLOCKS; k++)	
 		{
 			for (j = 0; j < NBLOCKS_IBLOCK; j++, i++)	
 			{
-				if (i == blocksNeeded) break;
-					root->ino.ib2->iblocks[k]->blocks[j] = 
-						&fs->free_block_bitmap[blocksAllocated[i]];
+				if (i == numBlocks) break;
+					ino->ib2->iblocks[k]->blocks[j] = blocks[i];
 			}
 		}
 	}
 
-	if (i < blocksNeeded) {					// If we used up all the doubly indirected blocks
+	if (i < numBlocks) {					// If we used up all the doubly indirected blocks
 								// Start using triply indirected blocks
 		for (l = 0; l < NIBLOCKS; l++)
 		{
@@ -263,37 +272,100 @@ int fs_mkfs() {
 			{
 				for (j = 0; j < NBLOCKS_IBLOCK; j++, i++)	
 				{
-					if (i == blocksNeeded) break;
-						root->ino.ib3->iblocks[l]->iblocks[k]->blocks[j] = 
-							&fs->free_block_bitmap[blocksAllocated[i]];
+					if (i == numBlocks) break;
+						ino->ib3->iblocks[l]->iblocks[k]->blocks[j] = blocks[i];
 				}
 			}
 		}
 	}
 
-	if (i != blocksNeeded)
-		printf("Warning: num blocks allocated (%d) != num blocks needed (%d)", i, blocksNeeded);
+	if (i != numBlocks)
+		printf("Warning: num blocks allocated (%d) != num blocks needed (%d)", i, numBlocks);
+	return FS_OK;
+}
 
-	// Write changed blocks to disk
-	for (i = 0; i < blocksNeeded; i++)
-	{
-		fseek(fp, BLKSIZE*blocksAllocated[i], SEEK_SET); 
-		fwrite(fs->blocks[blocksAllocated[i]], BLKSIZE, 1, fp);
-	}
+int fs_mkfs() {
+	int i;
+	int numBlocks;				/* How many blocks to allocate */
+	int blockIndex[MAXFILEBLOCKS];		/* Indices of allocated blocks */
 
-	// Allocate memory for all of this directory entry's direct blocks 
-	for (i = 0; i < NBLOCKS; i++)
-		root->ino.blocks[i] = (block*)malloc(sizeof(block));
+	fs_preallocate();	/* Make a file on disk */
+	free_blocks_base = 2;	/* Start allocating from 3rd block. 
+				 * Blocks 0 and 1 are superblock and free map
+				 */
+
+	/* Make in-memory representation of filesystem. 
+	 * This will be always be kept in synch with disk
+	 */
+	fs = (filesystem*)malloc(sizeof(filesystem));
+	fs->blocks[0] = fs_newBlock();
+	fs->blocks[1] = fs_newBlock();
+
+	fs->superblock		= fs->blocks[0];
+	fs->free_block_bitmap	= fs->blocks[1];
+
+	// Setup root directory entry
+	root		= (dirent*)malloc(sizeof(dirent));
+	root_data	= (dir_data*)malloc(sizeof(dir_data));
+
+	strcpy(root->name, "/");
+	root->ino.num		= 1;
+	root->ino.nlinks	= 0;
+	root->ino.mode		= FS_DIR;
+	root->ino.size		= BLKSIZE;
+
+	root_data->numDirs	= 0;
+	root_data->numFiles	= 0;
+	root_data->numLinks	= 0;
+
+	/* How many free blocks do we need?
+	 * + 1 because we allocate the ceiling in integer arithmetic
+	 */
+	numBlocks = sizeof(*root_data)/BLKSIZE + 1;
+	fs_allocate_blocks(numBlocks, blockIndex);	// Allocate all blocks needed
+	fs_fill_inode_block_pointers(&root->ino, numBlocks, blockIndex);
 
 	// Put the the root directory entry at the beginning 
 	// of the filesystem superblock
 	memcpy(fs->superblock->data, root, sizeof(*root));
 
-	// Write the in-memory copy of the filesystem superblock to the disk
-	fseek(fp, 0, SEEK_SET);
-	fwrite(fs->superblock->data, sizeof(fs->superblock->data[0]), BLKSIZE, fp);
+	// Write filesystem to disk
+	fp = fopen(fname, "w+");
+	if (NULL == fp) return FS_ERR;
+
+	fwrite(fs->blocks[0]->data, sizeof(char), BLKSIZE, fp);		// superblock
+	fwrite(fs->blocks[1]->data, sizeof(char), BLKSIZE, fp);		// free block map
+
+	// Zero-out filesystem
+	for (i = free_blocks_base; i < MAXBLOCKS; i++) {
+		block* newBlock = fs_newBlock();
+		sprintf(newBlock->data, "-block %d-", i);
+		
+		fseek(fp, BLKSIZE*i, SEEK_SET);
+		fputs(newBlock->data, fp);
+		free(newBlock);
+	}
+
+	// Allocate blocks in-memory for root_data
+	for (i = 0; i < numBlocks; i++)
+		fs->blocks[blockIndex[i]] = fs_newBlock();
+
+	// Write root_data to filesystem blocks
+	for (i = 0; i < numBlocks-1; i++)
+		memcpy(fs->blocks[blockIndex[i]]->data, root_data, BLKSIZE);
+
+	// Remainder to write (which does not occupy a full block)
+	memcpy(fs->blocks[blockIndex[i]]->data, root_data, sizeof(*root_data) % BLKSIZE);
+
+	// Write changed filesystem blocks to disk
+	for (i = 0; i < numBlocks; i++)
+	{
+		fseek(fp, BLKSIZE*blockIndex[i], SEEK_SET); 
+		fwrite(fs->blocks[blockIndex[i]]->data, BLKSIZE, 1, fp);
+	}
 
 	printf("Root is \"%s\". Filesystem size is %d KByte.\n", root->name, BLKSIZE*MAXBLOCKS/1024);
 	
+	fclose(fp);
 	return 0;
 }
