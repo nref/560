@@ -6,23 +6,23 @@
 char curDir[FS_MAXPATHLEN];		// Current shell directory
 char cmd[SH_BUFLEN];			// Buffer for user input
 
-void _sh_tree_recurse(dir_data* dir) {
+void _sh_tree_recurse(dentry* dir) {
 	int i;
 
-	for (i = 0; i < dir->numDirs; i++)	// For each subdir at this level
+	for (i = 0; i < dir->ndirs; i++)	// For each subdir at this level
 	{
-		printf("%s\n", dir->dirents[i]->name);	
+		printf("%s\n", dir->subdirs[i].name);	
 		_sh_tree_recurse(dir);
 	}
-	for (i = 0; i < dir->numFiles; i++)	// For each file at this level
-		printf("%s\n", dir->files[i]->name);	
-	for (i = 0; i < dir->numLinks; i++)	// For each link at this level
-		printf("%s\n", dir->links[i]->name);	
+	for (i = 0; i < dir->nfiles; i++)	// For each file at this level
+		printf("%s\n", dir->files[i].name);	
+	for (i = 0; i < dir->ino.nlinks; i++)	// For each link at this level
+		printf("%s\n", dir->links[i].name);	
 }
 
 void sh_tree() {
-	printf("%s\n", root->name);
-	_sh_tree_recurse(root_data);
+	printf("%s\n", fs->root->name);
+	_sh_tree_recurse(fs->root);
 }
 
 void sh_stat(char* name) {
@@ -32,8 +32,8 @@ void sh_stat(char* name) {
 	printf("\n");
 }
 
-int sh_mkdirent(char* currentdir, char* dirname) {
-	return fs_mkdirent(curDir, dirname);
+int sh_mkdentry(char* currentdir, char* dirname) {
+	return fs_mkdentry(curDir, dirname);
 }
 
 int sh_mkfs() {	
@@ -53,7 +53,7 @@ int sh_openfs() {
 	i = fs_openfs();
 
 	if (i >= 0)
-		strcpy(curDir, root->name); 
+		strcpy(curDir, fs->root->name); 
 	return i;
 }
 
@@ -95,7 +95,7 @@ int main(int argc, char** argv) {
 
 		else if (!strcmp(fields[0], "mkdir")) { 
 			if (i>1) {	// If the user provided more than one field
-				int retval = sh_mkdirent(curDir, fields[1]); 
+				int retval = sh_mkdentry(curDir, fields[1]); 
 				if (retval >= 0) { printf("OK"); }
 				else printf("ERROR");
 				printf("\n");
@@ -112,7 +112,7 @@ int main(int argc, char** argv) {
 
 			if (!sh_mkfs())	{ 
 				printf("OK"); 
-				strcpy(curDir, root->name); 
+				strcpy(curDir, fs->root->name); 
 			}
 			else { printf("ERROR"); }
 			printf("\n");

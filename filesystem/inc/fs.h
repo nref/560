@@ -16,6 +16,8 @@
 #define FS_MAXFILES 256				// Max number of files in a dir
 #define FS_MAXLINKS 256				// Max number of links in a dir
 
+#define FS_ROOTMAXBLOCKS 512			// Max number of a blocks root dir can occupy
+
 #define FS_READ 0				// File read mode
 #define FS_WRITE 1				// File write mode
 
@@ -29,7 +31,7 @@ typedef unsigned long fs_ino_t;			// Inode number is just a ulong
 typedef unsigned int fs_mode_t;			// File mode is just an int (0 =='r', 1 =='w')
 
 typedef struct block {
-	int num;
+	int num;				// Number of bytes in the block (TODO: use this)
 	char data[BLKSIZE];
 } block;
 
@@ -46,12 +48,21 @@ typedef struct iblock3 {
 	struct iblock2* iblocks[NIBLOCKS];	// 3rd-level indirect blocks
 } iblock3;
 
+typedef struct file;
+typedef struct dentry;
+typedef struct link;
+
 typedef struct inode {
 	fs_ino_t num;				// Inode number
 	int nlinks;				// Number of hard links to the inode
 	int size;				// File size in bytes
 	int nblocks;				// File size in blocks
 	int mode;				// 0 file, 1 directory, 2 link
+	union {
+		struct file* file_o;
+		struct dentry* dir_o;
+		struct link* link_o;
+	} owner;				// "owner" of this inode can be file, dir, link
 
 	/*block* blocks[NBLOCKS];*/		// Directly addressable blocks (8 of them)
 	int blocks[NBLOCKS];
@@ -85,31 +96,34 @@ typedef struct link {
 	char name[FS_NAMEMAXLEN];		// filename
 } link;
 
-typedef struct dir_data {			// The data in a dir to write into blocks
-	struct dirent* dirents[FS_MAXDIRS];	// Subdirs
-	file* files[FS_MAXFILES];		// Files in this dir
-	link* links[FS_MAXLINKS];		// Links in this dir
-	int numDirs, numFiles, numLinks;
-} dir_data;
+typedef struct dentry {				// Directory entry
+	inode ino;				// Inode
+	struct dentry* parent;			// Parent directory
+	struct dentry* subdirs;			// Subdirectories
+	file* files;				// Files in this dir
+	link* links;				// Links in this dir
+	int ndirs, nfiles;
 
-typedef struct dirent {				// Directory entry
-	struct inode ino;			// Inode
 	char name[FS_NAMEMAXLEN];		// filename
-} dirent;
+} dentry;
 
 typedef struct filesystem {	
-	block* blocks[NBLOCKS];
+	block* blocks[MAXBLOCKS];
+	dentry *root;				// Root directory entry
 
-	block* superblock;			// Block 0
-	block* free_block_bitmap;		// Block 1. A map of free blocks
+	block* superblock;			// Block 0. Contains indices of blocks for the root dentry.
+	block* free_block_bitmap;		/* Block 1. A map of free blocks. 
+						 * Since filesystem size == 100MB == 25600 4096-byte blocks,
+						 * we can use a single block of 4096 chars == 4096*8 == 32768 bits
+						 * to store the free block bitmap.
+						 */
+	int free_blocks_base;			// Index of lowest free block
 } filesystem;
 
 extern char* fname;				/* The name our filesystem will have on disk */
 extern filesystem* fs;				/* Pointer to the in-memory representation of the fs, 
-						 * e.g. freelist && superblock 
+						 * e.g. freelist && superblock  && root
 						 */
-extern dirent* root;				/* Pointer to the root directory entry */
-extern dir_data* root_data;			/* Pointer to root directory data */
 
 extern int fs_openfs();
 extern int fs_mkfs();
@@ -118,8 +132,8 @@ extern char* fs_read(int fd, int size);
 extern void fs_write(int fd, char* string);
 extern void fs_seek(int fd, int offset);
 extern void fs_close(int fd);
-extern int fs_mkdirent(char* currentdir, char* dirname);
-extern void fs_rmdirent(int fd);
+extern int fs_mkdentry(char* currentdir, char* dirname);
+extern void fs_rmdentry(int fd);
 extern void fs_link(char* src, char* dest);
 extern void fs_unlink(char* name);
 extern inode* fs_stat(char* name);
