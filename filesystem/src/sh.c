@@ -6,14 +6,19 @@
 char curDir[FS_MAXPATHLEN];		// Current shell directory
 char cmd[SH_BUFLEN];			// Buffer for user input
 
-void _sh_tree_recurse(dentry* dir) {
+void _sh_tree_recurse(int depth, dentry* dir) {
 	int i;
+
+	dentry *iterator = dir->head;
 
 	for (i = 0; i < dir->ndirs; i++)	// For each subdir at this level
 	{
-		printf("%s\n", dir->subdirs[i].name);	
-		_sh_tree_recurse(dir);
+		printf("%*s" "%s\n", depth*2, " ", iterator->name);	
+		_sh_tree_recurse(depth+1, iterator);
+		iterator = iterator->next;
 	}
+
+	// TODO: changes these to linked lists as well
 	for (i = 0; i < dir->nfiles; i++)	// For each file at this level
 		printf("%s\n", dir->files[i].name);	
 	for (i = 0; i < dir->ino.nlinks; i++)	// For each link at this level
@@ -22,7 +27,7 @@ void _sh_tree_recurse(dentry* dir) {
 
 void sh_tree() {
 	printf("%s\n", fs->root->name);
-	_sh_tree_recurse(fs->root);
+	_sh_tree_recurse(1, fs->root);
 }
 
 void sh_stat(char* name) {
@@ -33,7 +38,9 @@ void sh_stat(char* name) {
 }
 
 int sh_mkdentry(char* currentdir, char* dirname) {
-	return fs_mkdentry(curDir, dirname);
+	if (NULL == fs) printf("No filesystem yet!");
+	else return fs_mkdentry(curDir, dirname);
+	return FS_ERR;
 }
 
 int sh_mkfs() {	

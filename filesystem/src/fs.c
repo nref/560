@@ -29,6 +29,7 @@ FILE* fs_safeopen(char* fname, char* mode) {
 	FILE* fp = fopen(fname, mode);
 	if (NULL == fp) 
 		return (FILE*)FS_ERR;
+	return fp;
 }
 
 /* 
@@ -51,20 +52,20 @@ inode* ErrorInode() {
  */ 
 inode* dir_recurse(dentry* dir, int depth, int pathFields, char* name, char* path[]) {
 	int i;									// Declaration here to satisfy Visual C compiler
+	dentry *iterator = dir->head;
+	if (NULL == iterator) return ErrorInode();				// Dir has no subdirs!
 
 	for (i = 0; i < dir->ndirs; i++)					// For each subdir at this level
 	{
-		if (!strcmp(dir->subdirs[i].name, path[i])) {			// If we have a matching directory name
+		if (!strcmp(iterator->name, path[i])) {				// If we have a matching directory name
 			if (depth == pathFields)				// If we can't go any deeper
-				return &dir->subdirs[i].ino;			// Return the inode of the matching dir
+				return &iterator->ino;				// Return the inode of the matching dir
 
 			// Else recurse another level
-			else return dir_recurse(&dir->subdirs[i],
-						depth+1, 
-						pathFields-1, 
-						name, 
-						&path[1]); 
+			else return dir_recurse(iterator, depth+1, 
+						pathFields-1, name, &path[1]); 
 		}
+		iterator = iterator->next;
 	}
 	return ErrorInode();					// If nothing found, return a special error inode
 }
@@ -99,13 +100,41 @@ inode* fs_stat(char* name) {
 	return ErrorInode();
 }
 
-int fs_mkdentry(char* currentdir, char* dirname) {
-	inode* current_inode = fs_stat(currentdir);
+int fs_mkdentry(char* cur_dir_name, char* dir_name) {
+	dentry* curr_dir, *new_dir;
+	inode* current_inode = fs_stat(cur_dir_name);
 	if (current_inode->num == 0) return FS_ERR;
 
-	// TODO: Get dentry, dir_data using current_inode
+	curr_dir = current_inode->owner.dir_o;
+	curr_dir->ndirs++;				// TODO: Fix segfault after mkdir and then reload fs
+	new_dir = (dentry*) malloc(sizeof(dentry));	// TODO: Replace with constructor
 
-	return FS_ERR;
+	// TODO: Store in blocks
+	strcpy(new_dir->name, dir_name);
+	new_dir->tail = NULL;
+	new_dir->head = NULL;
+	new_dir->nfiles = 0;
+	new_dir->ndirs = 0;
+	new_dir->ino.nlinks = 0;
+	new_dir->ino.num = 2;				// TODO: Write inode allocator
+	new_dir->ino.size = BLKSIZE;
+	new_dir->ino.nblocks = 1;
+	new_dir->files = NULL;
+	new_dir->links = NULL;
+
+	/* First entry TODO: Try this in fewer LOC */
+	if (NULL == curr_dir->head) {
+		curr_dir->head = new_dir;
+		new_dir->prev = new_dir;
+		new_dir->next = new_dir;
+		curr_dir->tail = curr_dir->head;
+	} else {
+		curr_dir->tail->next = new_dir;
+		new_dir->prev = curr_dir->tail;
+		curr_dir->tail = new_dir;
+		new_dir->next = curr_dir->head;
+	}
+	return FS_OK;
 }
 
 block* fs_newBlock() {
@@ -285,7 +314,6 @@ int fs_openfs() {
 
 	fs		= (filesystem*)	malloc(sizeof(filesystem));
 	fs->root	= (dentry*)	malloc(sizeof(dentry));
-
 	fs->blocks[0] = fs_newBlock();
 	fs->blocks[1] = fs_newBlock();
 
@@ -294,7 +322,7 @@ int fs_openfs() {
 
 	fp = fs_safeopen(fname, "r");
 	if (FS_ERR == (int)fp) return FS_ERR;
-	
+
 	fseek(fp, 0, SEEK_SET);						// Read the superblock
 	fread(	fs->superblock->data,					// stored on disk back into memory
 		sizeof(char), BLKSIZE, fp);
@@ -368,9 +396,14 @@ int fs_mkfs() {
 	fs->root->ino.size		= fs->root->ino.nblocks*BLKSIZE;
 	fs->root->ino.owner.dir_o	= fs->root;
 
-	fs->root->subdirs	= (dentry*)	malloc(FS_MAXDIRS*sizeof(dentry));
 	fs->root->files		= (file*)	malloc(FS_MAXDIRS*sizeof(file));
 	fs->root->links		= (link*)	malloc(FS_MAXDIRS*sizeof(link));
+
+	fs->root->head		= NULL;		// First added subdir
+	fs->root->tail		= NULL;		// Lastly added subdir
+	fs->root->parent	= fs->root;	// Parent of root is root
+	fs->root->next		= fs->root;	// root has no parent; next goes to self
+	fs->root->prev		= fs->root;	// root has no parent; prev go to self
 
 	fs_allocate_blocks(fs->root->ino.nblocks, blockIndex);	/* Allocate n blocks */
 	

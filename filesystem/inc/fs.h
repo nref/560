@@ -48,9 +48,9 @@ typedef struct iblock3 {
 	struct iblock2* iblocks[NIBLOCKS];	// 3rd-level indirect blocks
 } iblock3;
 
-typedef struct file;
-typedef struct dentry;
-typedef struct link;
+struct file;
+struct dentry;
+struct link;
 
 typedef struct inode {
 	fs_ino_t num;				// Inode number
@@ -99,7 +99,14 @@ typedef struct link {
 typedef struct dentry {				// Directory entry
 	inode ino;				// Inode
 	struct dentry* parent;			// Parent directory
-	struct dentry* subdirs;			// Subdirectories
+	//struct dentry* subdirs;		// Subdirectories	
+						// TODO: This is deprecated, switching to linked-list 
+						// instead of preallocated array , see next 4 fields
+	struct dentry* head;			// First dir added here
+	struct dentry* tail;			// Last dir added here
+	struct dentry* next;			// Next dir in parent
+	struct dentry* prev;			// Previous dir in parent
+
 	file* files;				// Files in this dir
 	link* links;				// Links in this dir
 	int ndirs, nfiles;
