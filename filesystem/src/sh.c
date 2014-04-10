@@ -6,8 +6,8 @@
 char curDir[FS_MAXPATHLEN];		// Current shell directory
 char cmd[SH_BUFLEN];			// Buffer for user input
 
-void _sh_tree_recurse(int depth, dentry* dir) {
-	int i;
+void _sh_tree_recurse(uint depth, dentry* dir) {
+	uint i;
 
 	dentry *iterator = dir->head;
 
@@ -18,7 +18,7 @@ void _sh_tree_recurse(int depth, dentry* dir) {
 		iterator = iterator->next;
 	}
 
-	// TODO: changes these to linked lists as well
+	// TODO: change these to linked lists as well
 	for (i = 0; i < dir->nfiles; i++)	// For each file at this level
 		printf("%s\n", dir->files[i].name);	
 	for (i = 0; i < dir->ino.nlinks; i++)	// For each link at this level
@@ -26,8 +26,25 @@ void _sh_tree_recurse(int depth, dentry* dir) {
 }
 
 void sh_tree() {
-	printf("%s\n", fs->root->name);
-	_sh_tree_recurse(1, fs->root);
+	dentry* root;
+	
+	if (NULL != &fs->sb->root)
+		root = fs->sb->root.owner.dir_o;
+	else {
+		printf("No filesystem yet!\n");
+		return;
+	}
+
+	if (	NULL == fs || 
+		NULL == fs->sb || 
+		NULL == root || 
+		strlen(root->name) == 0) {
+
+		printf("No filesystem yet!\n");
+		return;
+	}
+	printf("%s\n", root->name);
+	_sh_tree_recurse(1, root);
 }
 
 void sh_stat(char* name) {
@@ -37,9 +54,9 @@ void sh_stat(char* name) {
 	printf("\n");
 }
 
-int sh_mkdentry(char* currentdir, char* dirname) {
+int sh_mkdir(char* currentdir, char* dirname) {
 	if (NULL == fs) printf("No filesystem yet!");
-	else return fs_mkdentry(curDir, dirname);
+	else return fs_mkdir(curDir, dirname);
 	return FS_ERR;
 }
 
@@ -55,13 +72,22 @@ void prompt() {
 }
 
 // Try to open a preexisting filesystem
-int sh_openfs() {
+dentry* sh_openfs() {
 	int i;
-	i = fs_openfs();
+	dentry* root;
 
-	if (i >= 0)
-		strcpy(curDir, fs->root->name); 
-	return i;
+	i = fs_openfs();
+	
+	if (NULL != &fs->sb->root)
+		root = fs->sb->root.owner.dir_o;
+	else {
+		printf("openfs() problem: root inode is NULL!\n");
+		return NULL;
+	}
+
+	if (i > 0)
+		strcpy(curDir, root->name); 
+	return root;
 }
 
 int main(int argc, char** argv) {
@@ -71,9 +97,11 @@ int main(int argc, char** argv) {
 	char* next_field = NULL;
 	char cmd_cpy[SH_BUFLEN];
 	int i;
+	dentry* root;
 	curDir[0] = '\0';
 
-	sh_openfs();							
+	root = sh_openfs();	
+
 	prompt();							
 	while (NULL != fgets(cmd, SH_BUFLEN-1, stdin)) {		// Get user input
 
@@ -102,7 +130,7 @@ int main(int argc, char** argv) {
 
 		else if (!strcmp(fields[0], "mkdir")) { 
 			if (i>1) {	// If the user provided more than one field
-				int retval = sh_mkdentry(curDir, fields[1]); 
+				int retval = sh_mkdir(curDir, fields[1]); 
 				if (retval >= 0) { printf("OK"); }
 				else printf("ERROR");
 				printf("\n");
@@ -117,9 +145,9 @@ int main(int argc, char** argv) {
 		else if (!strcmp(fields[0], "mkfs")) {
 			printf("mkfs() ... ");
 
-			if (!sh_mkfs())	{ 
+			if (FS_ERR != sh_mkfs()) { 
 				printf("OK"); 
-				strcpy(curDir, fs->root->name); 
+				strcpy(curDir, root->name); 
 			}
 			else { printf("ERROR"); }
 			printf("\n");
