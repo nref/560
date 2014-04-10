@@ -10,7 +10,7 @@ BDIR = ./bin
 ODIR = $(BDIR)/obj
 
 INCLUDES = -I$(IDIR)
-CFLAGS = $(INCLUDES) -g -std=c99
+CFLAGS = $(INCLUDES) -g -std=c99 -Wall
 CC = cc
 
 # Output binaries
