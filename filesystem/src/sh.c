@@ -9,13 +9,17 @@ char cmd[SH_BUFLEN];			// Buffer for user input
 void _sh_tree_recurse(uint depth, dentry_volatile* dir) {
 	uint i;
 
-	dentry_volatile *iterator = dir->head;
+	dentry_volatile *iterator = dir->head->data_v.dir;
+	if (NULL == iterator) {
+		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
+		return;
+	}
 
 	for (i = 0; i < dir->ndirs; i++)	// For each subdir at this level
 	{
 		printf("%*s" "%s\n", depth*2, " ", iterator->name);	
 		_sh_tree_recurse(depth+1, iterator);
-		iterator = iterator->next;
+		iterator = iterator->next->data_v.dir;
 	}
 
 	// TODO: change these to linked lists as well
@@ -27,13 +31,21 @@ void _sh_tree_recurse(uint depth, dentry_volatile* dir) {
 
 void sh_tree(filesystem *fs) {
 	dentry_volatile* root_v = NULL;
-	
+	inode* ino = NULL;
+
 	if (NULL == fs || NULL == &fs->sb) {
 		printf("NULL filesystem!\n");
 		return;
 	}
 
-	root_v = fs->sb.root;
+	/* Two way to get the root dir
+	 * This first one is more general; 
+	 * you can print the tree of any dir */
+	ino = fs_stat(fs, "/");
+	root_v = fs_dentry_volatile_from_dentry(fs, &ino->data.dir);
+
+	/* The less-general hardcoded method */
+	//root_v = fs->root;
 
 	if (NULL == root_v) {
 		printf("NULL root directory!\n");
@@ -70,7 +82,9 @@ int sh_mkdir(filesystem* fs, char* currentdir, char* dirname) {
 }
 
 filesystem* sh_mkfs() {	
-	return fs_mkfs();
+	filesystem* fs = NULL;
+	fs = fs_mkfs();
+	return fs;
 }
 
 // Show the shell prompt
@@ -96,9 +110,9 @@ dentry_volatile* sh_getfsroot(filesystem *fs) {
 
 	if (NULL == fs)
 		return NULL;
-	root_v = fs->sb.root;
+	root_v = fs->root;
 
-	if (NULL == root_v || fs->sb.ino != 1) {
+	if (NULL == root_v) {
 		printf("openfs() problem: root directory is NULL!\n");
 		return NULL;
 	}
@@ -111,7 +125,7 @@ dentry_volatile* sh_getfsroot(filesystem *fs) {
 	return root_v;
 }
 
-int main(int argc, char** argv) {
+int main() {
 
 	char* fields[SH_MAXFIELDS];
 	char* delimiter = "\t ";
@@ -171,6 +185,10 @@ int main(int argc, char** argv) {
 		else if (!strcmp(fields[0], "mkfs")) {
 			printf("mkfs() ... ");
 
+			if (NULL != fs) {
+				free(fs);
+				fs = NULL;
+			}
 			fs = sh_mkfs();
 			if (NULL != fs)
 				root = sh_getfsroot(fs);

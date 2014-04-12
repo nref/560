@@ -1,110 +1,26 @@
-﻿Build started 4/11/2014 10:51:46 PM.
+﻿Build started 4/12/2014 2:23:17 AM.
      1>Project "\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\filesystem\filesystem.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /I..\..\inc /ZI /nologo /W3 /WX- /Od /Oy- /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TC /analyze- /errorReport:prompt ..\..\src\fs.c ..\..\src\sh.c
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /I..\..\inc /ZI /nologo /W3 /WX- /Od /Oy- /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TC /analyze- /errorReport:prompt ..\..\src\sh.c
          sh.c
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(12): warning C4133: 'initializing' : incompatible types - from 'inode *' to 'dentry_volatile *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(22): warning C4133: '=' : incompatible types - from 'inode *' to 'dentry_volatile *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(45): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(110): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-         fs.c
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(32): warning C4996: 'fopen': This function or variable may be unsafe. Consider using fopen_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
-                 c:\program files (x86)\microsoft visual studio 11.0\vc\include\stdio.h(218) : see declaration of 'fopen'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(54): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(54): error C2198: 'fs_dentry_volatile_from_dentry' : too few arguments for call
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(67): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(67): error C2198: 'fs_dentry_volatile_from_dentry' : too few arguments for call
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(96): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(96): warning C4033: 'fs_stat' must return a value
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(97): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(98): warning C4047: 'function' : 'uint' differs in levels of indirection from 'char *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(98): warning C4024: 'dir_recurse' : different types for formal and actual parameter 4
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(98): warning C4047: 'function' : 'char *' differs in levels of indirection from 'char **'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(98): warning C4024: 'dir_recurse' : different types for formal and actual parameter 5
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(98): error C2198: 'dir_recurse' : too few arguments for call
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(125): warning C4047: '=' : 'inode *[256]' differs in levels of indirection from 'file *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(125): error C2106: '=' : left operand must be l-value
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(126): warning C4047: '=' : 'inode *[256]' differs in levels of indirection from 'link_perm *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(126): error C2106: '=' : left operand must be l-value
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(146): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(147): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(201): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(213): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(214): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(244): error C2039: 'map' : is not a member of 'filesystem'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(177) : see declaration of 'filesystem'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(252): error C2039: 'map' : is not a member of 'filesystem'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(177) : see declaration of 'filesystem'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(255): error C2039: 'map' : is not a member of 'filesystem'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(177) : see declaration of 'filesystem'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(435): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(436): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(438): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(439): error C2039: 'owner' : is not a member of 'inode'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(131) : see declaration of 'inode'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(445): error C2039: 'map' : is not a member of 'filesystem'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(177) : see declaration of 'filesystem'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(446): warning C4022: 'fread' : pointer mismatch for actual parameter 1
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(446): warning C4047: 'function' : 'size_t' differs in levels of indirection from 'FILE *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(446): warning C4024: 'fread' : different types for formal and actual parameter 3
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(446): error C2198: 'fread' : too few arguments for call
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(478): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(479): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(490): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(494): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(495): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(501): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(501): error C2198: 'strcpy' : too few arguments for call
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(503): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(507): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(507): warning C4047: 'function' : 'inode *' differs in levels of indirection from 'uint'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(507): warning C4024: 'fs_fill_inode_block_pointers' : different types for formal and actual parameter 1
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(507): warning C4047: 'function' : 'int' differs in levels of indirection from 'int *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(507): warning C4024: 'fs_fill_inode_block_pointers' : different types for formal and actual parameter 2
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(507): error C2198: 'fs_fill_inode_block_pointers' : too few arguments for call
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(510): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(511): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(523): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(524): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(531): error C2039: 'root' : is not a member of 'superblock'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(167) : see declaration of 'superblock'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(550): error C2039: 'map' : is not a member of 'filesystem'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(177) : see declaration of 'filesystem'
-                 \\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\inc\fs.h(177) : see declaration of 'filesystem'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(550): warning C4022: 'fwrite' : pointer mismatch for actual parameter 1
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(550): warning C4047: 'function' : 'size_t' differs in levels of indirection from 'FILE *'
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(550): warning C4024: 'fwrite' : different types for formal and actual parameter 2
-     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\fs.c(550): error C2198: 'fwrite' : too few arguments for call
-         Generating Code...
-     1>Done Building Project "\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\filesystem\filesystem.vcxproj" (Build target(s)) -- FAILED.
+     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(143): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 11.0\vc\include\string.h(110) : see declaration of 'strcpy'
+     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(153): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 11.0\vc\include\string.h(110) : see declaration of 'strcpy'
+     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(154): warning C4996: 'strtok': This function or variable may be unsafe. Consider using strtok_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 11.0\vc\include\string.h(200) : see declaration of 'strtok'
+     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(161): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 11.0\vc\include\string.h(110) : see declaration of 'strcpy'
+     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(163): warning C4996: 'strtok': This function or variable may be unsafe. Consider using strtok_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 11.0\vc\include\string.h(200) : see declaration of 'strtok'
+     1>\\vmware-host\shared folders\cds\documents\idx\560\labs\560\filesystem\src\sh.c(197): warning C4996: 'strcpy': This function or variable may be unsafe. Consider using strcpy_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+                 c:\program files (x86)\microsoft visual studio 11.0\vc\include\string.h(110) : see declaration of 'strcpy'
+       Link:
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.lib" /MACHINE:X86 Debug\fs.obj
+         Debug\sh.obj
+         filesystem.vcxproj -> \\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.exe
+     1>Done Building Project "\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\filesystem\filesystem.vcxproj" (Build target(s)).
 
-Build FAILED.
+Build succeeded.
 
-Time Elapsed 00:00:01.48
+Time Elapsed 00:00:01.03

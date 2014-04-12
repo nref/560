@@ -32,15 +32,22 @@
 
 #define INT_SZ 8
 
+#define true 1
+#define false 0
+
 /* The types that we want to write to or read from disk */
 enum {
-	BLOCK, DENTRY, INODE
+	BLOCK, MAP, SUPERBLOCK, INODE
 } TYPE;
 
 typedef unsigned int uint;
-typedef uint16_t block_t;			// Block number is just a ulong
-typedef unsigned long inode_t;			// Inode number is just a ulong
-typedef uint fs_mode_t;				// File mode is just an int (0 =='r', 1 =='w')
+typedef uint16_t block_t;			// Block number
+typedef unsigned long inode_t;			// Inode number
+typedef uint fs_mode_t;				// File mode (0 =='r', 1 =='w')
+
+typedef struct map {
+	char data[BLKSIZE];
+} map;
 
 typedef struct block {
 	block_t num;				// Index of this block. The block knows where it is in the fs
@@ -49,8 +56,7 @@ typedef struct block {
 } block;
 
 typedef struct iblock1 {	
-	/*block* blocks[NBLOCKS_IBLOCK];*/	// 1st-level indirect blocks
-	block_t blocks[NBLOCKS_IBLOCK];
+	block_t blocks[NBLOCKS_IBLOCK];		// 1st-level indirect blocks
 } iblock;
 
 typedef struct iblock2 {	
@@ -61,35 +67,21 @@ typedef struct iblock3 {
 	struct iblock2 iblocks[NIBLOCKS];	// 3rd-level indirect blocks
 } iblock3;
 
-struct inode;					// Forward declaration because of mutual 
-						// dependence inode <-> { file, dentry, link }
+struct inode;					/* Forward declaration because of mutual 
+						 * dependence inode <-> { file, dentry, link } */
 
 /* files, directories, and links have an in-memory "volatile" structure as well as an on-disk structure */
 typedef struct file {
 	inode_t ino;				// Index of the file's inode
-	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
 	uint f_pos;				// Byte offset seek'ed to
 	char name[FS_NAMEMAXLEN];		// filename
 } file;
-
-typedef struct file_volatile {
-	struct inode* f_inode;			// pointer to the file's inode
-	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
-	uint f_pos;				// Byte offset seek'ed to
-	char name[FS_NAMEMAXLEN];		// filename
-} file_volatile;
 
 typedef struct link_perm {			// On-disk link
 	inode_t ino;				// This link's inode
 	inode_t dest;				// inode pointing to
 	char name[FS_NAMEMAXLEN];		// link name
 } link_perm;
-
-typedef struct link_volatile {			// In-memory link
-	struct inode* ino;			// This link's inode
-	struct inode* dest;			// inode pointing to
-	char name[FS_NAMEMAXLEN];		// link name
-} link_volatile;
 
 typedef struct dentry {				// On-disk directory entry
 	inode_t ino;				// Inode number
@@ -106,34 +98,57 @@ typedef struct dentry {				// On-disk directory entry
 	char name[FS_NAMEMAXLEN];		// dir name
 } dentry;
 
+typedef struct file_volatile {
+	struct inode* f_inode;			// pointer to the file's inode
+	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
+	uint seek_pos;				// Byte offset seek'ed to
+	char name[FS_NAMEMAXLEN];		// Filename
+} file_volatile;
+
+typedef struct link_volatile {			// In-memory link
+	struct inode* ino;			// This link's inode
+	struct inode* dest;			// inode pointing to
+	char name[FS_NAMEMAXLEN];		// Link name
+} link_volatile;
+
 typedef struct dentry_volatile {		// In-memory directory entry
 	struct inode* ino;			// Inode
-	struct dentry_volatile* parent;		// Parent directory (inode number)
-	struct dentry_volatile* head;		// First dir added here
-	struct dentry_volatile* tail;		// Last dir added here
-	struct dentry_volatile* next;		// Next dir in parent
-	struct dentry_volatile* prev;		// Previous dir in parent
+	struct inode* parent;			// Parent directory (inode number)
+	struct inode* head;			// First dir added here
+	struct inode* tail;			// Last dir added here
+	struct inode* next;			// Next dir in parent
+	struct inode* prev;			// Previous dir in parent
 
-	file* files;				// Files in this dir
-	link_perm* links;				// Links in this dir
+	struct inode* files;			// Files in this dir
+	struct inode* links;			// Links in this dir
+
 	uint ndirs, nfiles;
 
-	char name[FS_NAMEMAXLEN];		// dir name
+	char name[FS_NAMEMAXLEN];		// Dir name
 } dentry_volatile;
 
+/* By intention the block, inode, and superblock have identical in-memory and disk structure */
 typedef struct inode {
 	inode_t num;				/* Inode number */
-	uint nlinks;				/* Number of hard links to the inode */
-	uint size;				/* File size in bytes */
 	uint nblocks;				/* File size in blocks */
-	uint mode;				/* 0 file, 1 directory, 2 link */
-	union {
-		struct file file_o;
-		struct dentry dir_o;
-		struct link_perm link_o;
-	} owner;				/* "owner" of this inode can be file, dir, link */
-
+	uint size;				/* File size in bytes */
 	block_t blocks[NBLOCKS];		/* Directly addressable blocks (8 of them) */
+
+	uint nlinks;				/* Number of hard links to the inode */
+	uint mode;				/* 0 file, 1 directory, 2 link */
+
+	union {
+		struct file file;
+		struct dentry dir;
+		struct link_perm link;
+	} data;					/* On-disk data of this inode */
+
+	union {
+		struct file_volatile* file;
+		struct dentry_volatile* dir;
+		struct link_perm* link;
+	} data_v;				/* In-memory data of this inode  */
+
 
 	struct iblock1 ib1;			/* Singly indirected blocks. 
 						 * NBLOCKS_IBLOCK addressable blocks 
@@ -150,30 +165,31 @@ typedef struct inode {
 						 */
 } inode;
 
-/* By intention the block, inode, superblock, filesystem have identical in-meory and disk structure */
 typedef struct superblock {
-	uint root_first_block;			// First block of root dir
-	uint root_last_block;			// Last block of root dir
-	uint fs_blk_alloc_cnt;			// The number of allocated blocks
-	uint free_blocks_base;			// Index of lowest free block
-	inode_t ino;				// Inode of root directory entry
-
-	dentry_volatile* root;
+	uint nblocks;				// The number of blocks allocated to the superblock
+	uint free_blocks_base;			// Index of lowest unallocated block
+	inode ino;				// Inode of root directory entry
+	block_t blocks[32];			// This superblock's blocks. Superblock is big to hold inode_first_blocks
+	block_t inode_first_blocks[MAXBLOCKS];	// Index of first allocated block for each inode.
+	block_t inode_block_counts[MAXBLOCKS];	// Index of first allocated block for each inode.
 
 } superblock;
 
 typedef struct filesystem {	
+	block* block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
+	dentry_volatile* root;			/* Root directory entry */
 
-	superblock sb;				// Block 0. Contains fs configuration
-	block map;				/* Block 1. A map of free blocks. 
+	map fb_map;				/* Block 0. Free block map. 
 						 * Since filesystem size == 100MB == 25600 4096-byte blocks,
 						 * we can use a single block of 4096 chars == 4096*8 == 32768 bits
-						 * to store the free block bitmap.
-						 */
+						 * to store the free block bitmap. */
+	superblock sb;				/* Blocks 0...sizeof(superblock). Superblock. Contains fs configuration */
+
 } filesystem;
 
-extern char* fname;				/* The name our filesystem will have on disk */
-extern block* block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
+char* fname;				/* The name our filesystem will have on disk */
+
+extern dentry_volatile* fs_dentry_volatile_from_dentry(filesystem*, dentry*);
 
 extern filesystem* fs_openfs();
 extern filesystem* fs_mkfs();
