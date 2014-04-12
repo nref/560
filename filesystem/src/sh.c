@@ -6,10 +6,10 @@
 char curDir[FS_MAXPATHLEN];		// Current shell directory
 char cmd[SH_BUFLEN];			// Buffer for user input
 
-void _sh_tree_recurse(uint depth, dentry* dir) {
+void _sh_tree_recurse(uint depth, dentry_volatile* dir) {
 	uint i;
 
-	dentry *iterator = dir->head;
+	dentry_volatile *iterator = dir->head;
 
 	for (i = 0; i < dir->ndirs; i++)	// For each subdir at this level
 	{
@@ -26,25 +26,33 @@ void _sh_tree_recurse(uint depth, dentry* dir) {
 }
 
 void sh_tree(filesystem *fs) {
-	dentry* root;
+	dentry_volatile* root_v = NULL;
 	
-	if (NULL != &fs->sb.ino)
-		root = &fs->sb.ino.owner.dir_o;
-	else {
-		printf("No filesystem yet!\n");
+	if (NULL == fs || NULL == &fs->sb) {
+		printf("NULL filesystem!\n");
 		return;
 	}
 
-	if (	NULL == fs || 
-		NULL == &fs->sb || 
-		NULL == root || 
-		strlen(root->name) == 0) {
+	root_v = fs->sb.root;
 
-		printf("No filesystem yet!\n");
+	if (NULL == root_v) {
+		printf("NULL root directory!\n");
 		return;
 	}
-	printf("%s\n", root->name);
-	_sh_tree_recurse(1, root);
+
+	if (NULL == root_v->ino) {
+		printf("NULL filesystem inode!\n");
+		return;
+	}
+	
+	if ('\0' == root_v->name[0] || strlen(root_v->name) == 0) {
+
+		printf("Filesystem root name not \"/\"!\n");
+		return;
+	}
+
+	printf("%s\n", root_v->name);
+	_sh_tree_recurse(1, root_v);
 }
 
 void sh_stat(filesystem* fs, char* name) {
@@ -83,19 +91,24 @@ filesystem* sh_openfs() {
 	return fs;
 }
 
-dentry* sh_getfsroot(filesystem *fs) {
-	dentry* root = NULL;
+dentry_volatile* sh_getfsroot(filesystem *fs) {
+	dentry_volatile* root_v = NULL;
 
 	if (NULL == fs)
 		return NULL;
-	if (NULL != &fs->sb.ino)
-		root = &fs->sb.ino.owner.dir_o;
-	else {
+	root_v = fs->sb.root;
+
+	if (NULL == root_v || fs->sb.ino != 1) {
+		printf("openfs() problem: root directory is NULL!\n");
+		return NULL;
+	}
+
+	if (NULL == root_v->ino) {
 		printf("openfs() problem: root inode is NULL!\n");
 		return NULL;
 	}
 
-	return root;
+	return root_v;
 }
 
 int main(int argc, char** argv) {
@@ -106,10 +119,10 @@ int main(int argc, char** argv) {
 	char cmd_cpy[SH_BUFLEN];
 	int i;
 	filesystem* fs = NULL;
-	dentry* root = NULL;
+	dentry_volatile* root = NULL;
 	curDir[0] = '\0';
 
-	fs = sh_openfs();
+	//fs = sh_openfs();
 	if (NULL != fs)
 		root = sh_getfsroot(fs);
 	if (NULL != root)

@@ -19,8 +19,6 @@
 
 char* fname = "fs";			/* The name our filesystem will have on disk */
 block* block_cache[MAXBLOCKS];		// In-memory copies of blocks on disk
-FILE* fp;				/* Pointer to the file containing the filesystem */
-
 
 /* Open a file and check for NULL */
 FILE* fs_safeopen(char* fname, char* mode) {
@@ -44,9 +42,9 @@ inode* ErrorInode() {
  * { "bob", "dylan", "is", "old" } represents path "/bob/dylan/is/old"
  * Return the inode at the end of this path or ErrorInode if not found.
  */ 
-inode* dir_recurse(dentry* dir, uint depth, uint pathFields, char* name, char* path[]) {
+inode* dir_recurse(dentry_volatile* dir, uint depth, uint pathFields, char* name, char* path[]) {
 	uint i;									// Declaration here to satisfy Visual C compiler
-	dentry *iterator = dir->head;
+	dentry_volatile *iterator = dir->head;
 	if (NULL == iterator) return ErrorInode();				// Dir has no subdirs!
 
 	for (i = 0; i < dir->ndirs; i++)					// For each subdir at this level
@@ -72,10 +70,10 @@ inode* fs_stat(filesystem* fs, char* name) {
 	char* path[FS_MAXPATHFIELDS];
 	char* next_field = NULL;
 	char* name_cpy = (char*)malloc(strlen(name)*sizeof(char));
-	const char* delimiter = "/";		// Path separator. Who doesn't use "/" ?
-	int depth = 0;				// The depth of the path, e.g. depth of "/a/b/c" is 3
+	const char* delimiter = "/";			// Path separator. Who doesn't use "/" ?
+	int depth = 0;					// The depth of the path, e.g. depth of "/a/b/c" is 3
 
-	strcpy(name_cpy, name);			// Copy the path because strtok replaces delimieter with '\0'
+	strcpy(name_cpy, name);				// Copy the path because strtok replaces delimieter with '\0'
 	if (NULL == &fs->sb.ino) { return NULL; }	// No filesystem yet, bail!
 
 	// Split the path on '/'
@@ -87,48 +85,56 @@ inode* fs_stat(filesystem* fs, char* name) {
 		depth++;
 	}
 
-	if (depth == 0) return &(fs->sb.ino);	// Return if we are at the root
-	else return dir_recurse(&fs->sb.ino.owner.dir_o, 0, depth,
+	if (depth == 0) return fs->sb.root->ino;	// Return if we are at the root
+	else return dir_recurse(fs->sb.root, 0, depth,
 				name, &path[1]);	// Else traverse the path, get matching inode
 
 	return ErrorInode();
 }
 
 int fs_mkdir(filesystem *fs, char* cur_dir_name, char* dir_name) {
-	dentry* curr_dir, *new_dir;
+	dentry* curr_dir = NULL, *new_dir = NULL;
+	dentry_volatile* curr_dir_v = NULL, *new_dir_v = NULL;
+
 	inode* current_inode = fs_stat(fs, cur_dir_name);
 	if (current_inode->num == 0) return FS_ERR;
 
 	curr_dir = &current_inode->owner.dir_o;
-	curr_dir->ndirs++;
-	new_dir = (dentry*)malloc(sizeof(dentry));	// TODO: Replace with constructor
-	new_dir->ino = (inode*) malloc(sizeof(inode));
+	curr_dir_v = NULL;
 
-	// TODO: Store in blocks
-	strcpy(new_dir->name, dir_name);
-	new_dir->tail = NULL;
-	new_dir->head = NULL;
-	new_dir->nfiles = 0;
-	new_dir->ndirs = 0;
-	new_dir->ino->nlinks = 0;
-	new_dir->ino->num = 2;				// TODO: Write inode allocator
-	new_dir->ino->size = BLKSIZE;
-	new_dir->ino->nblocks = 1;
-	new_dir->files = NULL;
-	new_dir->links = NULL;
+	new_dir = (dentry*)malloc(sizeof(dentry));			// TODO: Replace with constructor
+	new_dir_v = (dentry_volatile*)malloc(sizeof(dentry_volatile));	// TODO: Replace with constructor
+	new_dir_v->ino = (inode*) malloc(sizeof(inode));		// TODO: Write inode allocator
+
+	strcpy(new_dir_v->name, dir_name);
+	new_dir_v->tail = NULL;
+	new_dir_v->head = NULL;
+	new_dir_v->nfiles = 0;
+	new_dir_v->ndirs = 0;
+	new_dir_v->ino->nlinks = 0;
+	new_dir_v->ino->num = 2;				
+	new_dir_v->ino->size = BLKSIZE;
+	new_dir_v->ino->nblocks = 1;
+	new_dir_v->files = NULL;
+	new_dir_v->links = NULL;
 
 	/* If it's the first entry in cur_dir_name  */
-	if (NULL == curr_dir->head) {
-		curr_dir->head = new_dir;
-		new_dir->prev = new_dir;
-		new_dir->next = new_dir;
-		curr_dir->tail = curr_dir->head;
+	if (NULL == curr_dir_v->head) {
+		curr_dir_v->head = new_dir_v;
+		new_dir_v->prev = new_dir_v;
+		new_dir_v->next = new_dir_v;
+		curr_dir_v->tail = curr_dir_v->head;
 	} else {
-		curr_dir->tail->next = new_dir;
-		new_dir->prev = curr_dir->tail;
-		curr_dir->tail = new_dir;
-		new_dir->next = curr_dir->head;
+		curr_dir_v->tail->next = new_dir_v;
+		new_dir_v->prev = curr_dir_v->tail;
+		curr_dir_v->tail = new_dir_v;
+		new_dir_v->next = curr_dir_v->head;
 	}
+	curr_dir->ndirs++;
+
+	/* TODO: Write dentry to disk */
+
+
 	return FS_OK;
 }
 
@@ -173,7 +179,12 @@ int fs_free_block(filesystem* fs, block* blk) {
 	return FS_OK;
 }
 
-/* Preallocate a contiguous file. Differs across platforms */
+/* Preallocate a contiguous file. Differs across platforms 
+ * Note: this does NOT set the file to the given size. The OS
+ * attempts to "preallocate" the contiguousspace in its filesystem blocks,
+ * but the file will not appear to be of that size. 
+ * Therefore, this offers merely a performance benefit.
+ */
 int fs_preallocate() {
 	int ERR;
 #if defined(_WIN64) || defined(_WIN32)	// Have to put declaration here.
@@ -217,7 +228,7 @@ int fs_allocate_blocks(filesystem* fs, int count, int indices[]) {
 }
 
 /* Return the count of allocated blocks */
-int fs_fill_direct_blocks(uint* blocks, int count, int* blockIndices, uint maxCount) {
+int fs_fill_direct_blocks(block_t* blocks, int count, int* blockIndices, uint maxCount) {
 	uint i;
 	for (i = 0; i < maxCount; i++)
 	{
@@ -267,12 +278,14 @@ int fs_fill_inode_block_pointers(inode* ino, int count, int* blockIndices) {
 /* Zero-out filesystem */
 int fs_zero() {
 	int i;
-	fp = fs_safeopen(fname, "w+");
+	FILE* fp = fs_safeopen(fname, "r+");
 	if (FS_ERR == (int)fp) return FS_ERR;
 
 	for (i = 0; i < MAXBLOCKS; i++) {
 		block* newBlock = fs_newBlock();
-		sprintf(newBlock->data, "-block %d-", i);
+		char temp[128];
+		sprintf(temp, "-block %d-", i);
+		memcpy(newBlock->data, temp, strlen(temp));
 		
 		fseek(fp, BLKSIZE*i, SEEK_SET);
 		fputs(newBlock->data, fp);
@@ -282,19 +295,70 @@ int fs_zero() {
 	return FS_OK;
 }
 
-/* Open a filesystem stored on disk */
+/* Read an arbitary number of blocks from disk, 
+ * starting at block @param start
+ * Need the parameter @param type because
+ * the last block is not totally occupied,
+ * and we need to know how many bytes to read from this last
+ * block.
+ */
+void* fs_getblocksfromdisk(int start, int numblocks, int type) {
+	int i;
+	int j = start;
+	int type_size;
+	char* buf;
+
+	FILE* fp = fs_safeopen(fname, "r");
+
+	switch (type) {
+		case BLOCK:	type_size = sizeof(block);	break;
+		case DENTRY:	type_size = sizeof(dentry);	break;
+		case INODE:	type_size = sizeof(inode);	break;
+	}
+
+	buf = (char*)malloc(type_size);
+
+	for (i = 0; i < numblocks; i++)					/* Get root blocks from disk */
+	{
+		int memcpySize = BLKSIZE;
+		int freadSize = BLKSIZE;
+
+		block_cache[j] = fs_newBlock();
+
+		if (i+1 == numblocks)					/* If this is the last block */
+		{							/* Get last chunk which may only be a partial block */
+			memcpySize = type_size;				/* For block type, this is not necessary */
+			freadSize = memcpySize % BLKSIZE;	
+		}
+
+		fseek(fp, j*BLKSIZE, SEEK_SET);
+		fread(block_cache[j], 1, BLKSIZE, fp);
+
+		memcpy(buf, block_cache[j]->data, memcpySize);
+		j = block_cache[j]->next;
+	}
+
+	return (void*)buf;
+}
+
+/* Open a filesystem stored fson disk */
 filesystem* fs_openfs() {
-	int i, j, numRootBlocks;
+	int first_block, block_count;
 	FILE* fp;
 	filesystem* fs = NULL;
-	dentry *root = NULL;
+	dentry* root = NULL;
+	dentry_volatile* root_v = NULL;
 
 	fp = fs_safeopen(fname, "r");
 	if (NULL == fp) 
 		return FS_ERR;
 
-	fs	= (filesystem*)malloc(sizeof(filesystem));
-	root	= &fs->sb.ino.owner.dir_o;
+	fs			= (filesystem*)malloc(sizeof(filesystem));
+	fs->sb.root		= (dentry_volatile*)malloc(sizeof(dentry_volatile));
+	fs->sb.root->ino	= (inode*)malloc(sizeof(inode));
+	
+	root_v			= fs->sb.root;
+	root			= &root_v->ino->owner.dir_o;
 
 	fseek(fp, 0, SEEK_SET);							// Read the superblock
 	fread(&fs->sb, sizeof(superblock), 1, fp);				// stored on disk back into memory
@@ -303,113 +367,120 @@ filesystem* fs_openfs() {
 	fread(	fs->map.data,							// Also read the free block bitmap
 		sizeof(char), BLKSIZE, fp);					// from disk into memory
 
-	numRootBlocks = fs->sb.root_last_block - fs->sb.root_first_block + 1;
+	strcpy(root->name, "!");
+	if (!strcmp(root->name,"/"))						// We can return the root now if all of it fits in the superblock
+		return fs;							// We identify having the whole root by the last field, name,
+										// being correctly filled (i.e., filled with "/")
 
-	j = fs->sb.root_first_block;
-	for (i = 0; i < numRootBlocks; i++)					/* Get root blocks from disk */
-	{
-		int memcpySize = BLKSIZE;
-		int freadSize = BLKSIZE;
-
-		block_cache[j] = fs_newBlock();
-
-		if (i+1 == numRootBlocks)					/* If this is the last block */
-		{								/* Get last chunk which is only a partial block */
-			memcpySize = sizeof(*root);
-			freadSize = memcpySize % BLKSIZE;	
-		}
-
-		fseek(fp, j*BLKSIZE, SEEK_SET);
-		fread(block_cache[j], 1, BLKSIZE, fp);
-		memcpy(&root[i], block_cache[j]->data, memcpySize);
-
-		j = block_cache[j]->next;
-	}
+	/* If program flow reaches here, the root didn't fit in the superblock.
+	 * Get all of the blocks from disk.
+	 */
+	first_block = fs->sb.root_first_block;
+	block_count = fs->sb.root_last_block - fs->sb.root_first_block + 1;
+	root = (dentry*)fs_getblocksfromdisk(first_block, block_count, DENTRY);
 
 	fclose(fp);
-	if (!strcmp(root->name,"/"))					// If the root is named "/"
-		return NULL;
+	if (!strcmp(root->name,"/"))						
+		return fs;
 
-	return fs;
+	return NULL;
 }
 
 filesystem* fs_mkfs() {
-	uint i, j, stride;
+	uint i, j, stride, root_num_blks;
 	int* indices = NULL;							/* Indices of allocated blocks */
 	filesystem *fs = NULL;
 	dentry *root = NULL;
+	FILE* fp;
 
 	fs_preallocate();							/* Make a file on disk */
 	fs_zero();								/* Zero-out all filesystem blocks */
 
-	fs = (filesystem*)malloc(sizeof(filesystem));				/* Make in-memory representation of filesystem. 
+	fs			= (filesystem*)malloc(sizeof(filesystem));	/* Make in-memory representation of filesystem. 
 										 * This will be always be kept in synch with disk
 										 */
-	stride = sizeof(fs->map.data);						// The data field is smaller than BLKSIZE
+	fs->sb.root		= (dentry_volatile*)malloc(sizeof(dentry_volatile));
+	fs->sb.root->ino	= (inode*)malloc(sizeof(inode));
+
+	stride			= sizeof(fs->map.data);				// The data field is smaller than BLKSIZE
 	memset(fs->map.data, 0, BLKSIZE);					// Zero out block
 	
 	fs->sb.fs_blk_alloc_cnt	= 0;
 	fs->sb.free_blocks_base	= 2;						/* Start allocating from 3rd block. 
 										 * Blocks 0 and 1 are superblock and free map
 										 */
-	root				= &fs->sb.ino.owner.dir_o;
-	root->ndirs			= 0;
-	root->nfiles			= 0;
-	strcpy(root->name, "/");
-
-	fs->sb.ino.num			= 1;					/* TODO: Write inode allocator and use it here */
-	fs->sb.ino.nlinks		= 0;
-	fs->sb.ino.mode			= FS_DIR;
-	fs->sb.ino.nblocks		= sizeof(fs->sb)/BLKSIZE + 1; 		/* How many free blocks do we need?
+	fs->sb.ino			= 1;
+	fs->sb.root->ino->num		= fs->sb.ino;				/* TODO: Write inode allocator and use it here */
+	fs->sb.root->ino->nlinks	= 0;
+	fs->sb.root->ino->mode		= FS_DIR;
+	fs->sb.root->ino->		nblocks	= sizeof(fs->sb)/BLKSIZE + 1; 	/* How many free blocks do we need?
 										 * + 1 because we allocate the ceiling 
 										 * in integer arithmetic
 										 */
-	fs->sb.ino.size			= fs->sb.ino.nblocks*BLKSIZE;
+	fs->sb.root->ino->size		= fs->sb.root->ino->nblocks*BLKSIZE;
 
-	root->files			= (file*)malloc(FS_MAXDIRS*sizeof(file));
-	root->links			= (link*)malloc(FS_MAXDIRS*sizeof(link));
+	// Setup on-disk root dir
+	root				= &fs->sb.root->ino->owner.dir_o;
+	root->ino = fs->sb.ino;
+	strcpy(root->name, "/");
+	root->ndirs = 0;
+	root->nfiles = 0;
+	root->head = 0;
+	root->tail = 0;
+	root->parent = root->ino;
+	root->next = root->ino;
+	root->prev = root->ino;
 
-	root->head			= NULL;					// First added subdir
-	root->tail			= NULL;					// Lastly added subdir
-	root->parent			= root;					// Parent of root is root
-	root->next			= root;					// root has no parent; next goes to self
-	root->prev			= root;					// root has no parent; prev go to self
+	// Setup volatile (in-memory) root dir
+	strcpy(fs->sb.root->name, root->name);
+	fs->sb.root->ndirs			= root->ndirs;
+	fs->sb.root->nfiles			= root->ndirs;
+	fs->sb.root->files			= (file*)malloc(FS_MAXDIRS*sizeof(file));
+	fs->sb.root->links			= (link*)malloc(FS_MAXDIRS*sizeof(link));
+	fs->sb.root->head			= NULL;					// First added subdir
+	fs->sb.root->tail			= NULL;					// Lastly added subdir
+	fs->sb.root->parent			= fs->sb.root;				// Parent of root is root
+	fs->sb.root->next			= fs->sb.root;				// root has no parent; next goes to self
+	fs->sb.root->prev			= fs->sb.root;				// root has no parent; prev go to self
 
-	fs->sb.fs_blk_alloc_cnt += fs->sb.ino.nblocks;				// Superblock remembers # allocated
+	root_num_blks = fs->sb.root->ino->nblocks;
+	fs->sb.fs_blk_alloc_cnt += root_num_blks;					// Superblock remembers # allocated blocks
 
-	indices = (int*)malloc(fs->sb.ino.nblocks*sizeof(indices));
-	fs_allocate_blocks(fs, fs->sb.ino.nblocks, indices);			/* Allocate n blocks, tell us which we got */
+	indices = (int*)malloc(root_num_blks*sizeof(indices));
+	fs_allocate_blocks(fs, root_num_blks, indices);					/* Allocate n blocks, tell us which we got */
 	
-	fs_fill_inode_block_pointers(&fs->sb.ino, fs->sb.ino.nblocks, indices);	/* Fill in inode block pointers
-										 * with pointers to the allocated blocks
-										 */
-	fs->sb.root_first_block	= fs->sb.ino.blocks[0];
-	fs->sb.root_last_block	= fs->sb.ino.blocks[fs->sb.ino.nblocks-1]; 
+	fs_fill_inode_block_pointers(fs->sb.root->ino, root_num_blks, indices);		/* Fill in inode block pointers
+											 * with pointers to the allocated blocks
+											 */
+	free(indices);
+
+	fs->sb.root_first_block	= fs->sb.root->ino->blocks[0];
+	fs->sb.root_last_block	= fs->sb.root->ino->blocks[fs->sb.root->ino->nblocks-1]; 
 	
 	// Store root in fs
-	j = fs->sb.root_first_block;
-	for (i = 0; i < fs->sb.ino.nblocks-1; i++) {				// For all blocks except the last
+	j = fs->sb.root_first_block;	
+	for (i = 0; i < root_num_blks-1; i++) {						// For all blocks except the last
 
-		block_cache[j]		= fs_newBlock();			// Allocate in-memory block
-		block_cache[j]->num	= fs->sb.ino.blocks[i];			// Record index of this block
-		block_cache[j]->next	= fs->sb.ino.blocks[i+1];		// Record the index of the next block	
+		block_cache[j]		= fs_newBlock();				// Allocate in-memory block
+		block_cache[j]->num	= fs->sb.root->ino->blocks[i];			// Record index of this block
+		block_cache[j]->next	= fs->sb.root->ino->blocks[i+1];		// Record the index of the next block	
 
 		memcpy(block_cache[j]->data, &root[i*stride], stride);
 		j = block_cache[j]->next;
 	}
 	
-	block_cache[j] = fs_newBlock();				// Write the last block separately 
-	block_cache[j]->num = fs->sb.ino.blocks[i];		// because it might not occupy a full block
-	block_cache[j]->next = 0;				// There is no next block for this guy
-
+	block_cache[j] = fs_newBlock();							// Write the last block separately 
+	block_cache[j]->num = fs->sb.root->ino->blocks[i];				// because it might not occupy a full block
+	block_cache[j]->next = 0;							// There is no next block for this last block
+	printf("%d %d %d\n", sizeof(*root), sizeof(root), sizeof(*root) % stride);
 	memcpy(block_cache[j]->data, &root[i*stride], sizeof(*root) % stride);
 
 	// Write blocks to disk
-	fp = fs_safeopen(fname, "w+");
+	fp = fs_safeopen(fname, "r+");
 	if (FS_ERR == (int)fp) return FS_ERR;
 
 	j = fs->sb.root_first_block;
-	for (i = 0; i < fs->sb.ino.nblocks; i++)
+	for (i = 0; i < root_num_blks; i++)
 	{
 		fseek(fp, BLKSIZE*j, SEEK_SET); 
 		fwrite(block_cache[j], BLKSIZE, 1, fp);
