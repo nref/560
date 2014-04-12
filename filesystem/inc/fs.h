@@ -8,6 +8,8 @@
 #define NBLOCKS_IBLOCK 8			// Number of direct blocks an indirect block can point to
 #define NIBLOCKS 8				// Number of indirect blocks an indirect block can point to
 
+#define SUPERBLOCK_MAXBLOCKS 32			// Number of blocks we can allocate to the superblock
+
 #define MAXFILEBLOCKS NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
 
 #define FS_NAMEMAXLEN 256			// Max length of a directory or file name
@@ -37,7 +39,7 @@
 
 /* The types that we want to write to or read from disk */
 enum {
-	BLOCK, MAP, SUPERBLOCK, INODE
+	BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE
 } TYPE;
 
 typedef unsigned int uint;
@@ -57,7 +59,7 @@ typedef struct block {
 
 typedef struct iblock1 {	
 	block_t blocks[NBLOCKS_IBLOCK];		// 1st-level indirect blocks
-} iblock;
+} iblock1;
 
 typedef struct iblock2 {	
 	struct iblock1 iblocks[NIBLOCKS];	// 2nd-level indirect blocks
@@ -93,7 +95,7 @@ typedef struct dentry {				// On-disk directory entry
 
 	inode_t files[FS_MAXFILES];		// Files in this dir	TODO: Updates these to linked-list fashion like dirs
 	inode_t links[FS_MAXLINKS];		// Links in this dir
-	uint ndirs, nfiles;
+	uint ndirs, nfiles, nlinks;
 
 	char name[FS_NAMEMAXLEN];		// dir name
 } dentry;
@@ -166,14 +168,19 @@ typedef struct inode {
 } inode;
 
 typedef struct superblock {
-	uint nblocks;				// The number of blocks allocated to the superblock
 	uint free_blocks_base;			// Index of lowest unallocated block
-	inode ino;				// Inode of root directory entry
-	block_t blocks[32];			// This superblock's blocks. Superblock is big to hold inode_first_blocks
+	inode_t ino;				// Inode number of root directory entry
 	block_t inode_first_blocks[MAXBLOCKS];	// Index of first allocated block for each inode.
-	block_t inode_block_counts[MAXBLOCKS];	// Index of first allocated block for each inode.
+	uint inode_block_counts[MAXBLOCKS];	// How many allocated blocks for each inode.
 
 } superblock;
+
+/* Need these outside of superblock because we can be certain it fits into one block */
+typedef struct superblock_i {
+	uint nblocks;				// The number of blocks allocated to the superblock
+	block_t blocks[SUPERBLOCK_MAXBLOCKS];	// This superblock's blocks. Superblock is big to hold inode_first_blocks
+
+} superblock_i;
 
 typedef struct filesystem {	
 	block* block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
@@ -183,13 +190,13 @@ typedef struct filesystem {
 						 * Since filesystem size == 100MB == 25600 4096-byte blocks,
 						 * we can use a single block of 4096 chars == 4096*8 == 32768 bits
 						 * to store the free block bitmap. */
-	superblock sb;				/* Blocks 0...sizeof(superblock). Superblock. Contains fs configuration */
+
+	superblock_i sb_i;			/* Block 1. Tells us where the superblock blocks are. */
+	superblock sb;				/* Blocks 2...sizeof(superblock). Superblock. Contains fs configuration */
 
 } filesystem;
 
 char* fname;				/* The name our filesystem will have on disk */
-
-extern dentry_volatile* fs_dentry_volatile_from_dentry(filesystem*, dentry*);
 
 extern filesystem* fs_openfs();
 extern filesystem* fs_mkfs();

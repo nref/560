@@ -6,16 +6,19 @@
 char curDir[FS_MAXPATHLEN];		// Current shell directory
 char cmd[SH_BUFLEN];			// Buffer for user input
 
-void _sh_tree_recurse(uint depth, dentry_volatile* dir) {
+void _sh_tree_recurse(uint depth, dentry_volatile* dv) {
 	uint i;
+	dentry_volatile *iterator;
 
-	dentry_volatile *iterator = dir->head->data_v.dir;
-	if (NULL == iterator) {
+	if (NULL == dv->head) {
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
 		return;
 	}
+	
+	iterator = dv->head->data_v.dir;
 
-	for (i = 0; i < dir->ndirs; i++)	// For each subdir at this level
+
+	for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
 	{
 		printf("%*s" "%s\n", depth*2, " ", iterator->name);	
 		_sh_tree_recurse(depth+1, iterator);
@@ -29,7 +32,7 @@ void _sh_tree_recurse(uint depth, dentry_volatile* dir) {
 	//	printf("%s\n", dir->links[i].name);	
 }
 
-void sh_tree(filesystem *fs) {
+void sh_tree(filesystem *fs, char* name) {
 	dentry_volatile* root_v = NULL;
 	inode* ino = NULL;
 
@@ -38,14 +41,8 @@ void sh_tree(filesystem *fs) {
 		return;
 	}
 
-	/* Two way to get the root dir
-	 * This first one is more general; 
-	 * you can print the tree of any dir */
-	ino = fs_stat(fs, "/");
-	root_v = fs_dentry_volatile_from_dentry(fs, &ino->data.dir);
-
-	/* The less-general hardcoded method */
-	//root_v = fs->root;
+	ino = fs_stat(fs, name);
+	root_v = ino->data_v.dir;
 
 	if (NULL == root_v) {
 		printf("NULL root directory!\n");
@@ -166,7 +163,7 @@ int main() {
 
 		if (!strcmp(fields[0], "exit")) break;
 		else if (!strcmp(fields[0], "pwd")) { printf("%s\n", curDir); }
-		else if (!strcmp(fields[0], "tree")) { sh_tree(fs); }
+		else if (!strcmp(fields[0], "tree")) { sh_tree(fs, "/"); }
 
 		else if (!strcmp(fields[0], "mkdir")) { 
 			if (i>1) {	// If the user provided more than one field
