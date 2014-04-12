@@ -128,12 +128,12 @@ int main() {
 	char* delimiter = "\t ";
 	char* next_field = NULL;
 	char cmd_cpy[SH_BUFLEN];
-	int i;
+	uint i, j;
 	filesystem* fs = NULL;
 	dentry_volatile* root = NULL;
 	curDir[0] = '\0';
 
-	//fs = sh_openfs();
+	fs = sh_openfs();
 	if (NULL != fs)
 		root = sh_getfsroot(fs);
 	if (NULL != root)
@@ -152,14 +152,12 @@ int main() {
 
 		i = 0;
 		while (NULL != next_field) {				// While there is another field
-			
-			fields[i] = (char*)malloc(			// Store this field
-				strlen(next_field)*sizeof(char));
+			fields[i] = (char*)malloc(strlen(next_field)+1);// Store this field
 			strcpy(fields[i], next_field);				
-			
 			next_field = strtok(NULL, delimiter);		// Get the next field
 			++i;						// Remember how many fields we have saved
 		}
+		free(next_field);
 
 		if (!strcmp(fields[0], "exit")) break;
 		else if (!strcmp(fields[0], "pwd")) { printf("%s\n", curDir); }
@@ -183,7 +181,7 @@ int main() {
 			printf("mkfs() ... ");
 
 			if (NULL != fs) {
-				free(fs);
+				fs_delete(fs);
 				fs = NULL;
 			}
 			fs = sh_mkfs();
@@ -196,6 +194,10 @@ int main() {
 			else { printf("ERROR"); }
 			printf("\n");
 		}
+
+		for (j = 0; j < i; j++)
+			free(fields[j]);
+
 		prompt();
 	}
 	printf("exit()\n");

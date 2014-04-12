@@ -7,17 +7,21 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2A5A9C5118F7824900484816 /* main.c in Sources */ = {isa = PBXBuildFile; fileRef = 2A5A9C5018F7824900484816 /* main.c */; };
 		2A5A9C5318F7824900484816 /* fs_xcode.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = 2A5A9C5218F7824900484816 /* fs_xcode.1 */; };
+		2A5A9C6D18F7828D00484816 /* fs.c in Sources */ = {isa = PBXBuildFile; fileRef = 2A5A9C6618F7828D00484816 /* fs.c */; };
+		2A5A9C6E18F7828D00484816 /* sh.c in Sources */ = {isa = PBXBuildFile; fileRef = 2A5A9C6718F7828D00484816 /* sh.c */; };
+		2A5A9C7318F7868300484816 /* makefile in CopyFiles */ = {isa = PBXBuildFile; fileRef = 2A5A9C5A18F7828D00484816 /* makefile */; };
+		2A5A9C7518F7869700484816 /* sh.h in Sources */ = {isa = PBXBuildFile; fileRef = 2A5A9C7218F7851F00484816 /* sh.h */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		2A5A9C4B18F7824900484816 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
+			buildActionMask = 8;
 			dstPath = /usr/share/man/man1/;
 			dstSubfolderSpec = 0;
 			files = (
+				2A5A9C7318F7868300484816 /* makefile in CopyFiles */,
 				2A5A9C5318F7824900484816 /* fs_xcode.1 in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 1;
@@ -26,8 +30,20 @@
 
 /* Begin PBXFileReference section */
 		2A5A9C4D18F7824900484816 /* fs_xcode */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = fs_xcode; sourceTree = BUILT_PRODUCTS_DIR; };
-		2A5A9C5018F7824900484816 /* main.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = main.c; sourceTree = "<group>"; };
 		2A5A9C5218F7824900484816 /* fs_xcode.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = fs_xcode.1; sourceTree = "<group>"; };
+		2A5A9C5918F7828D00484816 /* fs */ = {isa = PBXFileReference; lastKnownFileType = file; name = fs; path = ../../fs; sourceTree = "<group>"; };
+		2A5A9C5A18F7828D00484816 /* makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; name = makefile; path = ../../makefile; sourceTree = "<group>"; };
+		2A5A9C5C18F7828D00484816 /* .keep */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = .keep; sourceTree = "<group>"; };
+		2A5A9C5E18F7828D00484816 /* .keep */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = .keep; sourceTree = "<group>"; };
+		2A5A9C5F18F7828D00484816 /* fs.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = fs.o; sourceTree = "<group>"; };
+		2A5A9C6018F7828D00484816 /* sh.o */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.objfile"; path = sh.o; sourceTree = "<group>"; };
+		2A5A9C6118F7828D00484816 /* sh */ = {isa = PBXFileReference; lastKnownFileType = "compiled.mach-o.executable"; path = sh; sourceTree = "<group>"; };
+		2A5A9C6618F7828D00484816 /* fs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = fs.c; sourceTree = "<group>"; };
+		2A5A9C6718F7828D00484816 /* sh.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = sh.c; sourceTree = "<group>"; };
+		2A5A9C6818F7828D00484816 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = README.md; path = ../../README.md; sourceTree = "<group>"; };
+		2A5A9C6918F7828D00484816 /* samplescript.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; name = samplescript.sh; path = ../../samplescript.sh; sourceTree = "<group>"; };
+		2A5A9C7118F7851F00484816 /* fs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fs.h; sourceTree = "<group>"; };
+		2A5A9C7218F7851F00484816 /* sh.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sh.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,10 +76,57 @@
 		2A5A9C4F18F7824900484816 /* fs_xcode */ = {
 			isa = PBXGroup;
 			children = (
-				2A5A9C5018F7824900484816 /* main.c */,
+				2A5A9C5918F7828D00484816 /* fs */,
+				2A5A9C5A18F7828D00484816 /* makefile */,
+				2A5A9C5B18F7828D00484816 /* bin */,
+				2A5A9C6218F7828D00484816 /* inc */,
+				2A5A9C6518F7828D00484816 /* src */,
+				2A5A9C6818F7828D00484816 /* README.md */,
+				2A5A9C6918F7828D00484816 /* samplescript.sh */,
 				2A5A9C5218F7824900484816 /* fs_xcode.1 */,
 			);
 			path = fs_xcode;
+			sourceTree = "<group>";
+		};
+		2A5A9C5B18F7828D00484816 /* bin */ = {
+			isa = PBXGroup;
+			children = (
+				2A5A9C5C18F7828D00484816 /* .keep */,
+				2A5A9C5D18F7828D00484816 /* obj */,
+				2A5A9C6118F7828D00484816 /* sh */,
+			);
+			name = bin;
+			path = ../../bin;
+			sourceTree = "<group>";
+		};
+		2A5A9C5D18F7828D00484816 /* obj */ = {
+			isa = PBXGroup;
+			children = (
+				2A5A9C5E18F7828D00484816 /* .keep */,
+				2A5A9C5F18F7828D00484816 /* fs.o */,
+				2A5A9C6018F7828D00484816 /* sh.o */,
+			);
+			path = obj;
+			sourceTree = "<group>";
+		};
+		2A5A9C6218F7828D00484816 /* inc */ = {
+			isa = PBXGroup;
+			children = (
+				2A5A9C7118F7851F00484816 /* fs.h */,
+				2A5A9C7218F7851F00484816 /* sh.h */,
+			);
+			name = inc;
+			path = ../../inc;
+			sourceTree = "<group>";
+		};
+		2A5A9C6518F7828D00484816 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				2A5A9C6618F7828D00484816 /* fs.c */,
+				2A5A9C6718F7828D00484816 /* sh.c */,
+			);
+			name = src;
+			path = ../../src;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -117,7 +180,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2A5A9C5118F7824900484816 /* main.c in Sources */,
+				2A5A9C7518F7869700484816 /* sh.h in Sources */,
+				2A5A9C6E18F7828D00484816 /* sh.c in Sources */,
+				2A5A9C6D18F7828D00484816 /* fs.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,13 +262,16 @@
 		2A5A9C5718F7824900484816 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				INSTALL_PATH = ./;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRIP_INSTALLED_PRODUCT = NO;
 			};
 			name = Debug;
 		};
 		2A5A9C5818F7824900484816 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				INSTALL_PATH = ./;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

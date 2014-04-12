@@ -38,9 +38,7 @@
 #define false 0
 
 /* The types that we want to write to or read from disk */
-enum {
-	BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE
-} TYPE;
+enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
 
 typedef unsigned int uint;
 typedef uint16_t block_t;			// Block number
@@ -178,7 +176,7 @@ typedef struct superblock {
 /* Need these outside of superblock because we can be certain it fits into one block */
 typedef struct superblock_i {
 	uint nblocks;				// The number of blocks allocated to the superblock
-	block_t blocks[SUPERBLOCK_MAXBLOCKS];	// This superblock's blocks. Superblock is big to hold inode_first_blocks
+	block_t blocks[SUPERBLOCK_MAXBLOCKS];	// Indices to superblock's blocks
 
 } superblock_i;
 
@@ -198,6 +196,7 @@ typedef struct filesystem {
 
 char* fname;				/* The name our filesystem will have on disk */
 
+extern void fs_delete(filesystem*);
 extern filesystem* fs_openfs();
 extern filesystem* fs_mkfs();
 extern int fs_open(char* filename, char* mode);
