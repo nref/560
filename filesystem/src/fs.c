@@ -18,30 +18,41 @@
 #endif
 
 char* fname = "fs";			/* The name our filesystem will have on disk */
-block* block_cache[MAXBLOCKS];		// In-memory copies of blocks on disk
+block block_cache[MAXBLOCKS];		// In-memory copies of blocks on disk
 long last_inode = 0;
 
 uint stride;				/* The data field is smaller than BLKSIZE
 					 * so our writes to disk are not BLKSIZE but rather 
 					 * BLKSIZE - sizeof(other fields in block struct) */
 block_t  rootblocks[] = { 0, 1 };	/* Indices to the first and second blocks */
+FILE* fp = NULL;
 
-void* fs_getblocksfromdisk(block_t* blocks, uint numblocks, uint type);
+int fs_getblocksfromdisk(void* dest, block_t* blocks, uint numblocks, uint type);
 int fs_writeblockstodisk(block_t* blocks, uint numblocks, uint type, void* data);
 int fs_fill_inode_block_pointers(inode* ino, uint count, block_t* blockIndices);
 int fs_allocate_blocks(filesystem* fs, int count, block_t* indices);
 extern dentry_volatile* fs_dentry_volatile_from_dentry(filesystem* fs, dentry* d, uint existsOnDisk);
 void fs_debug_print();
+void fs_safeopen();
+void fs_safeclose();
 
-inode* ErrorInode();
 inode_t fs_alloc_inode();
 
 /* Open a file and check for NULL */
-FILE* fs_safeopen(char* fname, char* mode) {
-	FILE* fp = fopen(fname, mode);
-	if (NULL == fp) 
-		return (FILE*)FS_ERR;
-	return fp;
+void fs_safeopen(char* fname, char* mode) {
+	if (NULL != fp)	/* Close whatever was already open */
+		fs_safeclose();
+
+	fp = fopen(fname, mode);
+	if (NULL == fp) {
+		printf("fs_safeopen: \"%s\" %s\n", fname, strerror(errno));
+		return;
+	}
+}
+
+void fs_safeclose() {
+	if (NULL != fp)
+		fclose(fp);
 }
 
 /* Follow a an array of cstrings which are the fields of a path, e.g. input of 
@@ -50,13 +61,14 @@ FILE* fs_safeopen(char* fname, char* mode) {
  */ 
 inode* dir_recurse(filesystem* fs, dentry_volatile* dir, uint depth, uint pathFields, char* name, char* path[]) {
 	uint i;									// Declarations go here to satisfy Visual C compiler
-	dentry_volatile *iterator = dir->head->data_v.dir;
+	dentry_volatile* iterator;
 
-	if (NULL == iterator) return ErrorInode();				// Dir has no subdirs!
+	if (NULL == dir || NULL == dir->head || NULL == dir->head->data_v.dir) return NULL;
+	iterator = dir->head->data_v.dir;
 
 	for (i = 0; i < dir->ndirs; i++)					// For each subdir at this level
 	{
-		if (NULL == iterator) return ErrorInode();			// Return if we have iterated over all subdirs
+		if (NULL == iterator) return NULL;				// Return if we have iterated over all subdirs
 
 		if (!strcmp(iterator->name, path[i])) {				// If we have a matching directory name
 			if (depth == pathFields)				// If we can't go any deeper
@@ -69,7 +81,7 @@ inode* dir_recurse(filesystem* fs, dentry_volatile* dir, uint depth, uint pathFi
 		iterator = iterator->next->data_v.dir;
 
 	}
-	return ErrorInode();					// If nothing found, return a special error inode
+	return NULL;					// If nothing found, return a special error inode
 }
 
 /*
@@ -104,7 +116,7 @@ inode* fs_stat(filesystem* fs, char* name) {
 		for (i = 0; i < depth; i++) free(path[i]);
 		return ino;
 	}
-	return ErrorInode();
+	return NULL;
 }
 
 dentry* fs_new_dentry(int alloc_inode, char* name) {
@@ -177,13 +189,14 @@ inode* fs_get_inode_from_disk(filesystem* fs, inode_t num) {
 	inode* ino = NULL;
 	block_t first_block_num;
 
-	if (0 > num || MAXBLOCKS < num) return NULL;	/* Sanity check */
+	if (MAXBLOCKS < num) return NULL;	/* Sanity check */
 
 	if (0 == fs->sb.inode_first_blocks[num])
 		return NULL;	/* An inode of this number does not exist on disk */
 
 	first_block_num = fs->sb.inode_first_blocks[num];
-	ino = (inode*)fs_getblocksfromdisk(&first_block_num, fs->sb.inode_block_counts[num], INODE);
+	//ino = (inode*)
+		fs_getblocksfromdisk(ino, &first_block_num, fs->sb.inode_block_counts[num], INODE);
 
 	return ino;
 }
@@ -240,9 +253,15 @@ dentry_volatile* fs_new_dir_volatile(filesystem* fs, char* name) {
 
 int fs_mkdir(filesystem *fs, char* cur_dir_name, char* dir_name) {
 	dentry_volatile* curr_dir_v = NULL, *new_dir_v = NULL;
+	char path[FS_MAXPATHLEN];
 
 	inode* current_inode = fs_stat(fs, cur_dir_name);
 	if (current_inode->num == 0) return FS_ERR;
+
+	strcat(path, cur_dir_name);
+	strcat(path, "/");
+	strcat(path, dir_name);
+	if (0 != fs_stat(fs, path)) return FS_ERR;	// dir already exists
 
 	/* If the inode is not loaded from disk into memory, load it from disk */
 	if (NULL == &current_inode->data_v)	curr_dir_v = fs_dentry_volatile_from_dentry(fs, &current_inode->data.dir, true);
@@ -293,16 +312,6 @@ dentry_volatile* fs_mkdir_root(filesystem *fs) {
 	fs->sb.ino	= dv->ino->num;
 
 	return dv;
-}
-
-/* 
- * Return an inode the fields of which indicate a problem
- */
-inode* ErrorInode() {
-	inode* ret = (inode*)malloc(sizeof(inode));
-	ret->mode = FS_ERR;
-
-	return ret;
 }
 
 /* Quick and dirty. Later support deletion etc. */
@@ -361,8 +370,8 @@ int fs_preallocate() {
 	LARGE_INTEGER offset;		// because Visual C compiler is OLD school
 #endif
 
-	FILE* fp = fs_safeopen(fname, "w");
-	if (FS_ERR == (uint)fp) return FS_ERR;		
+	fs_safeopen(fname, "w");
+	if (NULL == fp) return FS_ERR;		
 
 #if defined(_WIN64) || defined(_WIN32)
 	offset.QuadPart = BLKSIZE*MAXBLOCKS;
@@ -375,21 +384,21 @@ int fs_preallocate() {
 	ERR = posix_fallocate(fp, 0, BLKSIZE*MAXBLOCKS);
 #endif
     
-	fclose(fp);
+	fs_safeclose();
 
 	if (ERR < 0) { 
 		perror("allocation error");
 		return ERR;
 	}
 
-	return ERR;
+	return FS_OK;
 }
 
 /* Zero-out filesystem */
 int fs_zero() {
 	int i;
-	FILE* fp = fs_safeopen(fname, "r+");
-	if (FS_ERR == (int)fp) return FS_ERR;
+	fs_safeopen(fname, "r+");
+	if (NULL == fp) return FS_ERR;
 
 	for (i = 0; i < MAXBLOCKS; i++) {
 		block* newBlock = fs_newBlock();
@@ -401,7 +410,7 @@ int fs_zero() {
 		fputs(newBlock->data, fp);
 		free(newBlock);
 	}
-	fclose(fp);
+	fs_safeclose();
 	return FS_OK;
 }
 
@@ -425,19 +434,36 @@ void fs_delete(filesystem *fs) {
 
 filesystem* fs_alloc_filesystem(int newfs) {
 	filesystem *fs = NULL;
+	
+	if (newfs) {
+		int err1, err2;
+
+		fs_safeclose();
+		err1 = fs_preallocate();	/* Make a contiguous file on disk (performance enhancement) */
+		err2 = fs_zero();		/* Zero-out all filesystem blocks */
+
+		if (FS_ERR == err1 || FS_ERR == err2) return NULL;
+	}
+
+	fs_safeopen(fname, "r+");	/* Test if file exists */
+	if (NULL == fp) return NULL;
+
 	fs = (filesystem*)malloc(sizeof(filesystem));
 
 	fs->sb.ino = 0;
-	fs->sb_i.nblocks = 0;
+	fs->sb.free_blocks_base = 2;					/* Start allocating from 3rd block. Block 0 is free map, Block 1 superblock_info */
+	fs->sb_i.nblocks = sizeof(superblock)/stride + 1; 		/* How many free blocks needed */
 
+	/* Zero-out fields */
 	memset(&fs->fb_map, 0, sizeof(map));
-	memset(&fs->sb_i.blocks, 0, sizeof(superblock_i));/* Zero-out map */
+	memset(&fs->sb_i.blocks, 0, sizeof(superblock_i));
 	memset(&fs->sb.inode_first_blocks, 0, MAXBLOCKS*sizeof(block_t));
 	memset(&fs->sb.inode_block_counts, 0, MAXBLOCKS*sizeof(uint));
 
 	if (newfs) {
-		fs_preallocate();	/* Make a contiguous file on disk (performance enhancement) */
-		fs_zero();		/* Zero-out all filesystem blocks */
+		fs_allocate_blocks(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
+		fs->root = fs_mkdir_root(fs);					/* Setup root dir */
+
 	}
 	return fs;
 }
@@ -502,19 +528,13 @@ int fs_fill_inode_block_pointers(inode* ino, uint count, block_t* blockIndices) 
 	return FS_OK;
 }
 
-void* fs_getblockfromdisk(block_t b) {
-	char* buf;
-
-	FILE* fp = fs_safeopen(fname, "r");
-	if (NULL == fp) return NULL;
-
-	buf = (char*)malloc(BLKSIZE);
+int fs_getblockfromdisk(void* dest, block_t b) {
+	if (NULL == fp) return FS_ERR;
 
 	fseek(fp, b*BLKSIZE, SEEK_SET);
-	fread(buf, 1, BLKSIZE, fp);
+	fread(dest, 1, BLKSIZE, fp);
 
-	fclose(fp);
-	return (void*)buf;
+	return FS_OK;
 }
 
 /* Read an arbitary number of blocks from disk, 
@@ -524,47 +544,42 @@ void* fs_getblockfromdisk(block_t b) {
  * and we need to know how many bytes to read from this last
  * block.
  */
-void* fs_getblocksfromdisk(block_t* blocks, uint numblocks, uint type_size) {
-	uint i, k, memcpySize;
+int fs_getblocksfromdisk(void* dest, block_t* blocks, uint numblocks, uint type_size) {
+	uint i, memcpySize;
 	block_t j = blocks[0];
-	char* buf = (char*)malloc(type_size);
-	FILE* fp;
+	char* buf = (char*)dest;
 
 	if (BLKSIZE != type_size) {
-
-		fp = fs_safeopen(fname, "r");
-		if (NULL == fp) return NULL;
 
 		for (i = 0; i < numblocks; i++) {					/* Get root blocks from disk */
 			memcpySize = i+1 == numblocks ? type_size % stride : stride;	/* Get last chunk which may only be a partial block */
 
-			block_cache[j] = (block*)fs_getblockfromdisk(j);
-			memcpy(&buf[i*memcpySize], &block_cache[j]->data, memcpySize);
+			if (FS_ERR == fs_getblockfromdisk(&block_cache[j], j))
+				return FS_ERR;
 
-			k = j;
-			j = block_cache[j]->next;
-			free(block_cache[k]);
+			if (MAXBLOCKS < j) return FS_ERR;
+			memcpy(&buf[i*memcpySize], &block_cache[j].data, memcpySize);
+
+			j = block_cache[j].next;
 		}
-		fclose(fp);
-	} else return fs_getblockfromdisk(j);
-	return (void*)buf;
+	} else if (FS_ERR == fs_getblockfromdisk(dest, j))
+		return FS_ERR;
+
+	return FS_OK;
 }
 
 int fs_writeblocktodisk(block_t b, uint size, void* data) {
-	FILE* fp = fs_safeopen(fname, "r+");
-	if (FS_ERR == (int)fp) return FS_ERR;
+	if (NULL == fp) return FS_ERR;
 
 	fseek(fp, BLKSIZE*b, SEEK_SET); 
 	fwrite(data, 1, size, fp);
 
-	fclose(fp);
 	return FS_OK;
 }
 
 int fs_writeblockstodisk(block_t* blocks, uint numblocks, uint type_size, void* data) {
 	uint i, copysize;
 	block_t j = blocks[0];
-	FILE* fp;
 
 	// Split @param data into strides if it will not fit in one block
 	if (BLKSIZE < type_size) {
@@ -573,32 +588,27 @@ int fs_writeblockstodisk(block_t* blocks, uint numblocks, uint type_size, void* 
 												// memcpy at 1-byte granularity 
 
 		for (i = 0; i < numblocks; i++) {						// For all blocks
-			block_cache[j]		= fs_newBlock();				// Allocate in-memory block
-			block_cache[j]->num	= blocks[i];					// Record index of this block
+			block_cache[j].num = blocks[i];						// Record index of this block
 
 			if (i+1 == numblocks) {							// If this is the last block
 				copysize =  type_size % stride;					//   1. Write the remaining chunk that is less than the full block size
-				block_cache[j]->next = 0;					//   2 .It has no next block
+				block_cache[j].next = 0;					//   2 .It has no next block
 			} else {								// This is not the last block, so:
 				copysize = stride;						//   1. Copy the full stride
-				j = block_cache[j]->next;					//   2. Get an index to the next block
-				block_cache[j]->next = blocks[i+1];				//   3. Record the index of the next block	
+				j = block_cache[j].next;					//   2. Get an index to the next block
+				block_cache[j].next = blocks[i+1];				//   3. Record the index of the next block	
 			}
-			memcpy(block_cache[j]->data, &buf[i*stride], copysize);
+			memcpy(block_cache[j].data, &buf[i*stride], copysize);
 		}
 		free(buf);
 
-		fp = fs_safeopen(fname, "r+");
-		if (FS_ERR == (int)fp) return FS_ERR;
-
-		// Write blocks to disk
+		j = blocks[0];
 		for (i = 0; i < numblocks; i++) {
-			fseek(fp, BLKSIZE*j, SEEK_SET); 
-			fwrite(block_cache[j], 1, BLKSIZE, fp);
-			free(block_cache[j]);
-			j = block_cache[j]->next;
+			if (j == 0) break;	// Sanity check: Do not write inode 0
+
+			fs_writeblocktodisk(j, BLKSIZE, &block_cache[j]);
+			j = block_cache[j].next;
 		}
-		fclose(fp);
 
 	// Else write @param data to a whole block directly
 	} else fs_writeblocktodisk(j, type_size, data);
@@ -610,27 +620,18 @@ int fs_writeblockstodisk(block_t* blocks, uint numblocks, uint type_size, void* 
 filesystem* fs_openfs() {
 	filesystem* fs = NULL;
 	inode* root_inode = NULL;
-	FILE* fp = NULL;
-	superblock* tmp = NULL;
 
 	stride = sizeof(((struct block*)0)->data);
 	if (0 == stride) return NULL;
 
-	fp = fs_safeopen(fname, "r");	/* Test is fs file exists */
-	if (NULL == fp) return NULL;
-	fclose(fp);
-
 	fs = fs_alloc_filesystem(false);
+	if (NULL == fs) return NULL;
 
 	fs_debug_print();
 
-	//memcpy(&fs->fb_map,	fs_getblockfromdisk ( 0						),	sizeof(map));		// Read the free block bitmap from disk into memory
-	//memcpy(&fs->sb_i,	fs_getblockfromdisk ( 1						),	sizeof(superblock_i));	// Read superblock_info stored on disk into memory
-	//memcpy(&fs->sb,	fs_getblocksfromdisk( fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock)	),	sizeof(superblock));	// Read superblock stored on disk into memory
-	
-	fs->fb_map	= *(map*)		fs_getblockfromdisk(0);
-	fs->sb_i	= *(superblock_i*)	fs_getblockfromdisk(1);
-	fs->sb		= *(superblock*)	fs_getblocksfromdisk(fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
+	fs_getblockfromdisk(&fs->fb_map, 0);
+	fs_getblockfromdisk(&fs->sb_i, 1);
+	fs_getblocksfromdisk(&fs->sb, fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
 
 	root_inode		= (inode*)fs_get_inode_from_disk(fs, fs->sb.ino);					// Get the root directory inode from disk
 	if (NULL == root_inode)	return NULL;										// Opening the filesystem file failed
@@ -648,13 +649,8 @@ filesystem* fs_mkfs() {
 	if (0 == stride) return NULL;
 
 	fs = fs_alloc_filesystem(true);
-
-	fs->sb_i.nblocks = sizeof(superblock)/stride + 1; 		/* How many free blocks needed */
-	fs->sb.free_blocks_base = 2;					/* Start allocating from 3rd block. Block 0 is free map, Block 1 superblock_info */
-	fs_allocate_blocks(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
-
-	fs->root	= fs_mkdir_root(fs);				/* Setup root dir */
-
+	if (NULL == fs) return NULL;
+	
 	fs_writeblockstodisk( &rootblocks[0],		1,			sizeof(map),		&fs->fb_map);	/* Write map to disk */
 	fs_writeblockstodisk( &rootblocks[1],		1,			sizeof(superblock_i),	&fs->sb_i);	/* Write superblock info to disk */
 	fs_writeblockstodisk( fs->sb_i.blocks,		fs->sb_i.nblocks,	sizeof(superblock),	&fs->sb);	/* Write superblock to disk */
