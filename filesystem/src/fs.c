@@ -17,23 +17,29 @@
 #include <windows.h>
 #endif
 
+/* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
+#define PRINT_STRUCT(p)  print_mem((p), sizeof(*(p)))
+
 char* fname = "fs";			/* The name our filesystem will have on disk */
 long last_inode = 0;
 
-uint stride;				/* The data field is smaller than BLKSIZE
+size_t stride;				/* The data field is smaller than BLKSIZE
 					 * so our writes to disk are not BLKSIZE but rather 
 					 * BLKSIZE - sizeof(other fields in block struct) */
 block_t  rootblocks[] = { 0, 1 };	/* Indices to the first and second blocks */
 FILE* fp = NULL;
 
-int fs_getblocksfromdisk(filesystem* fs, void* dest, block_t* blocks, uint numblocks, uint type);
-int fs_writeblockstodisk(filesystem* fs, block_t* blocks, uint numblocks, uint type, void* data);
+int fs_getblocksfromdisk(filesystem* fs, void* dest, block_t* blocks, uint numblocks, size_t size);
+int fs_writeblockstodisk(filesystem* fs, block_t* blocks, uint numblocks, size_t size, void* data);
 int fs_fill_inode_block_pointers(inode* ino, uint count, block_t* blockIndices);
 int fs_allocate_blocks(filesystem* fs, int count, block_t* indices);
 extern dentry_volatile* fs_dentry_volatile_from_dentry(filesystem* fs, dentry* d, uint existsOnDisk);
 void fs_debug_print();
 void fs_safeopen();
 void fs_safeclose();
+
+void print_mem();
+void fs_debug_print();
 
 inode_t fs_alloc_inode();
 
@@ -167,7 +173,7 @@ dentry_volatile* fs_new_dentry_volatile(int alloc_inode, char* name) {
 	dv->ndirs	= 0;
 
 	dv->ino->nlinks	= 0;
-	dv->ino->nblocks= 1;
+	dv->ino->nblocks= sizeof(inode)/stride+1;   /* How many blocks the inode consumes */
 	dv->ino->size	= BLKSIZE;
 	dv->ino->mode	= FS_DIR;
 
@@ -368,7 +374,7 @@ int fs_preallocate() {
 	LARGE_INTEGER offset;		// because Visual C compiler is OLD school
 #endif
 
-	fs_safeopen(fname, "w");
+	fs_safeopen(fname, "wb");
 	if (NULL == fp) return FS_ERR;		
 
 #if defined(_WIN64) || defined(_WIN32)
@@ -395,7 +401,7 @@ int fs_preallocate() {
 /* Zero-out filesystem */
 int fs_zero() {
 	int i;
-	fs_safeopen(fname, "r+");
+	fs_safeopen(fname, "rb+");
 	if (NULL == fp) return FS_ERR;
 
 	for (i = 0; i < MAXBLOCKS; i++) {
@@ -446,7 +452,7 @@ filesystem* fs_alloc_filesystem(int newfs) {
 		if (FS_ERR == err1 || FS_ERR == err2) return NULL;
 	}
 
-	fs_safeopen(fname, "r+");	/* Test if file exists */
+	fs_safeopen(fname, "rb+");	/* Test if file exists */
 	if (NULL == fp) return NULL;
 
 	fs = (filesystem*)malloc(sizeof(filesystem));
@@ -531,9 +537,9 @@ int fs_getblockfromdisk(void* dest, block_t b) {
 	if (NULL == fp) return FS_ERR;
 
 	fseek(fp, b*BLKSIZE, SEEK_SET);
-	fread(dest, BLKSIZE, 1, fp);
-
-	return FS_OK;
+	if (1 == fread(dest, BLKSIZE, 1, fp))	// fread() returns 0 or 1
+		return FS_OK;			// Return ok only if exactly one block was read
+	return FS_ERR;
 }
 
 /* Write a block to disk */
@@ -541,16 +547,18 @@ int fs_writeblocktodisk(block_t b, uint size, void* data) {
 	if (NULL == fp) return FS_ERR;
 
 	fseek(fp, BLKSIZE*b, SEEK_SET); 
-	fwrite(data, size, 1, fp);
+	if (1 == fwrite(data, size, 1, fp))	// fwrite() returns 0 or 1
+		return FS_OK;			// Return ok only if exactly one block was written
 
-	return FS_OK;
+	return FS_ERR;
 }
 
 /* Read an arbitary number of blocks from disk. */
-int fs_getblocksfromdisk(filesystem *fs, void* dest, block_t* blocks, uint numblocks, uint type_size) {
+int fs_getblocksfromdisk(filesystem *fs, void* dest, block_t* blocks, uint numblocks, size_t type_size) {
 	uint i, memcpySize;
 	block_t j = blocks[0];
 
+	/* Get strided blocks (more than one block or less than a whole block) */
 	if (BLKSIZE != type_size) {
 
 		for (i = 0; i < numblocks; i++) {					/* Get root blocks from disk */
@@ -565,6 +573,7 @@ int fs_getblocksfromdisk(filesystem *fs, void* dest, block_t* blocks, uint numbl
 			j = fs->block_cache[j].next;
 			if (0 == j) break;
 		}
+	/* Get exactly one block */
 	} else if (FS_ERR == fs_getblockfromdisk(dest, j))
 		return FS_ERR;
 
@@ -572,7 +581,7 @@ int fs_getblocksfromdisk(filesystem *fs, void* dest, block_t* blocks, uint numbl
 }
 
 /* Write an arbitrary number of blocks to disk */
-int fs_writeblockstodisk(filesystem* fs, block_t* blocks, uint numblocks, uint type_size, void* data) {
+int fs_writeblockstodisk(filesystem* fs, block_t* blocks, uint numblocks, size_t type_size, void* data) {
 	block_t j = blocks[0];
 
 	// Split @param data into strides if it will not fit in one block
@@ -592,17 +601,18 @@ int fs_writeblockstodisk(filesystem* fs, block_t* blocks, uint numblocks, uint t
 			}
 			memcpy(fs->block_cache[j].data, &((char*)data)[i*stride], copysize);
 		}
-
+		
 		j = blocks[0];
 		for (i = 0; i < numblocks; i++) {
 
-			fs_writeblocktodisk(j, BLKSIZE, &fs->block_cache[j]);
+			if (FS_ERR == fs_writeblocktodisk(j, BLKSIZE, &fs->block_cache[j]))
+				return FS_ERR;
 			j = fs->block_cache[j].next;
 			if (j == 0) break;	// Sanity check: Do not write inode 0
 		}
 
 	// Else write @param data to a whole block directly
-	} else fs_writeblocktodisk(j, type_size, data);
+	} else return fs_writeblocktodisk(j, type_size, data);
 
 	return FS_OK;
 }
@@ -611,17 +621,12 @@ int fs_writeblockstodisk(filesystem* fs, block_t* blocks, uint numblocks, uint t
 filesystem* fs_openfs() {
 	filesystem* fs = NULL;
 	inode* root_inode = NULL;
-	uint k;
 	block_t one = 1;
 
 	fs = fs_alloc_filesystem(false);
 	if (NULL == fs) return NULL;
 
-	//fs_debug_print();
-
-	//for (k = 0; k < sizeof(superblock); k++)
-	//	printf("%x ", ((char*)&fs->sb)[k]);
-	//printf("\n");
+	fs_debug_print();
 
 	fs_getblockfromdisk(&fs->fb_map, 0);
 	fs_getblocksfromdisk(fs, &fs->sb_i, &one, 1, sizeof(superblock_i));
@@ -631,10 +636,9 @@ filesystem* fs_openfs() {
 	if (NULL == root_inode)	return NULL;								// Opening the filesystem file failed
 
 	fs->root = fs_dentry_volatile_from_dentry(fs, &root_inode->data.dir, true);			// Convert the permanent storage directory to
-	
 	if (NULL == fs->root) return NULL;
+	
 	if (!strcmp(fs->root->name,"/")) return fs;							// We identify having the whole root by the last field,
-													// i.e. root->name, being correctly filled (i.e., filled with "/")
 	return NULL;
 }
 
@@ -647,10 +651,54 @@ filesystem* fs_mkfs() {
 	fs_writeblockstodisk(fs, &rootblocks[0],		1,			sizeof(map),		&fs->fb_map);	/* Write map to disk */
 	fs_writeblockstodisk(fs, &rootblocks[1],		1,			sizeof(superblock_i),	&fs->sb_i);	/* Write superblock info to disk */
 	fs_writeblockstodisk(fs, fs->sb_i.blocks,		fs->sb_i.nblocks,	sizeof(superblock),	&fs->sb);	/* Write superblock to disk */
-	fs_writeblockstodisk(fs, fs->root->ino->blocks,	fs->root->ino->nblocks,	sizeof(inode),		&fs->root->ino);/* Write root inode to disk. TODO: Need to write iblocks */
+	fs_writeblockstodisk(fs, fs->root->ino->blocks,		fs->root->ino->nblocks,	sizeof(inode),		fs->root->ino);/* Write root inode to disk. TODO: Need to write iblocks */
 
 	printf("Root is \"%s\". Filesystem size is %d KByte.\n", fs->root->name, BLKSIZE*MAXBLOCKS/1024);
 	return fs;
+}
+
+/* Print a hex dump of a struct, color nonzeros red
+ * Can also use hexdump -C filename
+ * or :%!xxd in vim
+ */
+void print_mem(void const *vp, size_t n)
+{
+	size_t i;
+	char* red = "\x1b[31m";
+	char* reset = "\x1b[0m";
+	unsigned char const* p = (unsigned char const*)vp;
+
+#if defined(_WIN64) || defined(_WIN32)
+	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	WORD saved_attributes;
+	GetConsoleScreenBufferInfo(console, &info);
+	saved_attributes = info.wAttributes;
+#endif
+
+	for (i = 0; i < n; i++) {
+
+		// Color nonzeros red
+		if (0 != p[i]) {
+#if defined(_WIN64) || defined(_WIN32)
+			SetConsoleTextAttribute(console, FOREGROUND_RED);
+#else
+			printf("%s",red);
+#endif
+		}
+
+		printf("%02x ", p[i]);
+
+		// Restore color
+		if (0 != p[i]) {
+#if defined(_WIN64) || defined(_WIN32)
+			SetConsoleTextAttribute(console, saved_attributes);
+#else
+			printf("%s",reset);
+#endif
+		}
+	}
+	putchar('\n');
 }
 
 void fs_debug_print() {
