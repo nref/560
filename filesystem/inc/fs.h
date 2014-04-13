@@ -3,6 +3,7 @@
 #define BLKSIZE 4096				// Block size in bytes
 //#define MAXBLOCKS 25600			// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
 #define MAXBLOCKS 256				// Temporary for rapid development: 1MB filesystem
+#define MAXINODES MAXBLOCKS			// Max num allocatable inodes. Free inode numbers is always <= MAXBLOCKS
 
 #define NBLOCKS 8				// Number of direct blocks an inode can point to
 #define NBLOCKS_IBLOCK 8			// Number of direct blocks an indirect block can point to
@@ -10,29 +11,17 @@
 
 #define SUPERBLOCK_MAXBLOCKS 32			// Number of blocks we can allocate to the superblock
 
-#define MAXFILEBLOCKS NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
+#define MAXFILEBLOCKS NBLOCKS+NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
 
-#define FS_NAMEMAXLEN 256			// Max length of a directory or file name
-#define FS_MAXPATHLEN 65535			// Maximum path length == sizeof(uint16)-1 == 2^16-1
-#define FS_MAXPATHFIELDS 16			// Max number of forward-slash "/"-separated fields in a path
+#define FS_NAMEMAXLEN 256				// Max length of a directory or file name
+#define FS_MAXPATHFIELDS 16				// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
+#define FS_MAXPATHLEN FS_NAMEMAXLEN*FS_MAXPATHFIELDS+1	// Maximum path length. +1 for terminating null
 
-#define FS_MAXDIRS 256				// Max number of subdirs in a dir
 #define FS_MAXFILES 256				// Max number of files in a dir
 #define FS_MAXLINKS 256				// Max number of links in a dir
 
-#define FS_ROOTMAXBLOCKS 512			// Max number of a blocks root dir can occupy
-
-#define FS_READ 0				// File read mode
-#define FS_WRITE 1				// File write mode
-
-#define FS_ERR -1				// Filesystem type error
-#define FS_OK 1					// Filesystem type ok
-
-#define FS_FILE 0				// Filesystem type file
-#define FS_DIR 1				// Filesystem type directory
-#define FS_LINK 2				// Filesystem type link
-
-#define INT_SZ 8
+#define FS_ERR -1
+#define FS_OK 1
 
 #define true 1
 #define false 0
@@ -40,6 +29,8 @@
 /* The types that we want to write to or read from disk */
 enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
 enum { DIRECT, INDIRECT1, INDIRECT2, INDIRECT3 } INDIRECTION;
+enum { OK, DIREXISTS, BADPATH } FS_MESSAGE;
+enum { FS_FILE, FS_DIR, FS_LINK } FILETYPE;
 
 typedef unsigned int uint;
 typedef uint16_t block_t;			// Block number
@@ -168,7 +159,8 @@ typedef struct inode {
 
 typedef struct superblock {
 	uint free_blocks_base;			// Index of lowest unallocated block
-	inode_t ino;				// Inode number of root directory entry
+	uint free_inodes_base;			// Index of lowest unallocated block
+	inode_t root;				// Inode number of root directory entry
 	block_t inode_first_blocks[MAXBLOCKS];	// Index of first allocated block for each inode.
 	uint inode_block_counts[MAXBLOCKS];	// How many allocated blocks for each inode.
 
@@ -182,16 +174,17 @@ typedef struct superblock_i {
 } superblock_i;
 
 typedef struct filesystem {	
-	block block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
 	dentry_volatile* root;			/* Root directory entry */
 
 	map fb_map;				/* Block 0. Free block map. 
 						 * Since filesystem size == 100MB == 25600 4096-byte blocks,
 						 * we can use a single block of 4096 chars == 4096*8 == 32768 bits
 						 * to store the free block bitmap. */
+	map ino_map;				/* Free inodes */
 
 	superblock_i sb_i;			/* Block 1. Tells us where the superblock blocks are. */
-	superblock sb;				/* Blocks 2...sizeof(superblock). Superblock. Contains fs configuration */
+	superblock sb;				/* Blocks 2...sizeof(superblock)/sizeof(block)+1. 
+						 * Superblock. Contains filesystem topology */
 
 } filesystem;
 

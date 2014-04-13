@@ -5,6 +5,7 @@
 
 char curDir[FS_MAXPATHLEN];		// Current shell directory
 char cmd[SH_BUFLEN];			// Buffer for user input
+char* errormsgs[3] = { "OK", "Directory exists", "stat() failed for the given path" };
 
 void _sh_tree_recurse(uint depth, dentry_volatile* dv) {
 	uint i;
@@ -165,10 +166,8 @@ int main() {
 
 		else if (!strcmp(fields[0], "mkdir")) { 
 			if (i>1) {	// If the user provided more than one field
-				int retval = sh_mkdir(fs, curDir, fields[1]); 
-				if (FS_ERR != retval) { printf("OK"); }
-				else printf("ERROR");
-				printf("\n");
+				int i = sh_mkdir(fs, curDir, fields[1]); 
+				printf("%s\n", errormsgs[i]);
 			}
 		}
 
