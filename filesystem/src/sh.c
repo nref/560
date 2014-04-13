@@ -193,7 +193,8 @@ int main() {
 			}
 			else { printf("ERROR"); }
 			printf("\n");
-		}
+
+		} else { printf("Bad command\n"); }
 
 		for (j = 0; j < i; j++)
 			free(fields[j]);

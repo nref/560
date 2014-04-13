@@ -25,7 +25,7 @@
 #define FS_READ 0				// File read mode
 #define FS_WRITE 1				// File write mode
 
-#define FS_ERR 0				// Filesystem type error
+#define FS_ERR -1				// Filesystem type error
 #define FS_OK 1					// Filesystem type ok
 
 #define FS_FILE 0				// Filesystem type file
@@ -39,6 +39,7 @@
 
 /* The types that we want to write to or read from disk */
 enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
+enum { DIRECT, INDIRECT1, INDIRECT2, INDIRECT3 } INDIRECTION;
 
 typedef unsigned int uint;
 typedef uint16_t block_t;			// Block number
@@ -173,7 +174,7 @@ typedef struct superblock {
 
 } superblock;
 
-/* Need these outside of superblock because we can be certain it fits into one block */
+/* Need these fields outside of superblock because we can be certain they fit into one block */
 typedef struct superblock_i {
 	uint nblocks;				// The number of blocks allocated to the superblock
 	block_t blocks[SUPERBLOCK_MAXBLOCKS];	// Indices to superblock's blocks
@@ -181,7 +182,7 @@ typedef struct superblock_i {
 } superblock_i;
 
 typedef struct filesystem {	
-	block* block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
+	block block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
 	dentry_volatile* root;			/* Root directory entry */
 
 	map fb_map;				/* Block 0. Free block map. 
