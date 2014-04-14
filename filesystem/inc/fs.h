@@ -11,7 +11,7 @@
 
 #define SUPERBLOCK_MAXBLOCKS 32			// Number of blocks we can allocate to the superblock
 
-#define MAXFILEBLOCKS NBLOCKS+NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
+#define MAXFILEBLOCKS 2*NBLOCKS + NBLOCKS*NBLOCKS_IBLOCK + NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
 
 #define FS_NAMEMAXLEN 256				// Max length of a directory or file name
 #define FS_MAXPATHFIELDS 16				// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
@@ -29,7 +29,7 @@
 /* The types that we want to write to or read from disk */
 enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
 enum { DIRECT, INDIRECT1, INDIRECT2, INDIRECT3 } INDIRECTION;
-enum { OK, DIREXISTS, BADPATH } FS_MESSAGE;
+enum { OK, FS_ERROR, DIREXISTS, BADPATH, NOTONDISK } FS_MESSAGE;
 enum { FS_FILE, FS_DIR, FS_LINK } FILETYPE;
 
 typedef unsigned int uint;

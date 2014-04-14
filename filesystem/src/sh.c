@@ -5,7 +5,9 @@
 
 char curDir[FS_MAXPATHLEN];		// Current shell directory
 char cmd[SH_BUFLEN];			// Buffer for user input
-char* errormsgs[3] = { "OK", "Directory exists", "stat() failed for the given path" };
+char* errormsgs[5] = {	"OK", "General Error", "Directory exists", 
+			"stat() failed for the given path",
+			"An inode was not found on disk" };
 
 void _sh_tree_recurse(uint depth, dentry_volatile* dv) {
 	uint i;

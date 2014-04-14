@@ -39,7 +39,7 @@ void fs_safeclose();
 void print_mem();
 void fs_debug_print();
 
-inode_t fs_allocate_inode();
+inode_t fs_allocate_inode(filesystem *fs);
 
 /* Open the filesystem file and check for NULL */
 void fs_safeopen(char* fname, char* mode) {
@@ -132,12 +132,12 @@ inode* fs_stat(filesystem* fs, char* name) {
  * gets allocated an inode, else inode 0 is given.
  * @param name the new directory name.
  */
-dentry* fs_new_dentry(int alloc_inode, char* name) {
+dentry* fs_new_dentry(filesystem* fs, int alloc_inode, char* name) {
 	dentry* d;
 	d = (dentry*)malloc(sizeof(dentry));
 
 	if (alloc_inode)
-		d->ino = fs_allocate_inode();
+		d->ino = fs_allocate_inode(fs);
 
 	d->parent	= d->ino;
 	d->next		= d->ino;
@@ -160,7 +160,7 @@ dentry* fs_new_dentry(int alloc_inode, char* name) {
  * gets allocated an inode, else inode 0 is given.
  * @param name the new directory name
  */
-dentry_volatile* fs_new_dentry_volatile(int alloc_inode, char* name) {
+dentry_volatile* fs_new_dentry_volatile(filesystem* fs, int alloc_inode, char* name) {
 	dentry_volatile* dv;
 
 	dv		= (dentry_volatile*)	malloc(sizeof(dentry_volatile));
@@ -194,10 +194,10 @@ dentry_volatile* fs_new_dentry_volatile(int alloc_inode, char* name) {
 	strcpy(dv->name, name);
 
 	if (alloc_inode)
-		dv->ino->num = fs_allocate_inode();
+		dv->ino->num = fs_allocate_inode(fs);
 	else dv->ino->num = 0;
 
-	memcpy(&dv->ino->data.dir, fs_new_dentry(alloc_inode, name), sizeof(dv->ino->data.dir));
+	memcpy(&dv->ino->data.dir, fs_new_dentry(fs, alloc_inode, name), sizeof(dv->ino->data.dir));
 	dv->ino->data_v.dir = dv;
 
 	return dv;
@@ -231,7 +231,7 @@ inode* fs_get_inode_from_disk(filesystem* fs, inode_t num) {
  */
 dentry_volatile* fs_dentry_volatile_from_dentry(filesystem* fs, dentry* d, uint existsOnDisk) {
 	dentry_volatile* dv = NULL;
-	dv = fs_new_dentry_volatile(false, d->name);
+	dv = fs_new_dentry_volatile(fs, false, d->name);
 
 	if (MAXBLOCKS < d->ino) return NULL;		/* A little sanity check */
 	/* If never seen this inode before, need to allocate blocks */
@@ -273,7 +273,7 @@ dentry_volatile* fs_dentry_volatile_from_dentry(filesystem* fs, dentry* d, uint 
 dentry_volatile* fs_new_dir_volatile(filesystem* fs, char* name) {
 	dentry* new_dir;
 	dentry_volatile* new_dir_v;
-	new_dir = fs_new_dentry(true, name);
+	new_dir = fs_new_dentry(fs, true, name);
 	new_dir_v = fs_dentry_volatile_from_dentry(fs, new_dir, false);
 	free(new_dir);
 
@@ -285,24 +285,53 @@ dentry_volatile* fs_new_dir_volatile(filesystem* fs, char* name) {
 
 int fs_mkdir(filesystem *fs, char* cur_path, char* dir_name) {
 	dentry_volatile* cur_dv = NULL, *new_dv = NULL;
+	dentry* cur_d = NULL, *new_d = NULL;
 	char path[FS_MAXPATHLEN];
 
-	inode* current_inode = fs_stat(fs, cur_path);
-	if (current_inode->num == 0) return BADPATH;
+	inode* current_inode, *tail;
 
+	current_inode = fs_stat(fs, cur_path);
+	if (NULL == current_inode)	return BADPATH;
+	
 	strcat(path, cur_path);
 	strcat(path, "/");
 	strcat(path, dir_name);
-	if (0 != fs_stat(fs, path)) return DIREXISTS;	// dir already exists
+	if (NULL != fs_stat(fs, path))	return DIREXISTS;	// dir already exists
+
+	cur_d = &current_inode->data.dir;
+	cur_dv = current_inode->data_v.dir;
 
 	/* If the inode is not loaded from disk into memory, load it from disk */
-	if (NULL == &current_inode->data_v)	cur_dv = fs_dentry_volatile_from_dentry(fs, &current_inode->data.dir, true);
-	else					cur_dv = current_inode->data_v.dir;
+	if (NULL == cur_dv)		*cur_dv = *fs_dentry_volatile_from_dentry(fs, cur_d, true);
+	if (NULL == cur_dv)		return NOTONDISK;
 
-	new_dv = fs_new_dir_volatile(fs, dir_name);
+	new_d = fs_new_dentry(fs, true, dir_name);
+
+	/* Setup linked list pointers */
+	if (NULL == cur_dv->head) { /* If it's the first entry here  */
+		cur_d->head = new_d->ino;
+		new_d->prev = new_d->ino;
+		new_d->next = new_d->ino;
+		cur_d->tail = cur_d->head;
+	} else {
+		new_d->prev = cur_d->tail;
+		new_d->next = cur_d->head;
+		cur_d->tail = new_d->ino;
+
+		/* Load the tail and update it */
+		tail = fs_get_inode_from_disk(fs, cur_d->tail);
+		if (NULL == tail) return FS_ERROR;
+		tail->data.dir.next = new_d->ino;
+		fs_writeblockstodisk(tail, tail->blocks, tail->nblocks, sizeof(inode));
+		free(tail);
+	}
+	cur_dv->ndirs++;
+
+	new_dv = fs_dentry_volatile_from_dentry(fs, new_d, false);
+	if (NULL == new_dv) return FS_ERROR;
 	new_dv->parent = current_inode;
-
-	/* If it's the first entry in cur_dir_name  */
+	
+	/* Do the same setup for the in-memory version */
 	if (NULL == cur_dv->head) {
 		cur_dv->head = new_dv->ino;
 		new_dv->prev = new_dv->ino;
@@ -310,12 +339,12 @@ int fs_mkdir(filesystem *fs, char* cur_path, char* dir_name) {
 		cur_dv->tail = cur_dv->head;
 	} else {
 		new_dv->prev = cur_dv->tail;
-		cur_dv->tail->data_v.dir->next = new_dv->ino;
-		cur_dv->tail = new_dv->ino;
 		new_dv->next = cur_dv->head;
+		cur_dv->tail = new_dv->ino;
+		cur_dv->tail->data_v.dir->next = new_dv->ino;	/* Updating the tail in-memory requires no disk write */
 	}
-	cur_dv->ndirs++;
 
+	fs_writeblockstodisk(cur_dv->ino, cur_dv->ino->blocks, cur_dv->ino->nblocks, sizeof(inode));
 	fs_writeblockstodisk(new_dv->ino, new_dv->ino->blocks, new_dv->ino->nblocks, sizeof(inode));
 
 	return OK;
@@ -326,7 +355,7 @@ dentry_volatile* fs_mkdir_root(filesystem *fs) {
 	dentry* d = NULL;
 	dentry_volatile* dv = NULL;
 
-	d = fs_new_dentry(true, "/");
+	d = fs_new_dentry(fs, true, "/");
 	dv = fs_dentry_volatile_from_dentry(fs, d, false);	/* Convert to in-memory root dir */
 
 	/* The above either read in bogus data (if there was no preexisting fs),
@@ -374,7 +403,7 @@ inode_t fs_allocate_inode(filesystem *fs) {
 		eightBlocks = &fs->ino_map.data[i/8];
 		if ((*eightBlocks)+1 < 0x07) {		// If this char is not full 
 			(*eightBlocks)++;
-			return fs->sb.free_inodes_base++;
+			return ++fs->sb.free_inodes_base;
 		}
 	}
 	return 0;
@@ -543,6 +572,7 @@ filesystem* fs_alloc_filesystem(int newfs) {
 
 	fs->sb.root = 0;
 	fs->sb.free_blocks_base = 3;					/* Start allocating from 4th block */
+	fs->sb.free_inodes_base = 1;					/* Start allocating from 1st inode */
 	fs->sb_i.nblocks = sizeof(superblock)/stride + 1; 		/* How many free blocks needed */
 	fs->fb_map.data[0] = 0x02;					/* First two blocks reserved */
 
