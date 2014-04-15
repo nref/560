@@ -56,6 +56,7 @@ void fs_safeopen(char* fname, char* mode) {
 void fs_safeclose() {
 	if (NULL != fp)
 		fclose(fp);
+	fp = NULL;
 }
 
 /* Follow an array of cstrings which are the fields of a path, e.g. input of 
