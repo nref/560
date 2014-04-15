@@ -159,7 +159,7 @@ typedef struct inode {
 
 typedef struct superblock {
 	uint free_blocks_base;			// Index of lowest unallocated block
-	uint free_inodes_base;			// Index of lowest unallocated block
+	inode_t free_inodes_base;			// Index of lowest unallocated block
 	inode_t root;				// Inode number of root directory entry
 	block_t inode_first_blocks[MAXBLOCKS];	// Index of first allocated block for each inode.
 	uint inode_block_counts[MAXBLOCKS];	// How many allocated blocks for each inode.

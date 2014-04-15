@@ -390,13 +390,13 @@ int fs_free_inode(filesystem* fs, inode_t num) {
 		return FS_ERR;	/* Block already free */
 
 	--fs->ino_map.data[num];
-	fs->sb.free_blocks_base = num;
+	fs->sb.free_inodes_base = num;
 	return FS_OK;
 }
 
 /* Find an unused inode number and return it */
 inode_t fs_allocate_inode(filesystem *fs) {
-	uint i;
+	inode_t i;
 	char *eightBlocks;
 
 	for (i = fs->sb.free_inodes_base; i < MAXINODES; i++)
