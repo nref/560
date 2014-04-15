@@ -53,9 +53,11 @@ void fs_safeopen(char* fname, char* mode) {
 }
 
 /* Close the filesystem file if is was open */
+/* TODO: Fix this to not *double free* and not run
+   if the fp has already been closed*/ 
 void fs_safeclose() {
-	if (NULL != fp)
-		fclose(fp);
+	if (NULL != fp)  //this needs to do more
+		fclose(fp); 
 }
 
 /* Follow an array of cstrings which are the fields of a path, e.g. input of 
