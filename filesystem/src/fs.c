@@ -24,6 +24,11 @@
 /* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
 #define PRINT_STRUCT(p)  print_mem((p), sizeof(*(p)))
 
+
+char* errormsgs[5]		= {	"OK", "General Error", "Directory exists", 
+					"stat() failed for the given path",
+					"An inode was not found on disk"	 };
+
 char* fname = "fs";			/* The name our filesystem will have on disk */
 block block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
 size_t stride;				/* The data field is smaller than BLKSIZE
@@ -31,17 +36,6 @@ size_t stride;				/* The data field is smaller than BLKSIZE
 					 * BLKSIZE - sizeof(other fields in block struct) */
 block_t  rootblocks[] = { 0, 1, 2 };	/* Indices to the first and second blocks */
 FILE* fp = NULL;			/* Pointer to file storage */
-
-inode_t fs_allocate_inode(filesystem *fs);
-int fs_readblocksfromdisk(void* dest, block_t* blocks, uint numblocks, size_t size);
-int fs_writeblockstodisk(void* source, block_t* blocks, uint numblocks, size_t type_size);
-int fs_fill_inode_block_pointers(inode* ino, uint count, block_t* blockIndices);
-int fs_allocate_blocks(filesystem* fs, const int count, block_t* indices);
-void fs_updateDisk(filesystem* fs);
-void fs_safeopen();
-void fs_safeclose();
-void print_mem();
-void fs_debug_print();
 
 /* Open the filesystem file and check for NULL */
 void fs_safeopen(char* fname, char* mode) {
@@ -71,9 +65,9 @@ void fs_safeclose() {
  * @param path The fields of the path
  * Return the inode at the end of this path or NULL if not found.
  */ 
-inode* dir_recurse(filesystem* fs, dentry_volatile* dir, uint depth, uint pathFields, char* name, char* path[]) {
+inode* fs_recurse(filesystem* fs, dent_v* dir, uint depth, uint pathFields, char* name, char* path[]) {
 	uint i;									// Declarations go here to satisfy Visual C compiler
-	dentry_volatile* iterator;
+	dent_v* iterator;
 
 	if (NULL == dir || NULL == dir->head || NULL == dir->head->data_v.dir) return NULL;
 	iterator = dir->head->data_v.dir;
@@ -87,7 +81,7 @@ inode* dir_recurse(filesystem* fs, dentry_volatile* dir, uint depth, uint pathFi
 				return iterator->ino;				// Return the inode of the matching dir
 
 			// Else recurse another level
-			else return dir_recurse(fs, iterator, depth+1, 
+			else return fs_recurse(fs, iterator, depth+1, 
 						pathFields-1, name, &path[1]); 
 		}
 		iterator = iterator->next->data_v.dir;
@@ -126,7 +120,7 @@ inode* fs_stat(filesystem* fs, char* name) {
 
 	if (depth == 0) return fs->root->ino;	// Return if we are at the root
 	else {
-		ino = dir_recurse(fs, fs->root, 0, depth, name, &path[depth-1]);	// Else traverse the path, get matching inode
+		ino = fs_recurse(fs, fs->root, 0, depth, name, &path[depth-1]);	// Else traverse the path, get matching inode
 		for (i = 0; i < depth; i++) 
 			free(path[i]);
 		return ino;
@@ -139,12 +133,12 @@ inode* fs_stat(filesystem* fs, char* name) {
  * gets allocated an inode, else inode 0 is given.
  * @param name the new directory name.
  */
-dentry* fs_new_dentry(filesystem* fs, const int alloc_inode, const char* name) {
-	dentry* d = NULL;
-	d = (dentry*)malloc(sizeof(dentry));
+dent* fs_newd(filesystem* fs, const int alloc_inode, const char* name) {
+	dent* d = NULL;
+	d = (dent*)malloc(sizeof(dent));
 
 	if (alloc_inode)
-		d->ino = fs_allocate_inode(fs);
+		d->ino = fs_ialloc(fs);
 	else d->ino = 0;
 
 	d->parent	= d->ino;
@@ -171,11 +165,11 @@ dentry* fs_new_dentry(filesystem* fs, const int alloc_inode, const char* name) {
  * gets allocated an inode, else inode 0 is given.
  * @param name the new directory name
  */
-dentry_volatile* fs_new_dentry_volatile(filesystem* fs, const int alloc_inode, const char* name) {
-	dentry*			d = NULL;
-	dentry_volatile*	dv = NULL;
+dent_v* fs_newdv(filesystem* fs, const int alloc_inode, const char* name) {
+	dent*			d = NULL;
+	dent_v*	dv = NULL;
 
-	dv		= (dentry_volatile*)	malloc(sizeof(dentry_volatile));
+	dv		= (dent_v*)	malloc(sizeof(dent_v));
 	dv->ino		= (inode*)		malloc(sizeof(inode));
 
 	dv->files	= (inode*)		malloc(FS_MAXFILES*sizeof(inode));
@@ -206,7 +200,7 @@ dentry_volatile* fs_new_dentry_volatile(filesystem* fs, const int alloc_inode, c
 	strncpy(dv->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
 	dv->name[FS_NAMEMAXLEN-1] = '\0';
 
-	d = fs_new_dentry(fs, alloc_inode, name);
+	d = fs_newd(fs, alloc_inode, name);
 	memcpy(&dv->ino->data.dir, d, sizeof(dv->ino->data.dir));
 	dv->ino->data_v.dir = dv;
 	dv->ino->num = d->ino;
@@ -216,7 +210,7 @@ dentry_volatile* fs_new_dentry_volatile(filesystem* fs, const int alloc_inode, c
 }
 
 /* Read from disk the inode to which @param num refers. */
-inode* fs_get_inode_from_disk(filesystem* fs, inode_t num) {
+inode* fs_inode_load(filesystem* fs, inode_t num) {
 	inode* ino = NULL;
 	block_t first_block_num;
 
@@ -242,15 +236,15 @@ inode* fs_get_inode_from_disk(filesystem* fs, inode_t num) {
 	return ino;
 }
 
-/* Given an inode number, load the corresponding dentry
- * Return a dentry_volatile whose field data.dir contains it. */
-dentry_volatile* fs_load_dir(filesystem* fs, inode_t num) {
-	dentry_volatile *dv;
+/* Given an inode number, load the corresponding dent
+ * Return a dent_v whose field data.dir contains it. */
+dent_v* fs_load_dir(filesystem* fs, inode_t num) {
+	dent_v *dv;
 
-	inode* ino = fs_get_inode_from_disk(fs, num);
+	inode* ino = fs_inode_load(fs, num);
 	if (NULL == ino) return NULL;
 
-	dv = fs_new_dentry_volatile(fs, false, ino->data.dir.name);
+	dv = fs_newdv(fs, false, ino->data.dir.name);
 	
 	if (NULL == dv) {
 		free(ino);
@@ -258,11 +252,11 @@ dentry_volatile* fs_load_dir(filesystem* fs, inode_t num) {
 	}
 
 	dv->ino		= ino;
-	dv->head	= fs_get_inode_from_disk(fs, dv->ino->data.dir.head);
-	dv->tail	= fs_get_inode_from_disk(fs, dv->ino->data.dir.tail);
-	dv->parent	= fs_get_inode_from_disk(fs, dv->ino->data.dir.parent);
-	dv->next	= fs_get_inode_from_disk(fs, dv->ino->data.dir.next);
-	dv->prev	= fs_get_inode_from_disk(fs, dv->ino->data.dir.prev);
+	dv->head	= fs_inode_load(fs, dv->ino->data.dir.head);
+	dv->tail	= fs_inode_load(fs, dv->ino->data.dir.tail);
+	dv->parent	= fs_inode_load(fs, dv->ino->data.dir.parent);
+	dv->next	= fs_inode_load(fs, dv->ino->data.dir.next);
+	dv->prev	= fs_inode_load(fs, dv->ino->data.dir.prev);
 
 	if (	NULL == dv->parent	|| 
 		NULL == dv->next	|| 
@@ -281,8 +275,8 @@ dentry_volatile* fs_load_dir(filesystem* fs, inode_t num) {
 	return dv;
 }
 
-dentry_volatile* fs_new_dir(filesystem *fs, dentry_volatile* parent, const char* name) {
-	dentry_volatile* dv = NULL;
+dent_v* fs_new_dir(filesystem *fs, dent_v* parent, const char* name) {
+	dent_v* dv = NULL;
 	inode* tail = NULL;
 	int makingRoot = 0;
 
@@ -291,12 +285,12 @@ dentry_volatile* fs_new_dir(filesystem *fs, dentry_volatile* parent, const char*
 		makingRoot = 1;
 
 	/* Allocate a new inode number */
-	dv = fs_new_dentry_volatile(fs, true, name);
+	dv = fs_newdv(fs, true, name);
 	if (NULL == dv) return NULL;
 
 	/* Allocate n blocks, tell us which we got */
 	if (FS_ERR == 
-		fs_allocate_blocks(	fs, dv->ino->nblocks, 
+		fs_balloc(	fs, dv->ino->nblocks, 
 					dv->ino->blocks) ) 
 	{
 		free(dv);
@@ -321,7 +315,7 @@ dentry_volatile* fs_new_dir(filesystem *fs, dentry_volatile* parent, const char*
 		tail = parent->tail;	/* Try in memory */
 		if (NULL == tail) {
 			parent->ino->data_v.dir->tail = 
-				fs_get_inode_from_disk(fs, parent->ino->data.dir.tail); /* Try from disk */
+				fs_inode_load(fs, parent->ino->data.dir.tail); /* Try from disk */
 			tail = parent->ino->data_v.dir->tail;
 		}
 
@@ -373,13 +367,14 @@ dentry_volatile* fs_new_dir(filesystem *fs, dentry_volatile* parent, const char*
 
 	/* Write changes to disk */
 	fs_writeblockstodisk(dv->ino, dv->ino->blocks, dv->ino->nblocks, sizeof(inode));
-	fs_updateDisk(fs);
+	if (FS_ERR == fs_sync(fs))
+		return NULL;
 
 	return dv;
 }
 
 int fs_mkdir(filesystem *fs, char* cur_path, char* dir_name) {
-	dentry_volatile* cur_dv = NULL, *new_dv = NULL;
+	dent_v* cur_dv = NULL, *new_dv = NULL;
 	char path[FS_MAXPATHLEN] = "";
 
 	inode* current_inode;
@@ -412,8 +407,8 @@ int fs_mkdir(filesystem *fs, char* cur_path, char* dir_name) {
  * @param newfs if true, load a preexisting root dir
  * Else make a new root dir
  */
-dentry_volatile* fs_mkdir_root(filesystem *fs, int newfs) {
-	dentry_volatile* dv = NULL;
+dent_v* fs_mkroot(filesystem *fs, int newfs) {
+	dent_v* dv = NULL;
 	
 	if (newfs) {
 		dv = fs_new_dir(fs, NULL, "/");
@@ -442,7 +437,7 @@ dentry_volatile* fs_mkdir_root(filesystem *fs, int newfs) {
  * Returns FS_OK on success, FS_ERR if the block
  * 
  */
-int fs_free_inode(filesystem* fs, inode_t num) {
+int fs_ifree(filesystem* fs, inode_t num) {
 	if (NULL == fs) return FS_ERR;
 
 	if (0x0 == fs->fb_map.data[num])
@@ -454,7 +449,7 @@ int fs_free_inode(filesystem* fs, inode_t num) {
 }
 
 /* Find an unused inode number and return it */
-inode_t fs_allocate_inode(filesystem *fs) {
+inode_t fs_ialloc(filesystem *fs) {
 	inode_t i;
 	char *eightBlocks;
 
@@ -472,9 +467,9 @@ inode_t fs_allocate_inode(filesystem *fs) {
 /* Free the index of a block and its malloc'd memory
  * @param blk pointer to the block to free
  * Returns FS_OK on success, FS_ERR if the block
- * 
+ * was already free
  */
-int fs_free_block(filesystem* fs, block* blk) {
+int fs_bfree(filesystem* fs, block* blk) {
 	if (NULL == fs) return FS_ERR;
 	if (NULL == blk) return FS_ERR;
 
@@ -489,7 +484,7 @@ int fs_free_block(filesystem* fs, block* blk) {
 
 /* Traverse the free block array and return a block 
  * whose field num is the index of the first free bock */
-int fs_allocate_block(filesystem* fs) {
+int _balloc(filesystem* fs) {
 	uint i;
 
 	/* One char in the free block map represents 
@@ -526,7 +521,7 @@ block* fs_newBlock() {
  * Therefore, this offers merely a performance benefit.
  * Returns FS_OK on success, FS_ERR on failure.
  */
-int fs_preallocate() {
+int fs_prealloc() {
 	int ERR;
 #if defined(_WIN64) || defined(_WIN32)	// Have to put declaration here.
 	LARGE_INTEGER offset;		// because Visual C compiler is OLD school
@@ -603,7 +598,7 @@ void fs_delete(filesystem *fs) {
  * the previous)
  * Returns a pointer to the allocated filesystem
  */
-filesystem* fs_alloc_filesystem(int newfs) {
+filesystem* fs_init(int newfs) {
 	filesystem *fs = NULL;
 
 	stride = sizeof(((struct block*)0)->data);
@@ -613,7 +608,7 @@ filesystem* fs_alloc_filesystem(int newfs) {
 		int err1, err2;
 
 		fs_safeclose();
-		err1 = fs_preallocate();	/* Make a contiguous file on disk (performance enhancement) */
+		err1 = fs_prealloc();		/* Make a contiguous file on disk (performance enhancement) */
 		err2 = fs_zero();		/* Zero-out all filesystem blocks */
 
 		if (FS_ERR == err1 || FS_ERR == err2) return NULL;
@@ -638,8 +633,8 @@ filesystem* fs_alloc_filesystem(int newfs) {
 	fs->fb_map.data[0] = 0x02;					/* First two blocks reserved */
 
 	if (newfs) {
-		fs_allocate_blocks(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
-		fs->root = fs_mkdir_root(fs, newfs);				/* Setup root dir */
+		fs_balloc(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
+		fs->root = fs_mkroot(fs, newfs);			/* Setup root dir */
 		fs->sb.root	= fs->root->ino->num;
 
 	}
@@ -647,11 +642,11 @@ filesystem* fs_alloc_filesystem(int newfs) {
 }
 
 /* Allocate @param count blocks if possible. Store indices in @param blocks */
-int fs_allocate_blocks(filesystem* fs, const int count, block_t* indices) {
+int fs_balloc(filesystem* fs, const int count, block_t* indices) {
 	int i, j;
 
 	for (i = 0; i < count; i++) {	// Allocate free blocks
-		j = fs_allocate_block(fs);
+		j = _balloc(fs);
 		if (FS_ERR == j) return FS_ERR;
 		indices[i] = j;
 	}
@@ -795,7 +790,7 @@ filesystem* fs_openfs() {
 	filesystem* fs = NULL;
 	block_t sb_i_location = 2;
 
-	fs = fs_alloc_filesystem(false);
+	fs = fs_init(false);
 	if (NULL == fs) return NULL;
 
 	fs_debug_print();
@@ -805,7 +800,7 @@ filesystem* fs_openfs() {
 	fs_readblocksfromdisk(&fs->sb_i, &sb_i_location, 1, sizeof(superblock_i));
 	fs_readblocksfromdisk(&fs->sb, fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
 
-	fs->root = fs_mkdir_root(fs, false);
+	fs->root = fs_mkroot(fs, false);
 
 	if (NULL == fs->root || strcmp(fs->root->name,"/")) {	// We determine it's the root by name "/"
 		free(fs);
@@ -815,23 +810,37 @@ filesystem* fs_openfs() {
 	return fs;
 }
 
-/* Update copies of free block map, free inode map, and superblock 
- * from memory to disk */
-void fs_updateDisk(filesystem* fs) {
-	fs_writeblockstodisk(&fs->fb_map,	&rootblocks[0],		1,			sizeof(map));		/* Write block map to disk */
-	fs_writeblockstodisk(&fs->ino_map,	&rootblocks[1],		1,			sizeof(map));		/* Write inode map to disk */
-	fs_writeblockstodisk(&fs->sb_i,		&rootblocks[2],		1,			sizeof(superblock_i));	/* Write superblock info to disk */
-	fs_writeblockstodisk(&fs->sb,		fs->sb_i.blocks,	fs->sb_i.nblocks,	sizeof(superblock));	/* Write superblock to disk */
+/* Synchronize on-disk copies of the free block map,
+ * free inode map, and superblock within-memory copies */
+int fs_sync(filesystem* fs) {
+	int status[4] = { 0 };
+	int i;
+
+	status[0] = fs_writeblockstodisk( &fs->fb_map,	&rootblocks[0],		1,			sizeof(map));		/* Write block map to disk */
+	status[1] = fs_writeblockstodisk( &fs->ino_map,	&rootblocks[1],		1,			sizeof(map));		/* Write inode map to disk */
+	status[2] = fs_writeblockstodisk( &fs->sb_i,	&rootblocks[2],		1,			sizeof(superblock_i));	/* Write superblock info to disk */
+	status[3] = fs_writeblockstodisk( &fs->sb,	fs->sb_i.blocks,	fs->sb_i.nblocks,	sizeof(superblock));	/* Write superblock to disk */
+
+	for (i = 0; i < 4; i++)
+		if (FS_ERR == status[i])
+			return FS_ERR;
+	return FS_OK;
 }
 
 filesystem* fs_mkfs() {
 	filesystem *fs = NULL;
 
-	fs = fs_alloc_filesystem(true);
+	fs = fs_init(true);
 	if (NULL == fs) return NULL;
 	
-	fs_writeblockstodisk(fs->root->ino,	fs->root->ino->blocks,	fs->root->ino->nblocks,	sizeof(inode));		/* Write root inode to disk. TODO: Need to write iblocks */
-	fs_updateDisk(fs);
+	/* Write root inode to disk. TODO: Need to write iblocks */
+	fs_writeblockstodisk( fs->root->ino, fs->root->ino->blocks, fs->root->ino->nblocks, sizeof(inode)); 
+
+	/* Write superblock and other important first blocks */
+	if (FS_ERR == fs_sync(fs)) {
+		free(fs);
+		return NULL;
+	}
 
 	printf("Root is \"%s\". Filesystem size is %d KByte.\n", fs->root->name, BLKSIZE*MAXBLOCKS/1024);
 	return fs;
@@ -890,7 +899,7 @@ void fs_debug_print() {
 	printf("sizeof(superblock): %lu\n", sizeof(superblock));
 	printf("sizeof(superblock_i): %lu\n", sizeof(superblock_i));
 	printf("sizeof(inode): %lu\n", sizeof(inode));
-	printf("sizeof(dentry): %lu\n", sizeof(dentry));
-	printf("sizeof(dentry_volatile): %lu\n", sizeof(dentry_volatile));
+	printf("sizeof(dent): %lu\n", sizeof(dent));
+	printf("sizeof(dent_v): %lu\n", sizeof(dent_v));
 	printf("sizeof(filesystem): %lu\n", sizeof(filesystem));
 }

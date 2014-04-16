@@ -34,8 +34,8 @@ enum { FS_FILE, FS_DIR, FS_LINK } FILETYPE;
 
 typedef unsigned int uint;
 typedef uint16_t block_t;			// Block number
-typedef unsigned long inode_t;			// Inode number
-typedef uint fs_mode_t;				// File mode (0 =='r', 1 =='w')
+typedef uint16_t inode_t;			// Inode number
+typedef uint8_t fs_mode_t;			// File mode (0 =='r', 1 =='w')
 
 typedef struct map {
 	char data[BLKSIZE];
@@ -59,9 +59,6 @@ typedef struct iblock3 {
 	struct iblock2 iblocks[NIBLOCKS];	// 3rd-level indirect blocks
 } iblock3;
 
-struct inode;					/* Forward declaration because of mutual 
-						 * dependence inode <-> { file, dentry, link } */
-
 /* files, directories, and links have an in-memory "volatile" structure as well as an on-disk structure */
 typedef struct file {
 	inode_t ino;				// Index of the file's inode
@@ -69,13 +66,13 @@ typedef struct file {
 	char name[FS_NAMEMAXLEN];		// filename
 } file;
 
-typedef struct link_perm {			// On-disk link
+typedef struct hardlink {			// On-disk link
 	inode_t ino;				// This link's inode
 	inode_t dest;				// inode pointing to
 	char name[FS_NAMEMAXLEN];		// link name
-} link_perm;
+} hardlink;
 
-typedef struct dentry {				// On-disk directory entry
+typedef struct dent {				// On-disk directory entry
 	inode_t ino;				// Inode number
 	inode_t parent;				// Parent directory (inode number)
 	inode_t head;				// First dir added here
@@ -88,22 +85,24 @@ typedef struct dentry {				// On-disk directory entry
 	uint ndirs, nfiles, nlinks;
 
 	char name[FS_NAMEMAXLEN];		// dir name
-} dentry;
+} dent;
 
-typedef struct file_volatile {
+struct inode;					/* Forward declaration because of mutual 
+						 * dependence inode <-> { file, dent, link } */
+typedef struct file_v {
 	struct inode* f_inode;			// pointer to the file's inode
 	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
 	uint seek_pos;				// Byte offset seek'ed to
 	char name[FS_NAMEMAXLEN];		// Filename
-} file_volatile;
+} file_v;
 
-typedef struct link_volatile {			// In-memory link
+typedef struct hardlink_v {			// In-memory link
 	struct inode* ino;			// This link's inode
 	struct inode* dest;			// inode pointing to
 	char name[FS_NAMEMAXLEN];		// Link name
-} link_volatile;
+} hardlink_v;
 
-typedef struct dentry_volatile {		// In-memory directory entry
+typedef struct dent_v {		// In-memory directory entry
 	struct inode* ino;			// Inode
 	struct inode* parent;			// Parent directory (inode number)
 	struct inode* head;			// First dir added here
@@ -117,7 +116,7 @@ typedef struct dentry_volatile {		// In-memory directory entry
 	uint ndirs, nfiles, nlinks;
 
 	char name[FS_NAMEMAXLEN];		// Dir name
-} dentry_volatile;
+} dent_v;
 
 /* By intention the block, inode, and superblock have identical in-memory and disk structure */
 typedef struct inode {
@@ -131,14 +130,14 @@ typedef struct inode {
 
 	union {
 		struct file file;
-		struct dentry dir;
-		struct link_perm link;
+		struct dent dir;
+		struct hardlink link;
 	} data;					/* On-disk data of this inode */
 
 	union {
-		struct file_volatile* file;
-		struct dentry_volatile* dir;
-		struct link_perm* link;
+		struct file_v* file;
+		struct dent_v* dir;
+		struct hardlink* link;
 	} data_v;				/* In-memory data of this inode  */
 
 
@@ -159,7 +158,7 @@ typedef struct inode {
 
 typedef struct superblock {
 	uint free_blocks_base;			// Index of lowest unallocated block
-	inode_t free_inodes_base;			// Index of lowest unallocated block
+	inode_t free_inodes_base;		// Index of lowest unallocated inode
 	inode_t root;				// Inode number of root directory entry
 	block_t inode_first_blocks[MAXBLOCKS];	// Index of first allocated block for each inode.
 	uint inode_block_counts[MAXBLOCKS];	// How many allocated blocks for each inode.
@@ -174,33 +173,79 @@ typedef struct superblock_i {
 } superblock_i;
 
 typedef struct filesystem {	
-	dentry_volatile* root;			/* Root directory entry */
+	dent_v* root;				/* Root directory entry */
 
 	map fb_map;				/* Block 0. Free block map. 
 						 * Since filesystem size == 100MB == 25600 4096-byte blocks,
 						 * we can use a single block of 4096 chars == 4096*8 == 32768 bits
 						 * to store the free block bitmap. */
-	map ino_map;				/* Free inodes */
+	map ino_map;				/* Block 1. Free inodes */
 
-	superblock_i sb_i;			/* Block 1. Tells us where the superblock blocks are. */
-	superblock sb;				/* Blocks 2...sizeof(superblock)/sizeof(block)+1. 
+	superblock_i sb_i;			/* Block 2. Tells us where the superblock blocks are. */
+	superblock sb;				/* Blocks 3...sizeof(superblock)/sizeof(block)+1. 
 						 * Superblock. Contains filesystem topology */
 
 } filesystem;
 
-char* fname;				/* The name our filesystem will have on disk */
+extern char* fname;				/* The name our filesystem will have on disk */
+extern char* errormsgs[5];
 
-dentry_volatile* fs_load_dir(filesystem* fs, inode_t num);
-extern void fs_delete(filesystem*);
-extern filesystem* fs_openfs();
-extern filesystem* fs_mkfs();
-extern int fs_open(char* filename, char* mode);
-extern char* fs_read(int fd, int size);
-extern void fs_write(int fd, char* string);
-extern void fs_seek(int fd, int offset);
-extern void fs_close(int fd);
-extern int fs_mkdir(filesystem *, char* currentdir, char* dirname);
-extern void fs_rmdir(int fd);
-extern void fs_link(char* src, char* dest);
-extern void fs_unlink(char* name);
-extern inode* fs_stat(filesystem *fs, char* name);
+/* These funcs will be private */
+extern dent*			fs_newd		(filesystem* fs, const int alloc_inode, const char* name);
+extern dent_v*		fs_newdv	(filesystem* fs, const int alloc_inode, const char* name);
+extern dent_v*		fs_mkroot	(filesystem *fs, int newfs);
+
+extern int			fs_prealloc	();
+extern int			fs_zero		();
+extern filesystem*		fs_openfs	();
+extern filesystem*		fs_init		(int newfs);
+
+extern int			_balloc		(filesystem* fs);
+extern int			fs_balloc	(filesystem* fs, const int count, block_t* indices);
+extern int			fs_bfree	(filesystem* fs, block* blk);
+extern block*			fs_newBlock	();
+
+extern inode_t			fs_ialloc	(filesystem *fs);
+extern int			fs_ifree	(filesystem* fs, inode_t num);
+
+extern int			fs_fill_direct_blocks		(block_t* blocks, uint count, block_t* blockIndices, uint maxCount);
+extern int			fs_fill_inode_block_pointers	(inode* ino, uint count, block_t* blockIndices);
+extern inode*			fs_inode_load			(filesystem* fs, inode_t num);
+
+extern int			fs_readblockfromdisk		(void* dest, block_t b);
+extern int			fs_writeblocktodisk		(block_t b, size_t size, void* data);
+
+extern int			fs_readblocksfromdisk		(void* dest, block_t* blocks, uint numblocks, size_t size);
+extern int			fs_writeblockstodisk		(void* source, block_t* blocks, uint numblocks, size_t type_size);
+
+extern inode*			fs_recurse	(filesystem* fs, dent_v* dir, uint depth, uint pathFields, char* name, char* path[]);
+extern int			fs_sync		(filesystem* fs);
+
+extern void			fs_safeopen	();
+extern void			fs_safeclose	();
+
+extern void			print_mem	();
+extern void			fs_debug_print	();
+
+/* These functions will be the public interface */
+typedef struct { 
+  dent_v (* load)(filesystem*, inode_t);
+  void (* const baz)(void);
+} namespace_struct;
+extern namespace_struct const foo;
+
+extern dent_v*			fs_load_dir	(filesystem* fs, inode_t num);
+extern dent_v*			fs_new_dir	(filesystem *fs, dent_v* parent, const char* name);
+
+extern void			fs_delete	(filesystem*);
+extern filesystem*		fs_mkfs		();
+extern int			fs_open		(char* filename, char* mode);
+extern int			fs_mkdir	(filesystem *, char* currentdir, char* dirname);
+extern char*			fs_read		(int fd, int size);
+extern void			fs_write	(int fd, char* string);
+extern void			fs_seek		(int fd, int offset);
+extern void			fs_close	(int fd);
+extern void			fs_rmdir	(int fd);
+extern void			fs_link		(char* src, char* dest);
+extern void			fs_unlink	(char* name);
+extern inode*			fs_stat		(filesystem *fs, char* name);

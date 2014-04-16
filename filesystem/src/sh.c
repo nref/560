@@ -3,15 +3,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-char curDir[FS_MAXPATHLEN]	= "";		// Current shell directory
+char curDir[FS_MAXPATHLEN]	= "";	// Current shell path
 
-char* errormsgs[5]		= {	"OK", "General Error", "Directory exists", 
-					"stat() failed for the given path",
-					"An inode was not found on disk"	 };
-
-void _sh_tree_recurse(filesystem *fs, uint depth, dentry_volatile* dv) {
+void _sh_tree_recurse(filesystem *fs, uint depth, dent_v* dv) {
 	uint i;
-	dentry_volatile *iterator = NULL;
+	dent_v *iterator = NULL;
 
 	if (NULL == dv->head) {
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
@@ -41,7 +37,7 @@ void _sh_tree_recurse(filesystem *fs, uint depth, dentry_volatile* dv) {
 }
 
 void sh_tree(filesystem *fs, char* name) {
-	dentry_volatile* root_v = NULL;
+	dent_v* root_v = NULL;
 	inode* ino = NULL;
 
 	if (NULL == fs || NULL == &fs->sb) {
@@ -110,8 +106,8 @@ filesystem* sh_openfs() {
 	return fs;
 }
 
-dentry_volatile* sh_getfsroot(filesystem *fs) {
-	dentry_volatile* root_v = NULL;
+dent_v* sh_getfsroot(filesystem *fs) {
+	dent_v* root_v = NULL;
 
 	if (NULL == fs)
 		return NULL;
@@ -142,7 +138,7 @@ int main() {
 
 	uint i, j;
 	filesystem* fs = NULL;
-	dentry_volatile* root = NULL;
+	dent_v* root = NULL;
 	curDir[0] = '\0';
 
 	fs = sh_openfs();
