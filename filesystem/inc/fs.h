@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stddef.h>
 
 #define BLKSIZE 4096				// Block size in bytes
 //#define MAXBLOCKS 25600			// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
@@ -11,7 +12,8 @@
 
 #define SUPERBLOCK_MAXBLOCKS 32			// Number of blocks we can allocate to the superblock
 
-#define MAXFILEBLOCKS 2*NBLOCKS + NBLOCKS*NBLOCKS_IBLOCK + NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK	// Maximum number of blocks that an inode can address
+// Maximum number of blocks that an inode can address
+#define MAXFILEBLOCKS 2*NBLOCKS + NBLOCKS*NBLOCKS_IBLOCK + NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK
 
 #define FS_NAMEMAXLEN 256				// Max length of a directory or file name
 #define FS_MAXPATHFIELDS 16				// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
@@ -192,8 +194,8 @@ extern char* errormsgs[5];
 
 /* These funcs will be private */
 extern dent*			fs_newd		(filesystem* fs, const int alloc_inode, const char* name);
-extern dent_v*		fs_newdv	(filesystem* fs, const int alloc_inode, const char* name);
-extern dent_v*		fs_mkroot	(filesystem *fs, int newfs);
+extern dent_v*			fs_newdv	(filesystem* fs, const int alloc_inode, const char* name);
+extern dent_v*			fs_mkroot	(filesystem *fs, int newfs);
 
 extern int			fs_prealloc	();
 extern int			fs_zero		();

@@ -18,7 +18,7 @@
 #endif
 
 #ifndef min
-#define min(a,b)            (((a) < (b)) ? (a) : (b))
+#define min(a,b)	(((a) < (b)) ? (a) : (b))
 #endif
 
 /* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
