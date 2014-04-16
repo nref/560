@@ -3,28 +3,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-char curDir[FS_MAXPATHLEN];		// Current shell directory
-char cmd[SH_BUFLEN];			// Buffer for user input
-char* errormsgs[5] = {	"OK", "General Error", "Directory exists", 
-			"stat() failed for the given path",
-			"An inode was not found on disk" };
+char curDir[FS_MAXPATHLEN]	= "";		// Current shell directory
 
-void _sh_tree_recurse(uint depth, dentry_volatile* dv) {
+char* errormsgs[5]		= {	"OK", "General Error", "Directory exists", 
+					"stat() failed for the given path",
+					"An inode was not found on disk"	 };
+
+void _sh_tree_recurse(filesystem *fs, uint depth, dentry_volatile* dv) {
 	uint i;
-	dentry_volatile *iterator;
+	dentry_volatile *iterator = NULL;
 
 	if (NULL == dv->head) {
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
 		return;
 	}
 	
+	/* Dynamically load the dir into memory from disk */
+	dv->head->data_v.dir = fs_load_dir(fs, dv->head->num);
 	iterator = dv->head->data_v.dir;
-
+	if (NULL == iterator) return;	/* Reached a leaf node of the directory tree */
 
 	for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
 	{
 		printf("%*s" "%s\n", depth*2, " ", iterator->name);	
-		_sh_tree_recurse(depth+1, iterator);
+		_sh_tree_recurse(fs, depth+1, iterator);
+
+		/* Dynamically load the dir into memory from disk */
+		iterator->next->data_v.dir = fs_load_dir(fs, iterator->next->num);
 		iterator = iterator->next->data_v.dir;
 	}
 
@@ -64,7 +69,7 @@ void sh_tree(filesystem *fs, char* name) {
 	}
 
 	printf("%s\n", root_v->name);
-	_sh_tree_recurse(1, root_v);
+	_sh_tree_recurse(fs, 1, root_v);
 }
 
 void sh_stat(filesystem* fs, char* name) {
@@ -125,12 +130,16 @@ dentry_volatile* sh_getfsroot(filesystem *fs) {
 	return root_v;
 }
 
+
 int main() {
 
 	char* fields[SH_MAXFIELDS];
 	char* delimiter = "\t ";
 	char* next_field = NULL;
-	char cmd_cpy[SH_BUFLEN];
+
+	char cmd[SH_BUFLEN]		= "";		// Buffer for user input
+	char cmd_cpy[SH_BUFLEN] = "";			// Copy input because strtok replaces delimiter with '\0'
+
 	uint i, j;
 	filesystem* fs = NULL;
 	dentry_volatile* root = NULL;
@@ -145,12 +154,12 @@ int main() {
 	prompt();							
 	while (NULL != fgets(cmd, SH_BUFLEN-1, stdin)) {		// Get user input
 
-		if (NULL == cmd) { prompt(); continue; }		// Sanity check
-		cmd[strlen(cmd)-1] = '\0';				// Remove trailing newline
 		if (strlen(cmd) == 0) { prompt(); continue; }		// Repeat loop on empty input
+		cmd[strlen(cmd)-1] = '\0';				// Remove trailing newline
 
-		// Break input into fields separated by whitespace
-		strcpy(cmd_cpy, cmd);					// Copy input because strtok replaces delimiter with '\0'
+		// Break input into fields separated by whitespace. 
+		// TODO: Move this and other tokenizing loops into dedicated function
+		strcpy(cmd_cpy, cmd);					
 		next_field = strtok(cmd_cpy, delimiter);		// Get first field
 
 		i = 0;

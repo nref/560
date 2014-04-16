@@ -114,7 +114,7 @@ typedef struct dentry_volatile {		// In-memory directory entry
 	struct inode* files;			// Files in this dir
 	struct inode* links;			// Links in this dir
 
-	uint ndirs, nfiles;
+	uint ndirs, nfiles, nlinks;
 
 	char name[FS_NAMEMAXLEN];		// Dir name
 } dentry_volatile;
@@ -190,6 +190,7 @@ typedef struct filesystem {
 
 char* fname;				/* The name our filesystem will have on disk */
 
+dentry_volatile* fs_load_dir(filesystem* fs, inode_t num);
 extern void fs_delete(filesystem*);
 extern filesystem* fs_openfs();
 extern filesystem* fs_mkfs();
