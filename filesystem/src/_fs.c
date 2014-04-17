@@ -248,7 +248,7 @@ static inode* _inode_load(filesystem* fs, inode_t num) {
 
 	ino = (inode*)malloc(sizeof(inode));
 	if (FS_ERR == 
-		_fs._readblocksfromdisk(	ino, &first_block_num, 
+		_fs.readblocks(	ino, &first_block_num, 
 					fs->sb.inode_block_counts[num], 
 					sizeof(inode))	) {
 		/* If the disk read failed */
@@ -390,7 +390,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 	}
 		
 	/* Fill in inode block indices with indices to the allocated blocks */
-	if (FS_ERR == _fs._fill_inode_block_pointers(	dv->ino, 
+	if (FS_ERR == _fs._fill_iblocks(	dv->ino, 
 							dv->ino->nblocks,
 							dv->ino->blocks ))
 	{
@@ -428,7 +428,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 			parent->ino->data.dir.tail = dv->ino->data.dir.ino;
 
 			/* Update changes to tail */
-			_fs._writeblockstodisk(tail, tail->blocks, tail->nblocks, sizeof(inode));
+			_fs.writeblocks(tail, tail->blocks, tail->nblocks, sizeof(inode));
 		}
 
 		parent->ndirs++;
@@ -451,14 +451,14 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 		}
 
 		/* Update change to parent */
-		_fs._writeblockstodisk(parent->ino, parent->ino->blocks, parent->ino->nblocks, sizeof(inode));
+		_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->nblocks, sizeof(inode));
 
 	} else {
 		/* Making root */
 	}
 
 	/* Write changes to disk */
-	_fs._writeblockstodisk(dv->ino, dv->ino->blocks, dv->ino->nblocks, sizeof(inode));
+	_fs.writeblocks(dv->ino, dv->ino->blocks, dv->ino->nblocks, sizeof(inode));
 	if (FS_ERR == _fs._sync(fs))
 		return NULL;
 
@@ -495,6 +495,7 @@ static dentv* _mkroot(filesystem *fs, int newfs) {
 }
 
 /* Free the index of an inode and its malloc'd memory
+
  * @param blk pointer to the block to free
  * Returns FS_OK on success, FS_ERR if the block
  * 
@@ -718,7 +719,7 @@ static int _balloc(filesystem* fs, const int count, block_t* indices) {
 }
 
 /* Fill in the direct blocks of an inode. Return the count of allocated blocks */
-static int _fill_direct_blocks(block_t* blocks, uint count, block_t* blockIndices, uint maxCount) {
+static int _fill_dblocks(block_t* blocks, uint count, block_t* blockIndices, uint maxCount) {
 	uint i;
 	for (i = 0; i < maxCount; i++) {
 		if (i == count) break;
@@ -730,27 +731,27 @@ static int _fill_direct_blocks(block_t* blocks, uint count, block_t* blockIndice
 /* Fill @param count @param block indices into the block indices of @param ino. 
  * Spill into indirect block pointers, doubly-indirected block pointers, and 
  * triply-indirected block pointers as needed. */
-static int _fill_inode_block_pointers(inode* ino, uint count, block_t* blockIndices) {
+static int _fill_iblocks(inode* ino, uint count, block_t* blockIndices) {
 	uint alloc_cnt = 0, indirection = 0;
 	uint i, j;
 
 	while (alloc_cnt < count) {
 		switch (indirection)
 		{
-			case DIRECT: alloc_cnt += _fs._fill_direct_blocks(ino->blocks, count, blockIndices, NBLOCKS); break;
+			case DIRECT: alloc_cnt += _fs._fill_dblocks(ino->blocks, count, blockIndices, NBLOCKS); break;
 
 			// If we used up all the direct blocks, start using singly indirected blocks
-			case INDIRECT1: alloc_cnt += _fs._fill_direct_blocks(ino->ib1.blocks, count, blockIndices, NBLOCKS_IBLOCK); break;
+			case INDIRECT1: alloc_cnt += _fs._fill_dblocks(ino->ib1.blocks, count, blockIndices, NBLOCKS_IBLOCK); break;
 
 			// If we used up all the singly indirected blocks, start using doubly indirected blocks
 			case INDIRECT2: for (i = 0; i < NIBLOCKS; i++)	
-						alloc_cnt += _fs._fill_direct_blocks(	ino->ib2.iblocks[i].blocks, 
+						alloc_cnt += _fs._fill_dblocks(	ino->ib2.iblocks[i].blocks, 
 											count, blockIndices, NBLOCKS_IBLOCK); break;
 
 			// If we used up all the doubly indirected blocks, start using triply indirected blocks
 			case INDIRECT3: for (i = 0; i < NIBLOCKS; i++)
 						for (j = 0; j < NIBLOCKS; j++)
-							alloc_cnt += _fs._fill_direct_blocks(	ino->ib3.iblocks[i].iblocks[j].blocks, 
+							alloc_cnt += _fs._fill_dblocks(	ino->ib3.iblocks[i].iblocks[j].blocks, 
 												count, blockIndices, NBLOCKS_IBLOCK); break;
 			default: return FS_ERR; /* Out of blocks */
 		}
@@ -761,7 +762,7 @@ static int _fill_inode_block_pointers(inode* ino, uint count, block_t* blockIndi
 }
 
 /* Read a block from disk */
-static int _readblockfromdisk(void* dest, block_t b) {
+static int readblock(void* dest, block_t b) {
 	if (NULL == fp) return FS_ERR;
 
 	if (0 != fseek(fp, b*BLKSIZE, SEEK_SET))
@@ -772,7 +773,7 @@ static int _readblockfromdisk(void* dest, block_t b) {
 }
 
 /* Write a block to disk */
-static int _writeblocktodisk(block_t b, size_t size, void* data) {
+static int writeblock(block_t b, size_t size, void* data) {
 	if (NULL == fp) return FS_ERR;
 
 	if (0 != fseek(fp, b*BLKSIZE, SEEK_SET))
@@ -784,7 +785,7 @@ static int _writeblocktodisk(block_t b, size_t size, void* data) {
 }
 
 /* Read an arbitary number of blocks from disk. */
-static int _readblocksfromdisk(void* dest, block_t* blocks, uint numblocks, size_t type_size) {
+static int readblocks(void* dest, block_t* blocks, uint numblocks, size_t type_size) {
 	block_t j = blocks[0];
 
 	/* Get strided blocks (more than one block or less than a whole block) */
@@ -799,7 +800,7 @@ static int _readblocksfromdisk(void* dest, block_t* blocks, uint numblocks, size
 
 			copysize = i+1 == numblocks ? type_size % stride : stride;	/* Get last chunk which may only be a partial block */
 
-			if (FS_ERR == _fs._readblockfromdisk(&block_cache[k], k))
+			if (FS_ERR == _fs.readblock(&block_cache[k], k))
 				return FS_ERR;
 			if (MAXBLOCKS <= k) return FS_ERR;
 
@@ -807,14 +808,14 @@ static int _readblocksfromdisk(void* dest, block_t* blocks, uint numblocks, size
 			j = block_cache[k].next;
 		}
 	/* Get exactly one block */
-	} else if (FS_ERR == _fs._readblockfromdisk(dest, j))
+	} else if (FS_ERR == _fs.readblock(dest, j))
 		return FS_ERR;
 
 	return FS_OK;
 }
 
 /* Write an arbitrary number of blocks to disk */
-static int _writeblockstodisk(void* source, block_t* blocks, uint numblocks, size_t type_size) {
+static int writeblocks(void* source, block_t* blocks, uint numblocks, size_t type_size) {
 	block_t j = blocks[0];
 
 	// Split @param source into strides if it will not fit in one block
@@ -838,13 +839,13 @@ static int _writeblockstodisk(void* source, block_t* blocks, uint numblocks, siz
 		for (i = 0; i < numblocks; i++) {
 			if (0 == j) break;	// Sanity check: Do not write inode 0
 
-			if (FS_ERR == _fs._writeblocktodisk(j, BLKSIZE, &block_cache[j]))
+			if (FS_ERR == _fs.writeblock(j, BLKSIZE, &block_cache[j]))
 				return FS_ERR;
 			j = block_cache[j].next;
 		}
 
 	// Else write @param source to a whole block directly
-	} else return _fs._writeblocktodisk(j, type_size, source);
+	} else return _fs.writeblock(j, type_size, source);
 
 	return FS_OK;
 }
@@ -859,10 +860,10 @@ static filesystem* _open() {
 
 	_fs._debug_print();
 
-	_fs._readblockfromdisk(&fs->fb_map, 0);
-	_fs._readblockfromdisk(&fs->ino_map, 1);
-	_fs._readblocksfromdisk(&fs->sb_i, &sb_i_location, 1, sizeof(superblock_i));
-	_fs._readblocksfromdisk(&fs->sb, fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
+	_fs.readblock(&fs->fb_map, 0);
+	_fs.readblock(&fs->ino_map, 1);
+	_fs.readblocks(&fs->sb_i, &sb_i_location, 1, sizeof(superblock_i));
+	_fs.readblocks(&fs->sb, fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
 
 	fs->root = _fs._mkroot(fs, false);
 
@@ -880,10 +881,10 @@ static int _sync(filesystem* fs) {
 	int status[4] = { 0 };
 	int i;
 
-	status[0] = _fs._writeblockstodisk( &fs->fb_map,	&rootblocks[0],		1,			sizeof(map));		/* Write block map to disk */
-	status[1] = _fs._writeblockstodisk( &fs->ino_map,	&rootblocks[1],		1,			sizeof(map));		/* Write inode map to disk */
-	status[2] = _fs._writeblockstodisk( &fs->sb_i,	&rootblocks[2],		1,			sizeof(superblock_i));	/* Write superblock info to disk */
-	status[3] = _fs._writeblockstodisk( &fs->sb,	fs->sb_i.blocks,	fs->sb_i.nblocks,	sizeof(superblock));	/* Write superblock to disk */
+	status[0] = _fs.writeblocks( &fs->fb_map,	&rootblocks[0],		1,			sizeof(map));		/* Write block map to disk */
+	status[1] = _fs.writeblocks( &fs->ino_map,	&rootblocks[1],		1,			sizeof(map));		/* Write inode map to disk */
+	status[2] = _fs.writeblocks( &fs->sb_i,	&rootblocks[2],		1,			sizeof(superblock_i));	/* Write superblock info to disk */
+	status[3] = _fs.writeblocks( &fs->sb,	fs->sb_i.blocks,	fs->sb_i.nblocks,	sizeof(superblock));	/* Write superblock to disk */
 
 	for (i = 0; i < 4; i++)
 		if (FS_ERR == status[i])
@@ -951,15 +952,15 @@ static void _debug_print() {
 	printf("FS_MAXPATHLEN: %d\n", FS_MAXPATHLEN);
 }
 
-_fs_private_interface const _fs = 
+fs_private_interface const _fs = 
 { 
 	_tokenize, _newd, _newdv, _ino_to_dv, _mkroot,
 	_attach_datav, _prealloc, _zero, _open, _init,
 	__balloc, _balloc, _bfree, _newBlock, _newPath,
-	_ialloc, _ifree, _fill_direct_blocks,
-	_fill_inode_block_pointers, _inode_load,
-	_readblockfromdisk, _writeblocktodisk,
-	_readblocksfromdisk, _writeblockstodisk,
+	_ialloc, _ifree, _fill_dblocks,
+	_fill_iblocks, _inode_load,
+	readblock, writeblock,
+	readblocks, writeblocks,
 	_recurse, _sync, _safeopen, _safeclose,
 	_print_mem, _debug_print,
 	_load_dir, _new_dir

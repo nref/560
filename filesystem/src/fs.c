@@ -28,10 +28,8 @@ static filesystem* fs_mkfs() {
 	fs = _fs._init(true);
 	if (NULL == fs) return NULL;
 	
-	// TODO: Check that writes are not redundant
-
 	/* Write root inode to disk. TODO: Need to write iblocks */
-	_fs._writeblockstodisk( fs->root->ino, fs->root->ino->blocks, fs->root->ino->nblocks, sizeof(inode)); 
+	_fs.writeblocks( fs->root->ino, fs->root->ino->blocks, fs->root->ino->nblocks, sizeof(inode)); 
 
 	/* Write superblock and other important first blocks */
 	if (FS_ERR == _fs._sync(fs)) {

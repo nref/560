@@ -134,7 +134,7 @@ typedef struct inode {
 
 	uint nlinks;				/* Number of hard links to the inode */
 	uint mode;				/* 0 file, 1 directory, 2 link */
-	uint16_t dv_attached;			/* Did we load the volatile version already? */
+	uint16_t dv_attached;			/* Did we load the volatile version already ? true : false */
 
 	union {
 		struct file file;
@@ -224,15 +224,15 @@ typedef struct {
 	inode_t			(* _ialloc)		(filesystem *);
 	int			(* _ifree)		(filesystem* , inode_t);
 
-	int			(* _fill_direct_blocks)(block_t*, uint, block_t*, uint);
-	int			(* _fill_inode_block_pointers)(inode*, uint, block_t*);
+	int			(* _fill_dblocks)(block_t*, uint, block_t*, uint);
+	int			(* _fill_iblocks)(inode*, uint, block_t*);
 	inode*			(* _inode_load)		(filesystem* , inode_t);
 
-	int			(* _readblockfromdisk)	(void*, block_t);
-	int			(* _writeblocktodisk)	(block_t, size_t, void*);
+	int			(* readblock)	(void*, block_t);
+	int			(* writeblock)	(block_t, size_t, void*);
 
-	int			(* _readblocksfromdisk)	(void*, block_t*, uint, size_t);
-	int			(* _writeblockstodisk)	(void*, block_t*, uint, size_t);
+	int			(* readblocks)	(void*, block_t*, uint, size_t);
+	int			(* writeblocks)	(void*, block_t*, uint, size_t);
 
 	inode*			(* _recurse)		(filesystem* , dentv*, uint, char*[]);
 	int			(* _sync)		(filesystem* );
