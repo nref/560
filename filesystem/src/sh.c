@@ -4,10 +4,12 @@
 #include <stdlib.h>
 
 char curDir[FS_MAXPATHLEN]	= "";	// Current shell path
+fs_public_interface fs_pub;
+_fs_private_interface fs_priv;
 
-void _sh_tree_recurse(filesystem *fs, uint depth, dent_v* dv) {
+void _sh_tree_recurse(filesystem *fs, uint depth, dentv* dv) {
 	uint i;
-	dent_v *iterator = NULL;
+	dentv *iterator = NULL;
 
 	if (NULL == dv->head) {
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
@@ -15,8 +17,8 @@ void _sh_tree_recurse(filesystem *fs, uint depth, dent_v* dv) {
 	}
 	
 	/* Dynamically load the dir into memory from disk */
-	dv->head->data_v.dir = fs_load_dir(fs, dv->head->num);
-	iterator = dv->head->data_v.dir;
+	dv->head->datav.dir = fs_priv._load_dir(fs, dv->head->num);
+	iterator = dv->head->datav.dir;
 	if (NULL == iterator) return;	/* Reached a leaf node of the directory tree */
 
 	for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
@@ -25,8 +27,8 @@ void _sh_tree_recurse(filesystem *fs, uint depth, dent_v* dv) {
 		_sh_tree_recurse(fs, depth+1, iterator);
 
 		/* Dynamically load the dir into memory from disk */
-		iterator->next->data_v.dir = fs_load_dir(fs, iterator->next->num);
-		iterator = iterator->next->data_v.dir;
+		iterator->next->datav.dir = fs_priv._load_dir(fs, iterator->next->num);
+		iterator = iterator->next->datav.dir;
 	}
 
 	// TODO: change these to linked lists as well
@@ -37,7 +39,7 @@ void _sh_tree_recurse(filesystem *fs, uint depth, dent_v* dv) {
 }
 
 void sh_tree(filesystem *fs, char* name) {
-	dent_v* root_v = NULL;
+	dentv* root_v = NULL;
 	inode* ino = NULL;
 
 	if (NULL == fs || NULL == &fs->sb) {
@@ -45,8 +47,8 @@ void sh_tree(filesystem *fs, char* name) {
 		return;
 	}
 
-	ino = fs_stat(fs, name);
-	root_v = ino->data_v.dir;
+	ino = fs_pub.stat(fs, name);
+	root_v = ino->datav.dir;
 
 	if (NULL == root_v) {
 		printf("NULL root directory!\n");
@@ -69,7 +71,7 @@ void sh_tree(filesystem *fs, char* name) {
 }
 
 void sh_stat(filesystem* fs, char* name) {
-	inode* ret = fs_stat(fs, name);
+	inode* ret = fs_pub.stat(fs, name);
 	if (NULL == ret) printf("No filesystem yet!");
 	else printf("%d %d", ret->mode, ret->size);
 	printf("\n");
@@ -77,14 +79,14 @@ void sh_stat(filesystem* fs, char* name) {
 
 int sh_mkdir(filesystem* fs, char* currentdir, char* dirname) {
 	if (NULL == fs) printf("No filesystem yet!");
-	else return fs_mkdir(fs, currentdir, dirname);
+	else return fs_pub.fs_mkdir(fs, currentdir, dirname);
 	printf("\n");
 	return FS_ERR;
 }
 
 filesystem* sh_mkfs() {	
 	filesystem* fs = NULL;
-	fs = fs_mkfs();
+	fs = fs_pub.fs_mkfs();
 	return fs;
 }
 
@@ -100,14 +102,14 @@ filesystem* sh_openfs() {
 	filesystem* fs = NULL;
 
 	curDir[0] = '\0';
-	fs = fs_openfs();
+	fs = _fs._open();
 	if (NULL == fs)
 		return NULL;
 	return fs;
 }
 
-dent_v* sh_getfsroot(filesystem *fs) {
-	dent_v* root_v = NULL;
+dentv* sh_getfsroot(filesystem *fs) {
+	dentv* root_v = NULL;
 
 	if (NULL == fs)
 		return NULL;
@@ -137,13 +139,16 @@ int main() {
 	char cmd_cpy[SH_BUFLEN] = "";			// Copy input because strtok replaces delimiter with '\0'
 
 	uint i, j;
-	filesystem* fs = NULL;
-	dent_v* root = NULL;
+	filesystem* shfs = NULL;
+	dentv* root = NULL;
 	curDir[0] = '\0';
+	
+	fs_pub = fs;
+	fs_priv = _fs;
 
-	fs = sh_openfs();
-	if (NULL != fs)
-		root = sh_getfsroot(fs);
+	shfs = sh_openfs();
+	if (NULL != shfs)
+		root = sh_getfsroot(shfs);
 	if (NULL != root)
 		strcpy(curDir, root->name); 
 
@@ -169,30 +174,30 @@ int main() {
 
 		if (!strcmp(fields[0], "exit")) break;
 		else if (!strcmp(fields[0], "pwd")) { printf("%s\n", curDir); }
-		else if (!strcmp(fields[0], "tree")) { sh_tree(fs, "/"); }
+		else if (!strcmp(fields[0], "tree")) { sh_tree(shfs, "/"); }
 
 		else if (!strcmp(fields[0], "mkdir")) { 
 			if (i>1) {	// If the user provided more than one field
-				int i = sh_mkdir(fs, curDir, fields[1]); 
+				int i = sh_mkdir(shfs, curDir, fields[1]); 
 				printf("%s\n", errormsgs[i]);
 			}
 		}
 
 		else if (!strcmp(fields[0], "stat")) { 
 			if (i>1)	// If the user provided more than one field
-				sh_stat(fs, fields[1]); 
+				sh_stat(shfs, fields[1]); 
 		}
 
 		else if (!strcmp(fields[0], "mkfs")) {
 			printf("mkfs() ... ");
 
-			if (NULL != fs) {
-				fs_delete(fs);
-				fs = NULL;
+			if (NULL != shfs) {
+				fs_pub.fs_delete(shfs);
+				shfs = NULL;
 			}
-			fs = sh_mkfs();
-			if (NULL != fs)
-				root = sh_getfsroot(fs);
+			shfs = sh_mkfs();
+			if (NULL != shfs)
+				root = sh_getfsroot(shfs);
 			if (NULL != root) { 
 				printf("OK"); 
 				strcpy(curDir, root->name); 

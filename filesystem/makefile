@@ -19,18 +19,21 @@ BIN = sh
 # Build targets: all with a name from BIN in ./bin/
 all: $(BIN)
 
-DEPS = $(ODIR)/fs.o $(ODIR)/sh.o
+DEPS = $(ODIR)/sh.o $(ODIR)/fs.o $(ODIR)/_fs.o
 
 define cc-command
 $(CC) $(CFLAGS) -o $(BDIR)/$@ $^
 endef
 
 # Link objects into binaries
-sh: $(ODIR)/sh.o $(ODIR)/fs.o
+sh: $(DEPS)
 	$(cc-command)
 
 # Build objects from source
-$(ODIR)/sh.o: $(SDIR)/sh.c $(IDIR)/sh.h
+$(ODIR)/sh.o: $(SDIR)/sh.c $(IDIR)/sh.h 
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$(ODIR)/_fs.o: $(SDIR)/_fs.c $(IDIR)/_fs.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(ODIR)/fs.o: $(SDIR)/fs.c $(IDIR)/fs.h

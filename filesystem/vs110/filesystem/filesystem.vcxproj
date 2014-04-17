@@ -68,10 +68,12 @@
   <ItemGroup>
     <ClInclude Include="..\..\inc\fs.h" />
     <ClInclude Include="..\..\inc\sh.h" />
+    <ClInclude Include="..\..\inc\_fs.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\fs.c" />
     <ClCompile Include="..\..\src\sh.c" />
+    <ClCompile Include="..\..\src\_fs.c" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\makefile" />

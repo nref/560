@@ -1,254 +1,36 @@
-#include <stdint.h>
-#include <stddef.h>
+#ifndef FS_H
+#define FS_H
 
-#define BLKSIZE 4096				// Block size in bytes
-//#define MAXBLOCKS 25600				// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
-#define MAXBLOCKS 256				// Temporary for rapid development: 1MB filesystem
-#define MAXINODES MAXBLOCKS			// Max num allocatable inodes. Free inode numbers is always <= MAXBLOCKS
+#include "_fs.h"
 
-#define NBLOCKS 8				// Number of direct blocks an inode can point to
-#define NBLOCKS_IBLOCK 8			// Number of direct blocks an indirect block can point to
-#define NIBLOCKS 8				// Number of indirect blocks an indirect block can point to
+//extern void			fs_delete	(filesystem*);
+//extern filesystem*		fs_mkfs		();
+//extern int			fs_mkdir	(filesystem *, char* currentdir, char* dirname);
+//extern inode*			stat		(filesystem *fs, char* name);
+//extern int			fs_open		(char* filename, char* mode);
+//extern void			fs_close	(int fd);
+//extern void			fs_rmdir	(int fd);
+//extern char*			fs_read		(int fd, int size);
+//extern void			fs_write	(int fd, char* string);
+//extern void			fs_seek		(int fd, int offset);
+//extern void			fs_link		(inode_t, inode_t);
+//extern void			fs_unlink	(inode_t);
 
-#define SUPERBLOCK_MAXBLOCKS 64			// Number of blocks we can allocate to the superblock
-
-// Maximum number of blocks that an inode can address
-#define MAXFILEBLOCKS NBLOCKS+NIBLOCKS \
-	+ NIBLOCKS*NBLOCKS_IBLOCK \
-	+ NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK
-
-#define FS_NAMEMAXLEN 256				// Max length of a directory or file name
-#define FS_MAXPATHFIELDS 16				// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
-#define FS_MAXPATHLEN FS_NAMEMAXLEN*FS_MAXPATHFIELDS+1	// Maximum path length. +1 for terminating null
-
-#define FS_MAXFILES 256				// Max number of files in a dir
-#define FS_MAXLINKS 256				// Max number of links in a dir
-
-#define FS_ERR -1
-#define FS_OK 1
-
-#define true 1
-#define false 0
-
-/* The types that we want to write to or read from disk */
-enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
-enum { DIRECT, INDIRECT1, INDIRECT2, INDIRECT3 } INDIRECTION;
-enum { OK, FS_ERROR, DIREXISTS, BADPATH, NOTONDISK } FS_MESSAGE;
-enum { FS_FILE, FS_DIR, FS_LINK } FILETYPE;
-
-typedef unsigned int uint;
-typedef uint16_t block_t;			// Block number
-typedef uint16_t inode_t;			// Inode number
-typedef uint8_t fs_mode_t;			// File mode (0 =='r', 1 =='w')
-
-typedef struct map {
-	char data[BLKSIZE];
-} map;
-
-typedef struct block {
-	block_t num;				// Index of this block. The block knows where it is in the fs
-	block_t next;				// Index of next block. Enables traversing blocks in linked-list fashion
-	char data[BLKSIZE-4];			// Size of this block - size of the fields = how much data we can store
-} block;
-
-typedef struct iblock1 {	
-	block_t blocks[NBLOCKS_IBLOCK];		// 1st-level indirect blocks
-} iblock1;
-
-typedef struct iblock2 {	
-	struct iblock1 iblocks[NIBLOCKS];	// 2nd-level indirect blocks
-} iblock2;
-
-typedef struct iblock3 {
-	struct iblock2 iblocks[NIBLOCKS];	// 3rd-level indirect blocks
-} iblock3;
-
-/* files, directories, and links have an in-memory "volatile" structure as well as an on-disk structure */
-typedef struct file {
-	inode_t ino;				// Index of the file's inode
-	uint f_pos;				// Byte offset seek'ed to
-	char name[FS_NAMEMAXLEN];		// filename
-} file;
-
-typedef struct hardlink {			// On-disk link
-	inode_t ino;				// This link's inode
-	inode_t dest;				// inode pointing to
-	char name[FS_NAMEMAXLEN];		// link name
-} hardlink;
-
-typedef struct dent {				// On-disk directory entry
-	inode_t ino;				// Inode number
-	inode_t parent;				// Parent directory (inode number)
-	inode_t head;				// First dir added here
-	inode_t tail;				// Last dir added here
-	inode_t next;				// Next dir in parent
-	inode_t prev;				// Previous dir in parent
-
-	inode_t files[FS_MAXFILES];		// Files in this dir	TODO: Updates these to linked-list fashion like dirs
-	inode_t links[FS_MAXLINKS];		// Links in this dir
-	uint ndirs, nfiles, nlinks;
-
-	char name[FS_NAMEMAXLEN];		// dir name
-} dent;
-
-struct inode;					/* Forward declaration because of mutual 
-						 * dependence inode <-> { file, dent, link } */
-typedef struct file_v {
-	struct inode* f_inode;			// pointer to the file's inode
-	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
-	uint seek_pos;				// Byte offset seek'ed to
-	char name[FS_NAMEMAXLEN];		// Filename
-} file_v;
-
-typedef struct hardlink_v {			// In-memory link
-	struct inode* ino;			// This link's inode
-	struct inode* dest;			// inode pointing to
-	char name[FS_NAMEMAXLEN];		// Link name
-} hardlink_v;
-
-typedef struct dent_v {				// In-memory directory entry
-	struct inode* ino;			// Inode
-	struct inode* parent;			// Parent directory (inode number)
-	struct inode* head;			// First dir added here
-	struct inode* tail;			// Last dir added here
-	struct inode* next;			// Next dir in parent
-	struct inode* prev;			// Previous dir in parent
-
-	struct inode* files;			// Files in this dir
-	struct inode* links;			// Links in this dir
-
-	uint ndirs, nfiles, nlinks;
-
-	char name[FS_NAMEMAXLEN];		// Dir name
-} dent_v;
-
-/* By intention the block, inode, and superblock have identical in-memory and disk structure */
-typedef struct inode {
-	inode_t num;				/* Inode number */
-	uint nblocks;				/* File size in blocks */
-	uint size;				/* File size in bytes */
-	block_t blocks[NBLOCKS];		/* Directly addressable blocks (8 of them) */
-
-	uint nlinks;				/* Number of hard links to the inode */
-	uint mode;				/* 0 file, 1 directory, 2 link */
-
-	union {
-		struct file file;
-		struct dent dir;
-		struct hardlink link;
-	} data;					/* On-disk data of this inode */
-
-	union {
-		struct file_v* file;
-		struct dent_v* dir;
-		struct hardlink* link;
-	} data_v;				/* In-memory data of this inode  */
-
-
-	struct iblock1 ib1;			/* Singly indirected blocks. 
-						 * NBLOCKS_IBLOCK addressable blocks 
-						 */
-
-	struct iblock2 ib2;			/* Doubly indirected blocks. 
-						 * NIBLOCKS * NBLOCKS_IBLOCK addressable blocks
-						 * e.g. 8*8 = 64
-						 */
-
-	struct iblock3 ib3;			/* Triply indirected blocks. 
-						 * NIBLOCKS^2 * NBLOCKS_IBLOCK addressable blocks
-						 * e.g. 8^2*8 == 512 
-						 */
-} inode;
-
-typedef struct superblock {
-	uint free_blocks_base;			// Index of lowest unallocated block
-	inode_t free_inodes_base;		// Index of lowest unallocated inode
-	inode_t root;				// Inode number of root directory entry
-	block_t inode_first_blocks[MAXBLOCKS];	// Index of first allocated block for each inode.
-	uint inode_block_counts[MAXBLOCKS];	// How many allocated blocks for each inode.
-
-} superblock;
-
-/* Need these fields outside of superblock because we can be certain they fit into one block */
-typedef struct superblock_i {
-	uint nblocks;				// The number of blocks allocated to the superblock
-	block_t blocks[SUPERBLOCK_MAXBLOCKS];	// Indices to superblock's blocks
-
-} superblock_i;
-
-typedef struct filesystem {	
-	dent_v* root;				/* Root directory entry */
-
-	map fb_map;				/* Block 0. Free block map. 
-						 * Since filesystem size == 100MB == 25600 4096-byte blocks,
-						 * we can use a single block of 4096 chars == 4096*8 == 32768 bits
-						 * to store the free block bitmap. */
-	map ino_map;				/* Block 1. Free inodes */
-
-	superblock_i sb_i;			/* Block 2. Tells us where the superblock blocks are. */
-	superblock sb;				/* Blocks 3...sizeof(superblock)/sizeof(block)+1. 
-						 * Superblock. Contains filesystem topology */
-} filesystem;
-
-extern char* fname;				/* The name our filesystem will have on disk */
-extern char* errormsgs[5];
-
-/* These funcs will be private */
-extern dent*			fs_newd		(filesystem* fs, const int alloc_inode, const char* name);
-extern dent_v*			fs_newdv	(filesystem* fs, const int alloc_inode, const char* name);
-extern dent_v*			fs_mkroot	(filesystem *fs, int newfs);
-
-extern int			fs_prealloc	();
-extern int			fs_zero		();
-extern filesystem*		fs_openfs	();
-extern filesystem*		fs_init		(int newfs);
-
-extern int			_balloc		(filesystem* fs);
-extern int			fs_balloc	(filesystem* fs, const int count, block_t* indices);
-extern int			fs_bfree	(filesystem* fs, block* blk);
-extern block*			fs_newBlock	();
-
-extern inode_t			fs_ialloc	(filesystem *fs);
-extern int			fs_ifree	(filesystem* fs, inode_t num);
-
-extern int			fs_fill_direct_blocks		(block_t* blocks, uint count, block_t* blockIndices, uint maxCount);
-extern int			fs_fill_inode_block_pointers	(inode* ino, uint count, block_t* blockIndices);
-extern inode*			fs_inode_load			(filesystem* fs, inode_t num);
-
-extern int			fs_readblockfromdisk		(void* dest, block_t b);
-extern int			fs_writeblocktodisk		(block_t b, size_t size, void* data);
-
-extern int			fs_readblocksfromdisk		(void* dest, block_t* blocks, uint numblocks, size_t size);
-extern int			fs_writeblockstodisk		(void* source, block_t* blocks, uint numblocks, size_t type_size);
-
-extern inode*			fs_recurse	(filesystem* fs, dent_v* dir, uint depth, uint pathFields, char* name, char* path[]);
-extern int			fs_sync		(filesystem* fs);
-
-extern void			fs_safeopen	();
-extern void			fs_safeclose	();
-
-extern void			print_mem	();
-extern void			fs_debug_print	();
-
-/* These functions will be the public interface */
 typedef struct { 
-  dent_v (* load)(filesystem*, inode_t);
-  void (* const baz)(void);
-} namespace_struct;
-extern namespace_struct const foo;
+	void (* fs_delete)(filesystem*);
+	filesystem* (* fs_mkfs)();
+	int (* fs_mkdir)(filesystem*, char*, char*);
+	inode* (* stat)(filesystem*, char*);
+	int (* fs_open)(char*, char*);
+	void (*fs_close)(int);
+	void (*fs_rmdir)(int);
+	char* (* fs_read)(int, int);
+	void (*fs_write)(int, char*);
+	void (*fs_seek)(int, int);
+	void (*fs_link)(inode_t, inode_t);
+	void (*fs_unlink)(inode_t);
 
-extern dent_v*			fs_load_dir	(filesystem* fs, inode_t num);
-extern dent_v*			fs_new_dir	(filesystem *fs, dent_v* parent, const char* name);
+} fs_public_interface;
+extern fs_public_interface const fs;
 
-extern void			fs_delete	(filesystem*);
-extern filesystem*		fs_mkfs		();
-extern int			fs_open		(char* filename, char* mode);
-extern int			fs_mkdir	(filesystem *, char* currentdir, char* dirname);
-extern char*			fs_read		(int fd, int size);
-extern void			fs_write	(int fd, char* string);
-extern void			fs_seek		(int fd, int offset);
-extern void			fs_close	(int fd);
-extern void			fs_rmdir	(int fd);
-extern void			fs_link		(char* src, char* dest);
-extern void			fs_unlink	(char* name);
-extern inode*			fs_stat		(filesystem *fs, char* name);
+#endif /* FS_H */
