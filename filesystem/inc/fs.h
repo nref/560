@@ -3,19 +3,6 @@
 
 #include "_fs.h"
 
-//extern void			fs_delete	(filesystem*);
-//extern filesystem*		fs_mkfs		();
-//extern int			fs_mkdir	(filesystem *, char* currentdir, char* dirname);
-//extern inode*			stat		(filesystem *fs, char* name);
-//extern int			fs_open		(char* filename, char* mode);
-//extern void			fs_close	(int fd);
-//extern void			fs_rmdir	(int fd);
-//extern char*			fs_read		(int fd, int size);
-//extern void			fs_write	(int fd, char* string);
-//extern void			fs_seek		(int fd, int offset);
-//extern void			fs_link		(inode_t, inode_t);
-//extern void			fs_unlink	(inode_t);
-
 typedef struct { 
 	void (* fs_delete)(filesystem*);
 	filesystem* (* fs_mkfs)();

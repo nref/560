@@ -202,51 +202,6 @@ typedef struct fs_path {
 extern char* fname;				/* The name our filesystem will have on disk */
 extern char* errormsgs[5];
 
-//extern fs_path*			fs_tokenize	(const char* str, const char* delim);	/* Split a string on delimiter(s), return a char** */	
-//
-//extern dent*			fs_newd		(filesystem* fs, const int alloc_inode, const char* name);
-//extern dentv*			fs_newdv	(filesystem* fs, const int alloc_inode, const char* name);
-//extern dentv*			fs_ino_to_dv	(filesystem* fs, inode* ino);
-//extern dentv*			fs_mkroot	(filesystem *fs, int newfs);
-//extern int			fs_attach_datav	(filesystem* fs, inode* ino); /* Load a dentv from disk and put it in an inode*/
-//
-//extern int			fs_prealloc	();
-//extern int			fs_zero		();
-//extern filesystem*		fs_openfs	();
-//extern filesystem*		fs_init		(int newfs);
-//
-//extern int			_balloc		(filesystem* fs);
-//extern int			fs_balloc	(filesystem* fs, const int count, block_t* indices);
-//extern int			fs_bfree	(filesystem* fs, block* blk);
-//extern block*			fs_newBlock	();
-//extern fs_path*			fs_newPath	();
-//
-//extern inode_t			fs_ialloc	(filesystem *fs);
-//extern int			fs_ifree	(filesystem* fs, inode_t num);
-//
-//extern int			fs_fill_direct_blocks		(block_t* blocks, uint count, block_t* blockIndices, uint maxCount);
-//extern int			fs_fill_inode_block_pointers	(inode* ino, uint count, block_t* blockIndices);
-//extern inode*			fs_inode_load			(filesystem* fs, inode_t num);
-//
-//extern int			fs_readblockfromdisk		(void* dest, block_t b);
-//extern int			fs_writeblocktodisk		(block_t b, size_t size, void* data);
-//
-//extern int			fs_readblocksfromdisk		(void* dest, block_t* blocks, uint numblocks, size_t size);
-//extern int			fs_writeblockstodisk		(void* source, block_t* blocks, uint numblocks, size_t type_size);
-//
-//extern inode*			fs_recurse	(filesystem* fs, dentv* dir, uint depth, char* path[]);
-//extern int			fs_sync		(filesystem* fs);
-//
-//extern void			fs_safeopen	();
-//extern void			fs_safeclose	();
-//
-//extern void			print_mem	();
-//extern void			fs_debug_print	();
-//
-//extern dentv*			fs_load_dir	(filesystem* fs, inode_t num);
-//extern dentv*			fs_new_dir	(filesystem *fs, dentv* parent, const char* name);
-
-
 typedef struct { 
 	fs_path*		(* _tokenize)		(const char*, const char*);
 	dent*			(* _newd)		(filesystem*, const int, const char*);
