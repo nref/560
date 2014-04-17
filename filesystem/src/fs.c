@@ -24,7 +24,6 @@
 /* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
 #define PRINT_STRUCT(p)  print_mem((p), sizeof(*(p)))
 
-
 char* errormsgs[5]		= {	"OK", "General Error", "Directory exists", 
 					"stat() failed for the given path",
 					"An inode was not found on disk"	 };
@@ -308,6 +307,7 @@ dent_v* fs_new_dir(filesystem *fs, dent_v* parent, const char* name) {
 
 	fs->sb.inode_first_blocks[dv->ino->num] = dv->ino->blocks[0];
 	fs->sb.inode_block_counts[dv->ino->num] = dv->ino->nblocks;
+	if (makingRoot) fs->sb.root = dv->ino->num;	// TODO: Make sure this fix works
 
 	if (!makingRoot) {
 
@@ -450,15 +450,15 @@ int fs_ifree(filesystem* fs, inode_t num) {
 
 /* Find an unused inode number and return it */
 inode_t fs_ialloc(filesystem *fs) {
-	inode_t i;
-	char *eightBlocks;
+	uint i, blockidx, blockval;
 
 	for (i = fs->sb.free_inodes_base; i < MAXINODES; i++)
 	{
-		eightBlocks = &fs->ino_map.data[i/8];
-		if ((*eightBlocks)+1 < 0x07) {		// If this char is not full 
-			(*eightBlocks)++;
-			return ++fs->sb.free_inodes_base;
+		blockidx = i/255;	/* max int value of char */
+		blockval = (int)fs->ino_map.data[blockidx];
+		if (blockval < 255) {		// If this char is not full 
+			((fs->ino_map).data)[blockidx]++;
+			return fs->sb.free_inodes_base++;
 		}
 	}
 	return 0;
@@ -485,17 +485,17 @@ int fs_bfree(filesystem* fs, block* blk) {
 /* Traverse the free block array and return a block 
  * whose field num is the index of the first free bock */
 int _balloc(filesystem* fs) {
-	uint i;
+	uint i, blockidx, blockval;
 
 	/* One char in the free block map represents 
 	 * 8 blocks (sizeof(char) == 1 byte == 8 bits) */
-	char* eightBlocks;
-
+	
 	for (i = fs->sb.free_blocks_base; i < MAXBLOCKS; i++)
 	{
-		eightBlocks = &fs->fb_map.data[i/8];
-		if ((*eightBlocks)+1 < 0x07) {		// If this char is not full 
-			(*eightBlocks)++;
+		blockidx = i/255;	/* max int value of char */
+		blockval = (int)fs->fb_map.data[blockidx];
+		if (blockval < 255) {		// If this char is not full 
+			((fs->fb_map).data)[blockidx]++;
 			return fs->sb.free_blocks_base++;
 		}
 	}
@@ -627,16 +627,19 @@ filesystem* fs_init(int newfs) {
 	memset(&fs->sb.inode_block_counts, 0, MAXBLOCKS*sizeof(uint));
 
 	fs->sb.root = 0;
-	fs->sb.free_blocks_base = 3;					/* Start allocating from 4th block */
+	fs->sb.free_blocks_base = 4;					/* Start allocating from 5th block */
 	fs->sb.free_inodes_base = 1;					/* Start allocating from 1st inode */
 	fs->sb_i.nblocks = sizeof(superblock)/stride + 1; 		/* How many free blocks needed */
-	fs->fb_map.data[0] = 0x02;					/* First two blocks reserved */
+	fs->fb_map.data[0] = 0x04;					/* First four blocks reserved */
 
 	if (newfs) {
 		fs_balloc(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
 		fs->root = fs_mkroot(fs, newfs);			/* Setup root dir */
-		fs->sb.root	= fs->root->ino->num;
 
+		if (NULL == fs->root) {
+			free(fs);
+			return NULL;
+		}
 	}
 	return fs;
 }
@@ -833,6 +836,8 @@ filesystem* fs_mkfs() {
 	fs = fs_init(true);
 	if (NULL == fs) return NULL;
 	
+	// TODO: Check that writes are not redundant
+
 	/* Write root inode to disk. TODO: Need to write iblocks */
 	fs_writeblockstodisk( fs->root->ino, fs->root->ino->blocks, fs->root->ino->nblocks, sizeof(inode)); 
 
@@ -902,4 +907,6 @@ void fs_debug_print() {
 	printf("sizeof(dent): %lu\n", sizeof(dent));
 	printf("sizeof(dent_v): %lu\n", sizeof(dent_v));
 	printf("sizeof(filesystem): %lu\n", sizeof(filesystem));
+	printf("MAXFILEBLOCKS: %lu\n", MAXFILEBLOCKS);
+	printf("FS_MAXPATHLEN: %lu\n", FS_MAXPATHLEN);
 }

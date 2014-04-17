@@ -2,7 +2,7 @@
 #include <stddef.h>
 
 #define BLKSIZE 4096				// Block size in bytes
-//#define MAXBLOCKS 25600			// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
+//#define MAXBLOCKS 25600				// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
 #define MAXBLOCKS 256				// Temporary for rapid development: 1MB filesystem
 #define MAXINODES MAXBLOCKS			// Max num allocatable inodes. Free inode numbers is always <= MAXBLOCKS
 
@@ -10,10 +10,12 @@
 #define NBLOCKS_IBLOCK 8			// Number of direct blocks an indirect block can point to
 #define NIBLOCKS 8				// Number of indirect blocks an indirect block can point to
 
-#define SUPERBLOCK_MAXBLOCKS 32			// Number of blocks we can allocate to the superblock
+#define SUPERBLOCK_MAXBLOCKS 64			// Number of blocks we can allocate to the superblock
 
 // Maximum number of blocks that an inode can address
-#define MAXFILEBLOCKS 2*NBLOCKS + NBLOCKS*NBLOCKS_IBLOCK + NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK
+#define MAXFILEBLOCKS NBLOCKS+NIBLOCKS \
+	+ NIBLOCKS*NBLOCKS_IBLOCK \
+	+ NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK
 
 #define FS_NAMEMAXLEN 256				// Max length of a directory or file name
 #define FS_MAXPATHFIELDS 16				// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
@@ -104,7 +106,7 @@ typedef struct hardlink_v {			// In-memory link
 	char name[FS_NAMEMAXLEN];		// Link name
 } hardlink_v;
 
-typedef struct dent_v {		// In-memory directory entry
+typedef struct dent_v {				// In-memory directory entry
 	struct inode* ino;			// Inode
 	struct inode* parent;			// Parent directory (inode number)
 	struct inode* head;			// First dir added here
@@ -186,7 +188,6 @@ typedef struct filesystem {
 	superblock_i sb_i;			/* Block 2. Tells us where the superblock blocks are. */
 	superblock sb;				/* Blocks 3...sizeof(superblock)/sizeof(block)+1. 
 						 * Superblock. Contains filesystem topology */
-
 } filesystem;
 
 extern char* fname;				/* The name our filesystem will have on disk */
