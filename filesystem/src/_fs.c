@@ -21,6 +21,7 @@
 #define min(a,b)	(((a) < (b)) ? (a) : (b))
 #endif
 
+/* Type-agnostic way to print the binary data of a struct */
 /* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
 #define PRINT_STRUCT(p)  print_mem((p), sizeof(*(p)))
 
@@ -151,7 +152,7 @@ static fs_path* _tokenize(const char* str, const char* delim) {
 	return path;
 }
 
-/* Createa and zero-out a new on-disk directory entry
+/* Create a and zero-out a new on-disk directory entry
  * @param alloc_inode specifies whether this directory
  * gets allocated an inode, else inode 0 is given.
  * @param name the new directory name.
@@ -261,7 +262,7 @@ static inode* _inode_load(filesystem* fs, inode_t num) {
 	return ino;
 }
 
-/* Convert an on-disk directory to an in-memory directory */
+/* Convert an inode to an in-memory directory */
 static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 	dentv *dv;
 
@@ -367,6 +368,11 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 	return dv;
 }
 
+/* Create a new directory in the directory tree.
+ * Sets up pointers (dentv) and indices (dent) for 
+ * linked-list traversal. Writes new dent and
+ * changed existing dents to disk. Calls _sync();
+ */
 static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 	dentv* dv = NULL;
 	inode* tail = NULL;
@@ -467,8 +473,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 
 /* A special version of mkdir that makes the root dir
  * @param newfs if true, load a preexisting root dir
- * Else make a new root dir
- */
+ * Else make a new root dir */
 static dentv* _mkroot(filesystem *fs, int newfs) {
 	dentv* dv = NULL;
 	
@@ -497,9 +502,7 @@ static dentv* _mkroot(filesystem *fs, int newfs) {
 /* Free the index of an inode and its malloc'd memory
 
  * @param blk pointer to the block to free
- * Returns FS_OK on success, FS_ERR if the block
- * 
- */
+ * Returns FS_OK on success, FS_ERR if the blockv*/
 static int _ifree(filesystem* fs, inode_t num) {
 	if (NULL == fs) return FS_ERR;
 
@@ -539,8 +542,7 @@ static inode_t _ialloc(filesystem *fs) {
 /* Free the index of a block and its malloc'd memory
  * @param blk pointer to the block to free
  * Returns FS_OK on success, FS_ERR if the block
- * was already free
- */
+ * was already free */
 static int _bfree(filesystem* fs, block* blk) {
 	if (NULL == fs) return FS_ERR;
 	if (NULL == blk) return FS_ERR;
@@ -584,8 +586,7 @@ static int __balloc(filesystem* fs) {
 }
 
 /* malloc memory for a block, zero-out its fields
- * Returns the allocated block
- */
+ * Returns the allocated block */
 static block* _newBlock() {
 	block* b = (block*)malloc(sizeof(block));
 	memset(b->data, 0, sizeof(b->data));	// Zero-out
@@ -600,8 +601,7 @@ static block* _newBlock() {
  * attempts to "preallocate" the contiguousspace in its filesystem blocks,
  * but the file will not appear to be of that size. 
  * Therefore, this offers merely a performance benefit.
- * Returns FS_OK on success, FS_ERR on failure.
- */
+ * Returns FS_OK on success, FS_ERR on failure. */
 static int _prealloc() {
 	int ERR;
 #if defined(_WIN64) || defined(_WIN32)	// Have to put declaration here.
@@ -633,8 +633,7 @@ static int _prealloc() {
 }
 
 /* Zero-out the on-disk file 
- * Returns FS_OK on success, FS_ERR on failure
- */
+ * Returns FS_OK on success, FS_ERR on failure */
 static int _zero() {
 	int i;
 	_fs._safeopen(fname, "rb+");
@@ -658,8 +657,7 @@ static int _zero() {
 /* Create a new filesystem. @param newfs specifies if we 
  * open a file on disk or create a new one (overwriting
  * the previous)
- * Returns a pointer to the allocated filesystem
- */
+ * Returns a pointer to the allocated filesystem */
 static filesystem* _init(int newfs) {
 	filesystem *fs = NULL;
 
@@ -894,8 +892,7 @@ static int _sync(filesystem* fs) {
 
 /* Print a hex dump of a struct, color nonzeros red
  * Can also use hexdump -C filename 
- * or :%!xxd in vim
- */
+ * or :%!xxd in vim */
 static void _print_mem(void const *vp, size_t n)
 {
 	size_t i;
@@ -936,6 +933,7 @@ static void _print_mem(void const *vp, size_t n)
 	putchar('\n');
 }
 
+/* Print the sizes of various structs, defines, and fields. */
 static void _debug_print() {
 	printf("sizeof(map): %lu\n", sizeof(map));
 	printf("sizeof(block): %lu\n", sizeof(block));

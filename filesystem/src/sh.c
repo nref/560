@@ -5,7 +5,7 @@
 
 char curDir[FS_MAXPATHLEN]	= "";	// Current shell path
 fs_public_interface fs_pub;
-_fs_private_interface fs_priv;
+fs_private_interface fs_priv;
 
 void _sh_tree_recurse(filesystem *fs, uint depth, dentv* dv) {
 	uint i;
