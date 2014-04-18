@@ -41,31 +41,63 @@ static filesystem* fs_mkfs() {
 	return fs;
 }
 
-static int fs_mkdir(filesystem *thefs, char* cur_path, char* dir_name) {
-	dentv* cur_dv = NULL, *new_dv = NULL;
-	char path[FS_MAXPATHLEN] = "";
+/* cur_path should always be an absolute path; dir_path can be relative
+ * to cur_dir
+ */
+static int fs_mkdir(filesystem *thefs, char* cur_path, char* dir_path) {
+	dentv* parent_dv = NULL, *new_dv = NULL;
 
-	inode* current_inode;
+	inode* parent_inode;
+	uint i;
 
-	current_inode = fs.stat(thefs, cur_path);
-	if (NULL == current_inode)	return BADPATH;
-	
-	if (strlen(cur_path) + strlen(dir_name) + 1 >= FS_MAXPATHLEN)
+	fs_path* abs_path;
+	fs_path* rel_path;
+
+	char* path_str;
+	char* parent_str;
+	char* newdir_name;
+
+	if (strlen(cur_path) + strlen(dir_path) + 1 >= FS_MAXPATHLEN)
 		return BADPATH;
 
-	strcat(path, cur_path);
-	if (path[strlen(path)-1] != '/')
-		strcat(path, "/");				// Append path separator if it's not already there
-	strcat(path, dir_name);
-	if (NULL != fs.stat(thefs, path)) return DIREXISTS;	// The requested directory already exists
+	if ('/' != cur_path[0])					// Require leading "/"
+		return BADPATH;
+
+	if ('/' == dir_path[0])					// If there's a leading forward slash, we have an abs. path
+		abs_path = _fs._pathFromString(dir_path);
+	else {							// Have to make abs. path from cur_path + dir_name
+		rel_path = _fs._pathFromString(dir_path);
+
+		abs_path = _fs._newPath();
+		_fs._path_append(abs_path, cur_path);
+
+		for (i = 0; i < rel_path->nfields; i++)
+			_fs._path_append(abs_path, rel_path->fields[i]);
+	}
+
+	path_str = _fs._stringFromPath(abs_path);
+
+	newdir_name = _fs._pathGetLast(abs_path);
+	parent_str = _fs._pathSkipLast(abs_path);
+
+	if (NULL != fs.stat(thefs, path_str)) 
+		return DIREXISTS;				// The requested directory already exists
+
+	parent_inode = fs.stat(thefs, parent_str);
+	if (NULL == parent_inode)	return BADPATH;
 
 	// Get parent dir from memory or disk
-	cur_dv = current_inode->datav.dir;
-	if (NULL == cur_dv)
-		cur_dv = _fs._load_dir(thefs, current_inode->num);	
-	if (NULL == cur_dv) return NOTONDISK;
-	
-	new_dv = _fs._new_dir(thefs, cur_dv, dir_name);
+
+	if (!parent_inode->v_attached)
+		parent_dv = _fs._ino_to_dv(thefs, parent_inode);	 // Try from memory
+	else parent_dv = parent_inode->datav.dir;
+
+	if (!parent_inode->v_attached)
+		parent_dv = _fs._load_dir(thefs, parent_dv->ino->num);	// Try from disk
+
+	if (NULL == parent_dv) return NOTONDISK;			// Give up
+
+	new_dv = _fs._new_dir(thefs, parent_dv, newdir_name);
 	if (NULL == new_dv) return FS_ERROR;
 
 	return OK;
@@ -88,7 +120,7 @@ static inode* stat(filesystem* fs, char* name) {
 
 	if (depth == 0) return fs->root->ino;	// Return if we are at the root
 	else {					// Else traverse the path, get matching inode
-		ino = _fs._recurse(fs, fs->root, depth, &dPath->fields[depth-1]);	
+		ino = _fs._recurse(fs, fs->root, 0, depth-1, dPath->fields);	
 		for (i = 0; i < depth; i++) 
 			free(dPath->fields[i]);
 		return ino;

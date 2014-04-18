@@ -16,12 +16,13 @@
 #define SUPERBLOCK_MAXBLOCKS 64			// Number of blocks we can allocate to the superblock
 
 // Maximum number of blocks that an inode can address
-#define MAXFILEBLOCKS NBLOCKS+NIBLOCKS \
-	+ NIBLOCKS*NBLOCKS_IBLOCK \
-	+ NBLOCKS*NBLOCKS*NBLOCKS_IBLOCK
+#define MAXFILEBLOCKS								\
+	  NBLOCKS + NIBLOCKS	/* Direct blocks + first-level indirect */	\
+	+ NIBLOCKS * NBLOCKS_IBLOCK		/* Second-level indirect */	\
+	+ NIBLOCKS * NIBLOCKS * NBLOCKS_IBLOCK	/* Third-level indirect */
 
-#define FS_NAMEMAXLEN 256				// Max length of a directory or file name
-#define FS_MAXPATHFIELDS 16				// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
+#define FS_NAMEMAXLEN 256			// Max length of a directory or file name
+#define FS_MAXPATHFIELDS 16			// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
 #define FS_MAXPATHLEN FS_NAMEMAXLEN*FS_MAXPATHFIELDS+1	// Maximum path length. +1 for terminating null
 
 #define FS_MAXFILES 256				// Max number of files in a dir
@@ -55,15 +56,15 @@ typedef struct block {
 } block;
 
 typedef struct iblock1 {	
-	block_t blocks[NBLOCKS_IBLOCK];		// 1st-level indirect blocks
+	block* blocks[NBLOCKS_IBLOCK];		// 1st-level indirect blocks
 } iblock1;
 
 typedef struct iblock2 {	
-	struct iblock1 iblocks[NIBLOCKS];	// 2nd-level indirect blocks
+	struct iblock1* iblocks[NIBLOCKS];	// 2nd-level indirect blocks
 } iblock2;
 
 typedef struct iblock3 {
-	struct iblock2 iblocks[NIBLOCKS];	// 3rd-level indirect blocks
+	struct iblock2* iblocks[NIBLOCKS];	// 3rd-level indirect blocks
 } iblock3;
 
 /* files, directories, and links have an in-memory "volatile" structure as well as an on-disk structure */
@@ -73,11 +74,11 @@ typedef struct file {
 	char name[FS_NAMEMAXLEN];		// filename
 } file;
 
-typedef struct hardlink {			// On-disk link
+typedef struct hlink {				// On-disk link
 	inode_t ino;				// This link's inode
 	inode_t dest;				// inode pointing to
 	char name[FS_NAMEMAXLEN];		// link name
-} hardlink;
+} hlink;		/* hardlink */
 
 typedef struct dent {				// On-disk directory entry
 	inode_t ino;				// Inode number
@@ -103,11 +104,11 @@ typedef struct filev {
 	char name[FS_NAMEMAXLEN];		// Filename
 } filev;
 
-typedef struct hardlink_v {			// In-memory link
+typedef struct hlinkv {				// In-memory link
 	struct inode* ino;			// This link's inode
 	struct inode* dest;			// inode pointing to
 	char name[FS_NAMEMAXLEN];		// Link name
-} hardlink_v;
+} hlinkv;
 
 typedef struct dentv {				// In-memory directory entry
 	struct inode* ino;			// Inode
@@ -130,35 +131,38 @@ typedef struct inode {
 	inode_t num;				/* Inode number */
 	uint nblocks;				/* File size in blocks */
 	uint size;				/* File size in bytes */
-	block_t blocks[NBLOCKS];		/* Directly addressable blocks (8 of them) */
-
 	uint nlinks;				/* Number of hard links to the inode */
-	uint mode;				/* 0 file, 1 directory, 2 link */
-	uint16_t dv_attached;			/* Did we load the volatile version already ? true : false */
+
+	uint16_t inode_blocks;			/* Of the allocated blocks, how many are for the inode itself */
+	uint16_t mode;				/* 0 file, 1 directory, 2 link */
+	uint16_t v_attached;			/* Did we load the volatile version already ? true : false */
 
 	union {
 		struct file file;
 		struct dent dir;
-		struct hardlink link;
+		struct hlink link;
 	} data;					/* On-disk data of this inode */
 
 	union {
 		struct filev* file;
 		struct dentv* dir;
-		struct hardlink* link;
+		struct hlink* link;
 	} datav;				/* In-memory data of this inode  */
+	
+	block_t blocks[MAXFILEBLOCKS];		/* Indices to all blocks */
 
-
-	struct iblock1 ib1;			/* Singly indirected blocks. 
+	block* dblocks[NBLOCKS];		/* Direct block pointers */
+		
+	struct iblock1* ib1;			/* Indices to singly indirected blocks. 
 						 * NBLOCKS_IBLOCK addressable blocks 
 						 */
 
-	struct iblock2 ib2;			/* Doubly indirected blocks. 
+	struct iblock2* ib2;			/* Indices to doubly indirected blocks. 
 						 * NIBLOCKS * NBLOCKS_IBLOCK addressable blocks
 						 * e.g. 8*8 = 64
 						 */
 
-	struct iblock3 ib3;			/* Triply indirected blocks. 
+	struct iblock3* ib3;			/* Indices to triply indirected blocks. 
 						 * NIBLOCKS^2 * NBLOCKS_IBLOCK addressable blocks
 						 * e.g. 8^2*8 == 512 
 						 */
@@ -197,17 +201,31 @@ typedef struct filesystem {
 typedef struct fs_path {
 	char* fields[FS_MAXPATHFIELDS];
 	uint nfields;
+	uint firstField;
 } fs_path;
 
 extern char* fname;				/* The name our filesystem will have on disk */
 extern char* errormsgs[5];
 
 typedef struct { 
+	fs_path*		(* _newPath)		();
 	fs_path*		(* _tokenize)		(const char*, const char*);
+	fs_path*		(* _pathFromString)	(const char*);
+	char*			(* _stringFromPath)	(fs_path*);
+	char*			(* _pathSkipLast)	(fs_path* p);
+	char*			(* _pathGetLast)	(fs_path* p);
+	int			(* _path_append)	(fs_path*, const char*);
+	char*			(* _pathTrimSlashes)	(char* path);
+
+	char*			(* _strSkipFirst)	(char* cpy);
+	char*			(* _strSkipLast)	(char* cpy);
+
 	dent*			(* _newd)		(filesystem*, const int, const char*);
 	dentv*			(* _newdv)		(filesystem* , const int, const char*);
 	dentv*			(* _ino_to_dv)		(filesystem* , inode*);
 	dentv*			(* _mkroot)		(filesystem *, int);
+	dentv*			(* _load_dir)		(filesystem* , inode_t);
+	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
 	int			(* _attach_datav)	(filesystem* , inode*); /* Load a dentv from disk and put it in an inode*/
 
 	int			(* _prealloc)		();
@@ -219,13 +237,16 @@ typedef struct {
 	int			(* _balloc)		(filesystem* , const int, block_t*);
 	int			(* _bfree)		(filesystem* , block*);
 	block*			(* _newBlock)		();
-	fs_path*		(* _newPath)		();
 
 	inode_t			(* _ialloc)		(filesystem *);
 	int			(* _ifree)		(filesystem* , inode_t);
 
-	int			(* _fill_dblocks)	(block_t*, uint, block_t*, uint);
-	int			(* _fill_iblocks)	(inode*, uint, block_t*);
+	int			(* _fill_block_indices)	(inode*, block_t*, uint);
+	//int			(* _fill_iblocks)	(inode*, uint, block_t*);
+
+	//int			(* _inode_write_dblocks)(block_t* blocks, uint nblocks);
+	//int			(* _inode_write_all_blocks)(inode* ino);
+
 	inode*			(* _inode_load)		(filesystem* , inode_t);
 
 	int			(* readblock)		(void*, block_t);
@@ -234,7 +255,7 @@ typedef struct {
 	int			(* readblocks)		(void*, block_t*, uint, size_t);
 	int			(* writeblocks)		(void*, block_t*, uint, size_t);
 
-	inode*			(* _recurse)		(filesystem* , dentv*, uint, char*[]);
+	inode*			(* _recurse)		(filesystem* , dentv*, uint, uint, char*[]);
 	int			(* _sync)		(filesystem* );
 
 	void			(* _safeopen)		(char*, char*);
@@ -242,10 +263,6 @@ typedef struct {
 
 	void			(* _print_mem)		(void const*, size_t);
 	void			(* _debug_print)	();
-	
-	dentv*			(* _load_dir)		(filesystem* , inode_t);
-	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
-
 
 } fs_private_interface;
 extern fs_private_interface const _fs;

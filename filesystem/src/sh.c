@@ -71,8 +71,11 @@ void sh_tree(filesystem *fs, char* name) {
 }
 
 void sh_stat(filesystem* fs, char* name) {
-	inode* ret = fs_pub.stat(fs, name);
-	if (NULL == ret) printf("No filesystem yet!");
+	inode* ret;
+	if (NULL == fs) printf("No filesystem yet!");
+	
+	ret = fs_pub.stat(fs, name);
+	if (NULL == ret) printf("Inode not found for \"%s\"!", name);
 	else printf("%d %d", ret->mode, ret->size);
 	printf("\n");
 }
@@ -130,7 +133,6 @@ dentv* sh_getfsroot(filesystem *fs) {
 
 
 int main() {
-
 	char* fields[SH_MAXFIELDS];
 	char* delimiter = "\t ";
 	char* next_field = NULL;
@@ -146,9 +148,12 @@ int main() {
 	fs_pub = fs;
 	fs_priv = _fs;
 
+	_fs._debug_print();
 	shfs = sh_openfs();
+
 	if (NULL != shfs)
 		root = sh_getfsroot(shfs);
+
 	if (NULL != root)
 		strcpy(curDir, root->name); 
 
