@@ -25,7 +25,7 @@
 /* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
 #define PRINT_STRUCT(p)  print_mem((p), sizeof(*(p)))
 
-char* errormsgs[5]		= {	"OK", "General Error", "Directory exists", 
+char* fs_responses[5]		= {	"OK", "General Error", "Directory exists", 
 					"stat() failed for the given path",
 					"An inode was not found on disk"	 };
 
@@ -136,11 +136,11 @@ static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_
 		if (NULL == iterator) return NULL;				// This happens if there are no subdirs
 
 		if (!strcmp(iterator->name, path[current_depth])) {		// If we have a matching directory name
-			if (max_depth == i)					// If we can't go any deeper
+			if (max_depth == current_depth)				// If we can't go any deeper
 				return iterator->ino;				// Return the inode of the matching dir
 
 			// Else recurse another level
-			else return _fs._recurse(fs, iterator, current_depth + 1, max_depth, &path[1]); 
+			else return _fs._recurse(fs, iterator, current_depth + 1, max_depth, path); 
 		}
 
 		if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
@@ -162,7 +162,7 @@ static char* _strSkipFirst(char* cpy) {
 
 /* Return the given string less the last character */
 static char* _strSkipLast(char* cpy) {
-	int len;
+	size_t len;
 	if (NULL == cpy || '\0' == cpy[0]) 
 		return NULL;
 
@@ -174,7 +174,7 @@ static char* _strSkipLast(char* cpy) {
 /* Remove leading and final forward slashes from a string
  * if they exist */
 static char* _pathTrimSlashes(char* path) {
-	int len;
+	size_t len;
 	if (NULL == path || '\0' == path[0]) 
 		return NULL;
 
@@ -254,7 +254,7 @@ static char* _pathGetLast(fs_path* p) {
 
 /* Append a path element to a path structure*/
 static int _path_append(fs_path* p, const char* appendage) {
-	int len;
+	size_t len;
 	char* cpy;
 
 	if (	NULL == p || 
@@ -311,7 +311,7 @@ static dent* _newd(filesystem* fs, const int alloc_inode, const char* name) {
 	// Copy name
 	strncpy(d->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
 	d->name[FS_NAMEMAXLEN-1] = '\0';
-	
+
 	return d;
 }
 
@@ -1063,20 +1063,23 @@ static void _print_mem(void const *vp, size_t n)
 
 /* Print the sizes of various structs, defines, and fields. */
 static void _debug_print() {
-	printf("sizeof(map): %lu\n", sizeof(map));
-	printf("sizeof(block): %lu\n", sizeof(block));
-	printf("sizeof(iblock1): %lu\n", sizeof(iblock1));
-	printf("sizeof(iblock2): %lu\n", sizeof(iblock2));
-	printf("sizeof(iblock3): %lu\n", sizeof(iblock3));
-	printf("sizeof(superblock): %lu\n", sizeof(superblock));
-	printf("sizeof(superblock_i): %lu\n", sizeof(superblock_i));
-	printf("sizeof(inode): %lu\n", sizeof(inode));
-	printf("sizeof(dent): %lu\n", sizeof(dent));
-	printf("sizeof(dentv): %lu\n", sizeof(dentv));
-	printf("sizeof(filesystem): %lu\n", sizeof(filesystem));
-	printf("MAXFILEBLOCKS: %d\n", MAXFILEBLOCKS);
-	printf("FS_MAXPATHLEN: %d\n", FS_MAXPATHLEN);
-	printf("Stride (== sizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
+	printf("Welcome to the 560 shell by Doug Slater and Chris Craig\n");
+	printf("Here is some useful information about the filesystem:\n\n");
+	printf("\tsizeof(map): %lu\n", sizeof(map));
+	printf("\tsizeof(block): %lu\n", sizeof(block));
+	printf("\tsizeof(iblock1): %lu\n", sizeof(iblock1));
+	printf("\tsizeof(iblock2): %lu\n", sizeof(iblock2));
+	printf("\tsizeof(iblock3): %lu\n", sizeof(iblock3));
+	printf("\tsizeof(superblock): %lu\n", sizeof(superblock));
+	printf("\tsizeof(superblock_i): %lu\n", sizeof(superblock_i));
+	printf("\tsizeof(inode): %lu\n", sizeof(inode));
+	printf("\tsizeof(dent): %lu\n", sizeof(dent));
+	printf("\tsizeof(dentv): %lu\n", sizeof(dentv));
+	printf("\tsizeof(filesystem): %lu\n", sizeof(filesystem));
+	printf("\tMAXFILEBLOCKS: %d\n", MAXFILEBLOCKS);
+	printf("\tFS_MAXPATHLEN: %d\n", FS_MAXPATHLEN);
+	printf("\tStride (== sizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
+	printf("\n");
 	fflush(stdout);
 }
 

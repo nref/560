@@ -205,7 +205,7 @@ typedef struct fs_path {
 } fs_path;
 
 extern char* fname;				/* The name our filesystem will have on disk */
-extern char* errormsgs[5];
+extern char* fs_responses[5];
 
 typedef struct { 
 	fs_path*		(* _newPath)		();

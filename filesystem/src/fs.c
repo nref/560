@@ -87,7 +87,6 @@ static int fs_mkdir(filesystem *thefs, char* cur_path, char* dir_path) {
 	if (NULL == parent_inode)	return BADPATH;
 
 	// Get parent dir from memory or disk
-
 	if (!parent_inode->v_attached)
 		parent_dv = _fs._ino_to_dv(thefs, parent_inode);	 // Try from memory
 	else parent_dv = parent_inode->datav.dir;
