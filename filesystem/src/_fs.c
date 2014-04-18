@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "_fs.h"
-
+#
 #if defined(_WIN64) || defined(_WIN32)
 #include <windows.h>
 #endif
@@ -37,17 +37,6 @@ size_t stride;				/* The data field is smaller than BLKSIZE
 block_t  rootblocks[] = { 0, 1, 2 };	/* Indices to the first and second blocks */
 FILE* fp = NULL;			/* Pointer to file storage */
 
-/* Open the filesystem file and check for NULL */
-static void _safeopen(char* fname, char* mode) {
-	_fs._safeclose();	/* Close whatever was already open */
-
-	fp = fopen(fname, mode);
-	if (NULL == fp) {
-		printf("_fs._safeopen: \"%s\" %s\n", fname, strerror(errno));
-		return;
-	}
-}
-
 /* Close the filesystem file if is was open */
 static void _safeclose() {
 	if (NULL != fp)
@@ -55,14 +44,32 @@ static void _safeclose() {
 	fp = NULL;
 }
 
-/* Attach a dentv to the datav.dir field of an inode */
-static int _attach_datav(filesystem* fs, inode* ino) {
-	if (!ino->v_attached) {
-		ino->datav.dir = _fs._load_dir(fs, ino->num);
-		ino->v_attached = true;
-		if (NULL == ino->datav.dir) return FS_ERR;
+/* Open the filesystem file and check for NULL */
+static void _safeopen(char* fname, char* mode) {
+	_safeclose();	/* Close whatever was already open */
+
+	fp = fopen(fname, mode);
+	if (NULL == fp) {
+		printf("_safeopen: \"%s\" %s\n", fname, strerror(errno));
+		return;
 	}
-	return FS_OK;
+}
+
+/* If fields of an fs_path are { "a", "b", "c"},
+ * Then the string representing the path is "/a/b/c" */
+static fs_path* _newPath() {
+	uint i = 0;
+	fs_path* path = (fs_path*)malloc(sizeof(fs_path));
+
+	for (i = 0; i < FS_MAXPATHFIELDS; i++) {
+		path->fields[i] = (char*)malloc(FS_NAMEMAXLEN);
+		memset(path->fields[i], 0, FS_NAMEMAXLEN);
+	}
+
+	path->nfields = 0;
+	path->firstField = 0;
+
+	return path;
 }
 
 /* Split a string on delimiter(s) */
@@ -77,7 +84,7 @@ static fs_path* _tokenize(const char* str, const char* delim) {
 
 	len = strlen(str);
 	str_cpy = (char*)malloc(sizeof(char) * len + 1);
-	path = _fs._newPath();
+	path = _newPath();
 	
 	// Copy the input because strtok replaces delimieter with '\0'
 	strncpy(str_cpy, str, min(FS_NAMEMAXLEN-1, len+1));	
@@ -104,182 +111,118 @@ static fs_path* _tokenize(const char* str, const char* delim) {
 	return path;
 }
 
-/* Get the inode of a directory, link, or file, at the end of a path.
- * Follow an array of cstrings which are the fields of a path, e.g. input of 
- * { "bob", "dylan", "is", "old" } represents path "/bob/dylan/is/old"
- * 
- * @param dir The root of the tree to traverse.
- * @param depth The depth of the path
- * @param name ??
- * @param path The fields of the path
- * Return the inode at the end of this path or NULL if not found.
- */ 
-static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_depth, char* path[]) {
-	uint i;									// Declarations go here to satisfy Visual C compiler
-	dentv* iterator;
+/* Synchronize on-disk copies of the free block map,
+ * free inode map, and superblock within-memory copies */
+static int _sync(filesystem* fs) {
+	int status[4] = { 0 };
+	int i;
 
-	if (NULL == dir || NULL == dir->head) 
-		return NULL;
-	
-	if (!dir->head->v_attached) {						// Load the first directory from disk if not already in memory
-		if (FS_ERR == _fs._attach_datav(fs, dir->head))
-			return NULL;
-	}
+	status[0] = _fs.writeblocks( &fs->fb_map,	&rootblocks[0],		1,			sizeof(map));		/* Write block map to disk */
+	status[1] = _fs.writeblocks( &fs->ino_map,	&rootblocks[1],		1,			sizeof(map));		/* Write inode map to disk */
+	status[2] = _fs.writeblocks( &fs->sb_i,	&rootblocks[2],		1,			sizeof(superblock_i));	/* Write superblock info to disk */
+	status[3] = _fs.writeblocks( &fs->sb,	fs->sb_i.blocks,	fs->sb_i.nblocks,	sizeof(superblock));	/* Write superblock to disk */
 
-	if (NULL == dir->head->datav.dir) 
-		return NULL;
+	for (i = 0; i < 4; i++)
+		if (FS_ERR == status[i])
+			return FS_ERR;
+	return FS_OK;
+}
 
-	iterator = dir->head->datav.dir;
+/* Free the index of an inode and its malloc'd memory
 
-	for (i = 0; i < dir->ndirs; i++)					// For each subdir at this level
+ * @param blk pointer to the block to free
+ * Returns FS_OK on success, FS_ERR if the blockv*/
+static int _ifree(filesystem* fs, inode_t num) {
+	if (NULL == fs) return FS_ERR;
+
+	if (0x0 == fs->fb_map.data[num])
+		return FS_ERR;	/* Block already free */
+
+	--fs->ino_map.data[num];
+	fs->sb.free_inodes_base = num;
+
+	if (FS_ERR == _sync(fs))
+		return FS_ERR;
+
+	return FS_OK;
+}
+
+/* Find an unused inode number and return it */
+static inode_t _ialloc(filesystem *fs) {
+	uint i, blockidx, blockval;
+
+	for (i = fs->sb.free_inodes_base; i < MAXINODES; i++)
 	{
-		if (NULL == iterator) return NULL;				// This happens if there are no subdirs
+		blockidx = i/255;	/* max int value of char */
+		blockval = (int)fs->ino_map.data[blockidx];
+		if (blockval < 255) {		// If this char is not full 
+			((fs->ino_map).data)[blockidx]++;
+			fs->sb.free_inodes_base++;
 
-		if (!strcmp(iterator->name, path[current_depth])) {		// If we have a matching directory name
-			if (max_depth == current_depth)				// If we can't go any deeper
-				return iterator->ino;				// Return the inode of the matching dir
+			if (FS_ERR == _sync(fs))
+				return FS_ERR;
 
-			// Else recurse another level
-			else return _fs._recurse(fs, iterator, current_depth + 1, max_depth, path); 
+			return fs->sb.free_inodes_base;
 		}
-
-		if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
-
-		if (!iterator->next->v_attached) {				// Load the next directory from disk if not already in memory
-			if (FS_ERR == _fs._attach_datav(fs, iterator->next))
-				return NULL;
-		}
-
-		iterator = iterator->next->datav.dir;
 	}
-	return NULL;					// If nothing found, return a special error inode
+	return 0;
 }
 
-/* Return the given string less the first character */
-static char* _strSkipFirst(char* cpy) {
-	return &cpy[1];
-}
+/* Free the index of a block and its malloc'd memory
+ * @param blk pointer to the block to free
+ * Returns FS_OK on success, FS_ERR if the block
+ * was already free */
+static int _bfree(filesystem* fs, block* blk) {
+	if (NULL == fs) return FS_ERR;
+	if (NULL == blk) return FS_ERR;
 
-/* Return the given string less the last character */
-static char* _strSkipLast(char* cpy) {
-	size_t len;
-	if (NULL == cpy || '\0' == cpy[0]) 
-		return NULL;
+	if (0x0 == fs->fb_map.data[blk->num])
+		return FS_ERR;	/* Block already free */
 
-	len = strlen(cpy);
-	cpy[len - 1] = '\0';
-	return cpy;
-}
+	--fs->fb_map.data[blk->num];
+	fs->sb.free_blocks_base = blk->num;
+	free(blk);
 
-/* Remove leading and final forward slashes from a string
- * if they exist */
-static char* _pathTrimSlashes(char* path) {
-	size_t len;
-	if (NULL == path || '\0' == path[0]) 
-		return NULL;
-
-	if ('/' == path[0])		
-		path = _strSkipFirst(path);	/* Remove leading forward slash */
-	
-	len = strlen(path);
-	if ('/' == path[len - 1])	
-		path = _strSkipLast(path);	/* Remove trailing forward slash */
-
-	return path;
-}
-
-/* If fields of an fs_path are { "a", "b", "c"},
- * Then the string representing the path is "/a/b/c" */
-static fs_path* _newPath() {
-	uint i = 0;
-	fs_path* path = (fs_path*)malloc(sizeof(fs_path));
-
-	for (i = 0; i < FS_MAXPATHFIELDS; i++) {
-		path->fields[i] = (char*)malloc(FS_NAMEMAXLEN);
-		memset(path->fields[i], 0, FS_NAMEMAXLEN);
-	}
-
-	path->nfields = 0;
-	path->firstField = 0;
-
-	return path;
-}
-
-/* Split a string on "/" */
-static fs_path* _pathFromString(const char* str) {
-	return _tokenize(str, "/");
-}
-
-/* Return an absolute path */
-static char* _stringFromPath(fs_path* p) {
-	uint i;
-	char* path;
-	
-	if (NULL == p) return NULL;
-
-	path = (char*)malloc(FS_MAXPATHLEN);
-	memset(path, 0, FS_MAXPATHLEN);
-
-	strcat(path, "/");
-
-	for (i = p->firstField; i < min(p->nfields, FS_MAXPATHFIELDS); i++) {
-		strcat(path, p->fields[i]);
-		strcat(path, "/");
-	}
-	path[FS_NAMEMAXLEN] = '\0';
-	return path;
-}
-
-/* Get the path minus the last field, e.g. "a/b" from "a/b/c" */
-static char* _pathSkipLast(fs_path* p) {
-	char* path;
-	p->nfields--;
-	path = _fs._stringFromPath(p);
-	p->nfields++;
-
-	return path;
-}
-
-/* Get the last field in the path, e.g. "c" from "a/b/c" */
-static char* _pathGetLast(fs_path* p) {
-	char* p_str;
-	p->firstField = p->nfields - 1;
-	p_str = _fs._stringFromPath(p);
-	p->firstField = 0;
-
-	p_str = _pathTrimSlashes(p_str);
-
-	return p_str;
-}
-
-/* Append a path element to a path structure*/
-static int _path_append(fs_path* p, const char* appendage) {
-	size_t len;
-	char* cpy;
-
-	if (	NULL == p || 
-		NULL == appendage || 
-		'\0' == appendage[0]	) 
-	{ return FS_ERR; }
-
-	if (FS_MAXPATHFIELDS == p->nfields)
+	if (FS_ERR == _sync(fs))
 		return FS_ERR;
 
-	len = strlen(appendage);
-	cpy = (char*)malloc(len);
-	strncpy(cpy, appendage, min(len, FS_MAXPATHLEN));
-	cpy[len] = '\0';
+	return FS_OK;
+}
 
-	cpy = _pathTrimSlashes(cpy);
+/* Traverse the free block array and return a block 
+ * whose field num is the index of the first free bock */
+static int __balloc(filesystem* fs) {
+	uint i, blockidx, blockval;
 
-	if (NULL == cpy || 0 == strlen(cpy) || !strcmp("/", cpy))	/* Skip empty string and "/" */
-		return FS_ERR;
+	/* One char in the free block map represents 
+	 * 8 blocks (sizeof(char) == 1 byte == 8 bits) */
+	
+	for (i = fs->sb.free_blocks_base; i < MAXBLOCKS; i++)
+	{
+		blockidx = i/255;	/* max int value of char */
+		blockval = (int)fs->fb_map.data[blockidx];
+		if (blockval < 255) {		// If this char is not full 
+			((fs->fb_map).data)[blockidx]++;
+			fs->sb.free_blocks_base++;
 
-	strncpy(	p->fields[p->nfields], 
-			cpy, 
-			min(FS_MAXPATHLEN, strlen(cpy))	);
+			if (FS_ERR == _sync(fs))
+				return FS_ERR;
 
-	p->nfields++;
+			return fs->sb.free_blocks_base;
+		}
+	}
+	return FS_ERR;
+}
+
+/* Allocate @param count blocks if possible. Store indices in @param blocks */
+static int _balloc(filesystem* fs, const int count, block_t* indices) {
+	int i, j;
+
+	for (i = 0; i < count; i++) {	// Allocate free blocks
+		j = __balloc(fs);
+		if (FS_ERR == j) return FS_ERR;
+		indices[i] = j;
+	}
 	return FS_OK;
 }
 
@@ -293,7 +236,7 @@ static dent* _newd(filesystem* fs, const int alloc_inode, const char* name) {
 	d = (dent*)malloc(sizeof(dent));
 
 	if (alloc_inode)
-		d->ino = _fs._ialloc(fs);
+		d->ino = _ialloc(fs);
 	else d->ino = 0;
 
 	d->parent	= d->ino;
@@ -354,7 +297,7 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	strncpy(dv->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
 	dv->name[FS_NAMEMAXLEN-1] = '\0';
 
-	d = _fs._newd(fs, alloc_inode, name);
+	d = _newd(fs, alloc_inode, name);
 	memcpy(&dv->ino->data.dir, d, sizeof(dv->ino->data.dir));
 	dv->ino->datav.dir = dv;
 	dv->ino->num = d->ino;
@@ -397,25 +340,25 @@ static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 
 	if (NULL == ino) return NULL;
 
-	dv = _fs._newdv(fs, false, ino->data.dir.name);
+	dv = _newdv(fs, false, ino->data.dir.name);
 	if (NULL == dv) return NULL;
 
-	dv->head		= _fs._inode_load(fs, ino->data.dir.head);
+	dv->head		= _inode_load(fs, ino->data.dir.head);
 
 	if (ino->data.dir.head != ino->data.dir.tail)
-		dv->tail	= _fs._inode_load(fs, ino->data.dir.tail);
+		dv->tail	= _inode_load(fs, ino->data.dir.tail);
 	else	dv->tail	= dv->head;
 
 	if (ino->num != ino->data.dir.parent)
-		dv->parent	= _fs._inode_load(fs, ino->data.dir.parent);
+		dv->parent	= _inode_load(fs, ino->data.dir.parent);
 	else	dv->parent	= ino;
 
 	if (ino->num != ino->data.dir.next)
-		dv->next	= _fs._inode_load(fs, ino->data.dir.next);
+		dv->next	= _inode_load(fs, ino->data.dir.next);
 	else	dv->next	=ino;
 
 	if (ino->num != ino->data.dir.prev)
-		dv->prev	= _fs._inode_load(fs, ino->data.dir.prev);
+		dv->prev	= _inode_load(fs, ino->data.dir.prev);
 	else	dv->prev	= ino;
 
 	if (	NULL == dv->parent	|| 
@@ -445,10 +388,10 @@ static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 static dentv* _load_dir(filesystem* fs, inode_t num) {
 	dentv *dv;
 
-	inode* ino = _fs._inode_load(fs, num);
+	inode* ino = _inode_load(fs, num);
 	if (NULL == ino) return NULL;
 
-	dv = _fs._ino_to_dv(fs, ino);
+	dv = _ino_to_dv(fs, ino);
 	if (NULL == dv) {
 		free(ino);
 		return NULL;
@@ -456,31 +399,31 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 
 	if (NULL != dv->head)	{
 		if (!dv->head->v_attached) {
-			dv->head->datav.dir = _fs._ino_to_dv(fs, dv->head);
+			dv->head->datav.dir = _ino_to_dv(fs, dv->head);
 			dv->head->v_attached = true;
 		}
 	}
 	if (NULL != dv->tail)	{
 		if (!dv->tail->v_attached) {
-			dv->tail->datav.dir = _fs._ino_to_dv(fs, dv->tail);
+			dv->tail->datav.dir = _ino_to_dv(fs, dv->tail);
 			dv->tail->v_attached = true;
 		}
 	}
 	if (NULL != dv->parent) {
 		if (!dv->parent->v_attached) {
-			dv->parent->datav.dir = _fs._ino_to_dv(fs, dv->parent);
+			dv->parent->datav.dir = _ino_to_dv(fs, dv->parent);
 			dv->parent->v_attached = true;
 		}
 	}
 	if (NULL != dv->next)	{
 		if (!dv->next->v_attached) {
-			dv->next->datav.dir = _fs._ino_to_dv(fs, dv->next);
+			dv->next->datav.dir = _ino_to_dv(fs, dv->next);
 			dv->next->v_attached = true;
 		}
 	}
 	if (NULL != dv->prev)	{
 		if (!dv->prev->v_attached) {
-			dv->prev->datav.dir = _fs._ino_to_dv(fs, dv->prev);
+			dv->prev->datav.dir = _ino_to_dv(fs, dv->prev);
 			dv->prev->v_attached = true;
 		}
 	}
@@ -511,12 +454,12 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 		makingRoot = 1;
 
 	/* Allocate a new inode number */
-	dv = _fs._newdv(fs, true, name);
+	dv = _newdv(fs, true, name);
 	if (NULL == dv) return NULL;
 
 	/* Allocate n blocks, tell us which we got */
 	if (FS_ERR == 
-		_fs._balloc(	fs, dv->ino->nblocks, 
+		_balloc(	fs, dv->ino->nblocks, 
 				dv->ino->blocks) ) 
 	{
 		free(dv);
@@ -532,7 +475,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 		tail = parent->tail;	/* Try in memory */
 		if (NULL == tail || !tail->v_attached) {
 			parent->ino->datav.dir->tail = 
-				_fs._inode_load(fs, parent->ino->data.dir.tail); /* Try from disk */
+				_inode_load(fs, parent->ino->data.dir.tail); /* Try from disk */
 			tail = parent->ino->datav.dir->tail;
 
 			if (NULL != tail)
@@ -588,10 +531,182 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 
 	/* Write changes to disk */
 	_fs.writeblocks(dv->ino, dv->ino->blocks, dv->ino->nblocks, sizeof(inode));
-	if (FS_ERR == _fs._sync(fs))
+	if (FS_ERR == _sync(fs))
 		return NULL;
 
 	return dv;
+}
+
+/* Load a dentv from disk and put it in an inode*/
+static int _attach_datav(filesystem* fs, inode* ino) {
+	if (!ino->v_attached) {
+		ino->datav.dir = _load_dir(fs, ino->num);
+		ino->v_attached = true;
+		if (NULL == ino->datav.dir) return FS_ERR;
+	}
+	return FS_OK;
+}
+
+/* Get the inode of a directory, link, or file, at the end of a path.
+ * Follow an array of cstrings which are the fields of a path, e.g. input of 
+ * { "bob", "dylan", "is", "old" } represents path "/bob/dylan/is/old"
+ * 
+ * @param dir The root of the tree to traverse.
+ * @param depth The depth of the path
+ * @param name ??
+ * @param path The fields of the path
+ * Return the inode at the end of this path or NULL if not found.
+ */ 
+static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_depth, char* path[]) {
+	uint i;									// Declarations go here to satisfy Visual C compiler
+	dentv* iterator;
+
+	if (NULL == dir || NULL == dir->head) 
+		return NULL;
+	
+	if (!dir->head->v_attached) {						// Load the first directory from disk if not already in memory
+		if (FS_ERR == _attach_datav(fs, dir->head))
+			return NULL;
+	}
+
+	if (NULL == dir->head->datav.dir) 
+		return NULL;
+
+	iterator = dir->head->datav.dir;
+
+	for (i = 0; i < dir->ndirs; i++)					// For each subdir at this level
+	{
+		if (NULL == iterator) return NULL;				// This happens if there are no subdirs
+
+		if (!strcmp(iterator->name, path[current_depth])) {		// If we have a matching directory name
+			if (max_depth == current_depth)				// If we can't go any deeper
+				return iterator->ino;				// Return the inode of the matching dir
+
+			// Else recurse another level
+			else return _recurse(fs, iterator, current_depth + 1, max_depth, path); 
+		}
+
+		if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
+
+		if (!iterator->next->v_attached) {				// Load the next directory from disk if not already in memory
+			if (FS_ERR == _attach_datav(fs, iterator->next))
+				return NULL;
+		}
+
+		iterator = iterator->next->datav.dir;
+	}
+	return NULL;					// If nothing found, return a special error inode
+}
+
+/* Return the given string less the first character */
+static char* _strSkipFirst(char* cpy) {
+	return &cpy[1];
+}
+
+/* Return the given string less the last character */
+static char* _strSkipLast(char* cpy) {
+	size_t len;
+	if (NULL == cpy || '\0' == cpy[0]) 
+		return NULL;
+
+	len = strlen(cpy);
+	cpy[len - 1] = '\0';
+	return cpy;
+}
+
+/* Remove leading and final forward slashes from a string
+ * if they exist */
+static char* _pathTrimSlashes(char* path) {
+	size_t len;
+	if (NULL == path || '\0' == path[0]) 
+		return NULL;
+
+	if ('/' == path[0])		
+		path = _strSkipFirst(path);	/* Remove leading forward slash */
+	
+	len = strlen(path);
+	if ('/' == path[len - 1])	
+		path = _strSkipLast(path);	/* Remove trailing forward slash */
+
+	return path;
+}
+
+/* Split a string on "/" */
+static fs_path* _pathFromString(const char* str) {
+	return _tokenize(str, "/");
+}
+
+/* Return an absolute path */
+static char* _stringFromPath(fs_path* p) {
+	uint i;
+	char* path;
+	
+	if (NULL == p) return NULL;
+
+	path = (char*)malloc(FS_MAXPATHLEN);
+	memset(path, 0, FS_MAXPATHLEN);
+
+	strcat(path, "/");
+
+	for (i = p->firstField; i < min(p->nfields, FS_MAXPATHFIELDS); i++) {
+		strcat(path, p->fields[i]);
+		strcat(path, "/");
+	}
+	path[FS_NAMEMAXLEN] = '\0';
+	return path;
+}
+
+/* Get the path minus the last field, e.g. "a/b" from "a/b/c" */
+static char* _pathSkipLast(fs_path* p) {
+	char* path;
+	p->nfields--;
+	path = _stringFromPath(p);
+	p->nfields++;
+
+	return path;
+}
+
+/* Get the last field in the path, e.g. "c" from "a/b/c" */
+static char* _pathGetLast(fs_path* p) {
+	char* p_str;
+	p->firstField = p->nfields - 1;
+	p_str = _stringFromPath(p);
+	p->firstField = 0;
+
+	p_str = _pathTrimSlashes(p_str);
+
+	return p_str;
+}
+
+/* Append a path element to a path structure*/
+static int _path_append(fs_path* p, const char* appendage) {
+	size_t len;
+	char* cpy;
+
+	if (	NULL == p || 
+		NULL == appendage || 
+		'\0' == appendage[0]	) 
+	{ return FS_ERR; }
+
+	if (FS_MAXPATHFIELDS == p->nfields)
+		return FS_ERR;
+
+	len = strlen(appendage);
+	cpy = (char*)malloc(len);
+	strncpy(cpy, appendage, min(len, FS_MAXPATHLEN));
+	cpy[len] = '\0';
+
+	cpy = _pathTrimSlashes(cpy);
+
+	if (NULL == cpy || 0 == strlen(cpy) || !strcmp("/", cpy))	/* Skip empty string and "/" */
+		return FS_ERR;
+
+	strncpy(	p->fields[p->nfields], 
+			cpy, 
+			min(FS_MAXPATHLEN, strlen(cpy))	);
+
+	p->nfields++;
+	return FS_OK;
 }
 
 /* A special version of mkdir that makes the root dir
@@ -601,7 +716,7 @@ static dentv* _mkroot(filesystem *fs, int newfs) {
 	dentv* dv = NULL;
 	
 	if (newfs) {
-		dv = _fs._new_dir(fs, NULL, "/");
+		dv = _new_dir(fs, NULL, "/");
 		if (NULL == dv) return NULL;
 
 		dv->parent	= dv->ino;
@@ -615,97 +730,11 @@ static dentv* _mkroot(filesystem *fs, int newfs) {
 		fs->sb.root = dv->ino->num;
 	}
 	else {
-		dv = _fs._load_dir(fs, fs->sb.root);
+		dv = _load_dir(fs, fs->sb.root);
 		if (NULL == dv) return NULL;
 	}
 
 	return dv;
-}
-
-/* Free the index of an inode and its malloc'd memory
-
- * @param blk pointer to the block to free
- * Returns FS_OK on success, FS_ERR if the blockv*/
-static int _ifree(filesystem* fs, inode_t num) {
-	if (NULL == fs) return FS_ERR;
-
-	if (0x0 == fs->fb_map.data[num])
-		return FS_ERR;	/* Block already free */
-
-	--fs->ino_map.data[num];
-	fs->sb.free_inodes_base = num;
-
-	if (FS_ERR == _fs._sync(fs))
-		return FS_ERR;
-
-	return FS_OK;
-}
-
-/* Find an unused inode number and return it */
-static inode_t _ialloc(filesystem *fs) {
-	uint i, blockidx, blockval;
-
-	for (i = fs->sb.free_inodes_base; i < MAXINODES; i++)
-	{
-		blockidx = i/255;	/* max int value of char */
-		blockval = (int)fs->ino_map.data[blockidx];
-		if (blockval < 255) {		// If this char is not full 
-			((fs->ino_map).data)[blockidx]++;
-			fs->sb.free_inodes_base++;
-
-			if (FS_ERR == _fs._sync(fs))
-				return FS_ERR;
-
-			return fs->sb.free_inodes_base;
-		}
-	}
-	return 0;
-}
-
-/* Free the index of a block and its malloc'd memory
- * @param blk pointer to the block to free
- * Returns FS_OK on success, FS_ERR if the block
- * was already free */
-static int _bfree(filesystem* fs, block* blk) {
-	if (NULL == fs) return FS_ERR;
-	if (NULL == blk) return FS_ERR;
-
-	if (0x0 == fs->fb_map.data[blk->num])
-		return FS_ERR;	/* Block already free */
-
-	--fs->fb_map.data[blk->num];
-	fs->sb.free_blocks_base = blk->num;
-	free(blk);
-
-	if (FS_ERR == _fs._sync(fs))
-		return FS_ERR;
-
-	return FS_OK;
-}
-
-/* Traverse the free block array and return a block 
- * whose field num is the index of the first free bock */
-static int __balloc(filesystem* fs) {
-	uint i, blockidx, blockval;
-
-	/* One char in the free block map represents 
-	 * 8 blocks (sizeof(char) == 1 byte == 8 bits) */
-	
-	for (i = fs->sb.free_blocks_base; i < MAXBLOCKS; i++)
-	{
-		blockidx = i/255;	/* max int value of char */
-		blockval = (int)fs->fb_map.data[blockidx];
-		if (blockval < 255) {		// If this char is not full 
-			((fs->fb_map).data)[blockidx]++;
-			fs->sb.free_blocks_base++;
-
-			if (FS_ERR == _fs._sync(fs))
-				return FS_ERR;
-
-			return fs->sb.free_blocks_base;
-		}
-	}
-	return FS_ERR;
 }
 
 /* malloc memory for a block, zero-out its fields
@@ -731,7 +760,7 @@ static int _prealloc() {
 	LARGE_INTEGER offset;		// because Visual C compiler is OLD school
 #endif
 
-	_fs._safeopen(fname, "wb");
+	_safeopen(fname, "wb");
 	if (NULL == fp) return FS_ERR;		
 
 #if defined(_WIN64) || defined(_WIN32)
@@ -745,7 +774,7 @@ static int _prealloc() {
 	ERR = posix_fallocate(fp, 0, BLKSIZE*MAXBLOCKS);
 #endif
     
-	_fs._safeclose();
+	_safeclose();
 
 	if (ERR < 0) { 
 		perror("allocation error");
@@ -759,11 +788,11 @@ static int _prealloc() {
  * Returns FS_OK on success, FS_ERR on failure */
 static int _zero() {
 	int i;
-	_fs._safeopen(fname, "rb+");
+	_safeopen(fname, "rb+");
 	if (NULL == fp) return FS_ERR;
 
 	for (i = 0; i < MAXBLOCKS; i++) {
-		block* newBlock = _fs._newBlock();
+		block* newBlock = _newBlock();
 		char temp[128];
 		sprintf(temp, "%d", i);
 		memcpy(newBlock->data, temp, strlen(temp));
@@ -773,7 +802,7 @@ static int _zero() {
 		fputs(newBlock->data, fp);
 		free(newBlock);
 	}
-	_fs._safeclose();
+	_safeclose();
 	return FS_OK;
 }
 
@@ -790,14 +819,14 @@ static filesystem* _init(int newfs) {
 	if (newfs) {
 		int err1, err2;
 
-		_fs._safeclose();
-		err1 = _fs._prealloc();		/* Make a contiguous file on disk (performance enhancement) */
-		err2 = _fs._zero();		/* Zero-out all filesystem blocks */
+		_safeclose();
+		err1 = _prealloc();		/* Make a contiguous file on disk (performance enhancement) */
+		err2 = _zero();		/* Zero-out all filesystem blocks */
 
 		if (FS_ERR == err1 || FS_ERR == err2) return NULL;
 	}
 
-	_fs._safeopen(fname, "rb+");	/* Test if file exists */
+	_safeopen(fname, "rb+");	/* Test if file exists */
 	if (NULL == fp) return NULL;
 
 	fs = (filesystem*)malloc(sizeof(filesystem));
@@ -816,8 +845,8 @@ static filesystem* _init(int newfs) {
 	fs->fb_map.data[0] = 0x04;					/* First four blocks reserved */
 
 	if (newfs) {
-		_fs._balloc(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
-		fs->root = _fs._mkroot(fs, newfs);			/* Setup root dir */
+		_balloc(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
+		fs->root = _mkroot(fs, newfs);			/* Setup root dir */
 
 		if (NULL == fs->root) {
 			free(fs);
@@ -825,18 +854,6 @@ static filesystem* _init(int newfs) {
 		}
 	}
 	return fs;
-}
-
-/* Allocate @param count blocks if possible. Store indices in @param blocks */
-static int _balloc(filesystem* fs, const int count, block_t* indices) {
-	int i, j;
-
-	for (i = 0; i < count; i++) {	// Allocate free blocks
-		j = __balloc(fs);
-		if (FS_ERR == j) return FS_ERR;
-		indices[i] = j;
-	}
-	return FS_OK;
 }
 
 /* Fill in indices to the blocks of an inode. Return the count of allocated blocks */
@@ -866,20 +883,20 @@ static int _fill_block_indices(inode* ino, block_t* block_indices, uint count) {
 //	while (alloc_cnt < count) {
 //		switch (indirection)
 //		{
-//			case DIRECT: alloc_cnt += _fs._fill_dblocks(ino->blocks, count, blockIndices, NBLOCKS); break;
+//			case DIRECT: alloc_cnt += _fill_dblocks(ino->blocks, count, blockIndices, NBLOCKS); break;
 //
 //			// If we used up all the direct blocks, start using singly indirected blocks
-//			case INDIRECT1: alloc_cnt += _fs._fill_dblocks(ino->ib1.blocks, count, blockIndices, NBLOCKS_IBLOCK); break;
+//			case INDIRECT1: alloc_cnt += _fill_dblocks(ino->ib1.blocks, count, blockIndices, NBLOCKS_IBLOCK); break;
 //
 //			// If we used up all the singly indirected blocks, start using doubly indirected blocks
 //			case INDIRECT2: for (i = 0; i < NIBLOCKS; i++)	
-//						alloc_cnt += _fs._fill_dblocks(	ino->ib2.iblocks[i].blocks, 
+//						alloc_cnt += _fill_dblocks(	ino->ib2.iblocks[i].blocks, 
 //											count, blockIndices, NBLOCKS_IBLOCK); break;
 //
 //			// If we used up all the doubly indirected blocks, start using triply indirected blocks
 //			case INDIRECT3: for (i = 0; i < NIBLOCKS; i++)
 //						for (j = 0; j < NIBLOCKS; j++)
-//							alloc_cnt += _fs._fill_dblocks(	ino->ib3.iblocks[i].iblocks[j].blocks, 
+//							alloc_cnt += _fill_dblocks(	ino->ib3.iblocks[i].iblocks[j].blocks, 
 //												count, blockIndices, NBLOCKS_IBLOCK); break;
 //			default: return FS_ERR; /* Out of blocks */
 //		}
@@ -983,7 +1000,7 @@ static filesystem* _open() {
 	filesystem* fs = NULL;
 	block_t sb_i_location = 2;
 
-	fs = _fs._init(false);
+	fs = _init(false);
 	if (NULL == fs) return NULL;
 
 	_fs.readblock(&fs->fb_map, 0);
@@ -991,7 +1008,7 @@ static filesystem* _open() {
 	_fs.readblocks(&fs->sb_i, &sb_i_location, 1, sizeof(superblock_i));
 	_fs.readblocks(&fs->sb, fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
 
-	fs->root = _fs._mkroot(fs, false);
+	fs->root = _mkroot(fs, false);
 
 	if (NULL == fs->root || strcmp(fs->root->name,"/")) {	// We determine it's the root by name "/"
 		free(fs);
@@ -999,23 +1016,6 @@ static filesystem* _open() {
 	}
 
 	return fs;
-}
-
-/* Synchronize on-disk copies of the free block map,
- * free inode map, and superblock within-memory copies */
-static int _sync(filesystem* fs) {
-	int status[4] = { 0 };
-	int i;
-
-	status[0] = _fs.writeblocks( &fs->fb_map,	&rootblocks[0],		1,			sizeof(map));		/* Write block map to disk */
-	status[1] = _fs.writeblocks( &fs->ino_map,	&rootblocks[1],		1,			sizeof(map));		/* Write inode map to disk */
-	status[2] = _fs.writeblocks( &fs->sb_i,	&rootblocks[2],		1,			sizeof(superblock_i));	/* Write superblock info to disk */
-	status[3] = _fs.writeblocks( &fs->sb,	fs->sb_i.blocks,	fs->sb_i.nblocks,	sizeof(superblock));	/* Write superblock to disk */
-
-	for (i = 0; i < 4; i++)
-		if (FS_ERR == status[i])
-			return FS_ERR;
-	return FS_OK;
 }
 
 /* Print a hex dump of a struct, color nonzeros red

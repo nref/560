@@ -127,6 +127,11 @@ static inode* stat(filesystem* fs, char* name) {
 	return NULL;
 }
 
+/* Load a dentv from disk and put it in an inode*/
+static int attach_datav(filesystem* fs, inode* ino) {
+	return _fs._attach_datav(fs, ino);
+}
+
 static int	fs_open		(char* filename, char* mode) { return 0; }
 static void	fs_close	(int fd) { }
 static void	fs_rmdir	(int fd) { }
@@ -139,7 +144,7 @@ static void	fs_unlink	(inode_t ino) { }
 fs_public_interface const fs = 
 { 
 	fs_delete, fs_mkfs, fs_mkdir,
-	stat, fs_open, fs_close, 
+	stat, attach_datav, fs_open, fs_close, 
 	fs_rmdir, fs_read, fs_write, fs_seek,
 	fs_link, fs_unlink
 };

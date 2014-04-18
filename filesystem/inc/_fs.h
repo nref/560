@@ -226,7 +226,7 @@ typedef struct {
 	dentv*			(* _mkroot)		(filesystem *, int);
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
 	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
-	int			(* _attach_datav)	(filesystem* , inode*); /* Load a dentv from disk and put it in an inode*/
+	int			(* _attach_datav)	(filesystem* , inode*); 
 
 	int			(* _prealloc)		();
 	int			(* _zero)		();
