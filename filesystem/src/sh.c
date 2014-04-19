@@ -225,13 +225,13 @@ int main() {
 	prompt();							
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {		// Get user input
 
-		if (strlen(buf) == 0) { prompt(); continue; }		// Repeat loop on empty input
-		buf[strlen(buf)-1] = '\0';				// Remove trailing newline
+		if (strlen(buf) == 0 || !strcmp(buf, "\n")) { prompt(); continue; }		// Repeat loop on empty input or return character
+        buf[strlen(buf)-1] = '\0';				// Remove trailing newline
 
 		// Break input into cmd->fields separated by whitespace. 
 		cmd = fs.tokenize(buf, delimiter);
 
-		if (!strcmp(cmd->fields[0], "exit")) break;
+        if (!strcmp(cmd->fields[0], "exit")) break;
 		
 		else if (!strcmp(cmd->fields[0], "ls")) {
 
