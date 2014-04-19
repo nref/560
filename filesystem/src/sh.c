@@ -327,6 +327,15 @@ int main() {
 			else { printf("ERROR"); }
 			printf("\n");
 
+            
+        } else if (!strcmp(cmd->fields[0], "seek")) {
+            printf("Not Implemented\n");
+        } else if (!strcmp(cmd->fields[0], "open")) {
+            printf("Not Implemented\n");
+        } else if (!strcmp(cmd->fields[0], "write")) {
+            printf("Not Implemented\n");
+        } else if (!strcmp(cmd->fields[0], "close")) {
+            printf("Not Implemented\n");
 		} else { printf("Bad command \"%s\"\n", buf); }
 
         for (i = 0; i < cmd->nfields; i++)
