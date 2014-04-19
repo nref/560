@@ -152,12 +152,6 @@ void prompt() {
 	printf("> ");
 }
 
-// Try to open a preexisting filesystem
-void sh_openfs() {
-	fs.openfs();
-	sh_getfsroot();
-}
-
 int sh_cd(char* path) {
 	dentv* dv;
 	char* abs_path = NULL;
@@ -212,14 +206,15 @@ int sh_getfsroot() {
 }
 
 int main() {
-	int retv;
+	int retv = 0;
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
 	char* delimiter = "\t ";
 
 	fs_path* cmd;
 
 	_fs._debug_print();
-	sh_openfs();
+	fs.openfs();
+	sh_getfsroot();
 
 	prompt();							
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {		// Get user input
