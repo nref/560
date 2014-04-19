@@ -1152,6 +1152,7 @@ static void _debug_print() {
 	printf("Here is some useful information about the filesystem:\n\n");
 	printf("\tsizeof(map): %lu\n", sizeof(map));
 	printf("\tsizeof(block): %lu\n", sizeof(block));
+	printf("\tsizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
 	printf("\tsizeof(iblock1): %lu\n", sizeof(iblock1));
 	printf("\tsizeof(iblock2): %lu\n", sizeof(iblock2));
 	printf("\tsizeof(iblock3): %lu\n", sizeof(iblock3));
@@ -1162,8 +1163,8 @@ static void _debug_print() {
 	printf("\tsizeof(dentv): %lu\n", sizeof(dentv));
 	printf("\tsizeof(filesystem): %lu\n", sizeof(filesystem));
 	printf("\tMAXFILEBLOCKS: %d\n", MAXFILEBLOCKS);
+	printf("\tMAX FILE SIZE (KByte): %d\n", MAXFILEBLOCKS*BLKSIZE/1024);
 	printf("\tFS_MAXPATHLEN: %d\n", FS_MAXPATHLEN);
-	printf("\tStride (== sizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
 	printf("\n");
 	fflush(stdout);
 }
@@ -1174,19 +1175,28 @@ fs_private_interface const _fs =
 	_pathSkipLast, _pathGetLast, _path_append, _pathTrimSlashes, 
 	_getAbsolutePathDV, _getAbsolutePath,
 	_strSkipFirst, _strSkipLast,
+
 	_newd, _newdv, _ino_to_dv, _mkroot, 
 	_load_dir, _unload_dir,	
 	_new_dir, _v_attach, _v_detach,							/* Directory management */
+
 	_prealloc, _zero,								/* Native filsystem file allocation */
+
 	_open, _mkfs, _init,								/* Filesystem creation, opening */
+
 	__balloc, _balloc, _bfree, _newBlock,						/* Block allocation */
+
 	_ialloc, _ifree,								/* Inode allocation */
 	_fill_block_indices,
 	_inode_load,
+
 	readblock, writeblock,
 	readblocks, writeblocks,
+
 	_recurse, _sync, 
+
 	_safeopen, _safeclose,
+
 	_print_mem, _debug_print
 };
 

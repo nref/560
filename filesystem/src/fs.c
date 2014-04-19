@@ -197,7 +197,6 @@ static void closedir (dentv* dv) {
 	}
 }
 
-
 static void	rmdir		(int fd) { printf("fs_rmdir: %d\n", fd); }
 static char*	read		(int fd, int size) { printf("fs_read: %d %d\n", fd, size); return NULL; }
 static void	write		(filev* fv, char* str) { printf("fs_write: %s %s\n", fv->name, str);}
