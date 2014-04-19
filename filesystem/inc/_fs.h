@@ -22,7 +22,7 @@
 	+ NIBLOCKS * NIBLOCKS * NBLOCKS_IBLOCK	/* Third-level indirect */
 
 #define FS_NAMEMAXLEN 256			// Max length of a directory or file name
-#define FS_MAXPATHFIELDS 4			// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
+#define FS_MAXPATHFIELDS 32			// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
 #define FS_MAXPATHLEN FS_NAMEMAXLEN*FS_MAXPATHFIELDS+1	// Maximum path length. +1 for terminating null
 
 #define FS_MAXFILES 256				// Max number of files in a dir

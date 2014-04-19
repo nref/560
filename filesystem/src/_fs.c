@@ -797,8 +797,6 @@ static char* _getAbsolutePath(char* current_dir, char* path) {
 
 /* Traverse a directory up to the root, append dir ames while recursing back down*/
 static char* _getAbsolutePathDV(dentv* dv, fs_path *p) {
-	char *tmp;
-
 	if (NULL == dv || NULL == dv->parent) return NULL;
 
 	if (!strcmp(dv->name, "/"))	/* Stop at root or we will loop forever */
@@ -806,8 +804,7 @@ static char* _getAbsolutePathDV(dentv* dv, fs_path *p) {
 
 	if (!dv->parent->v_attached) return NULL;
 
-	tmp = _getAbsolutePathDV(dv->parent->datav.dir, p);
-	_path_append(p, tmp);
+	_getAbsolutePathDV(dv->parent->datav.dir, p);
 	_path_append(p, dv->name);
 
 	return _stringFromPath(p);
