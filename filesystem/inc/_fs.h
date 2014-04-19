@@ -22,13 +22,14 @@
 	+ NIBLOCKS * NIBLOCKS * NBLOCKS_IBLOCK	/* Third-level indirect */
 
 #define FS_NAMEMAXLEN 256			// Max length of a directory or file name
-#define FS_MAXPATHFIELDS 16			// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
+#define FS_MAXPATHFIELDS 4			// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
 #define FS_MAXPATHLEN FS_NAMEMAXLEN*FS_MAXPATHFIELDS+1	// Maximum path length. +1 for terminating null
 
 #define FS_MAXFILES 256				// Max number of files in a dir
 #define FS_MAXLINKS 256				// Max number of links in a dir
 
 #define FS_ERR -1
+#define FS_NORMAL 0
 #define FS_OK 1
 
 #define true 1
@@ -37,8 +38,11 @@
 /* The types that we want to write to or read from disk */
 enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
 enum { DIRECT, INDIRECT1, INDIRECT2, INDIRECT3 } INDIRECTION;
-enum { OK, FS_ERROR, DIREXISTS, BADPATH, NOTONDISK } FS_MESSAGE;
+enum { OK, FS_ERROR, DIREXISTS, BADPATH, NOTONDISK, TOOFEWARGS } FS_MESSAGE;
 enum { FS_FILE, FS_DIR, FS_LINK } FILETYPE;
+
+extern char* fname;				/* The name our filesystem will have on disk */
+extern char* fs_responses[6];
 
 typedef unsigned int uint;
 typedef uint16_t block_t;			// Block number
@@ -204,19 +208,18 @@ typedef struct fs_path {
 	uint firstField;
 } fs_path;
 
-extern char* fname;				/* The name our filesystem will have on disk */
-extern char* fs_responses[5];
-
 typedef struct { 
+	void			(* _pathFree)		(fs_path* p);
 	fs_path*		(* _newPath)		();
 	fs_path*		(* _tokenize)		(const char*, const char*);
 	fs_path*		(* _pathFromString)	(const char*);
-	char*			(* _stringFromPath)	(fs_path*);
+	char*			(* _stringFromPath)	(fs_path* p);
 	char*			(* _pathSkipLast)	(fs_path* p);
 	char*			(* _pathGetLast)	(fs_path* p);
 	int			(* _path_append)	(fs_path*, const char*);
 	char*			(* _pathTrimSlashes)	(char* path);
-
+	char*			(* _getAbsolutePathDV)	(dentv* dv, fs_path *p);
+	char*			(* _getAbsolutePath)	(char* current_dir, char* next_dir);
 	char*			(* _strSkipFirst)	(char* cpy);
 	char*			(* _strSkipLast)	(char* cpy);
 
@@ -225,12 +228,15 @@ typedef struct {
 	dentv*			(* _ino_to_dv)		(filesystem* , inode*);
 	dentv*			(* _mkroot)		(filesystem *, int);
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
+	int			(* _unload_dir)		(filesystem* , inode*);
 	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
-	int			(* _attach_datav)	(filesystem* , inode*); 
-
+	int			(* _v_attach)		(filesystem* , inode*); 
+	int			(* _v_detach)	(filesystem* , inode*); 
+	
 	int			(* _prealloc)		();
 	int			(* _zero)		();
 	filesystem*		(* _open)		();
+	filesystem*		(* _mkfs)		();
 	filesystem*		(* _init)		(int);
 
 	int			(* __balloc)		(filesystem* );

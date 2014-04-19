@@ -3,269 +3,224 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-char current_dir[FS_MAXPATHLEN]	= "";	// Current shell path
-//fs_public_interface fs_pub;
-//fs_private_interface fs_priv;
+dentv* cur_dv = NULL;
+char* current_path;
 
+char* sh_get_dv_path(dentv* dv) {
+	char* path = NULL;
+	fs_path* p = fs.newPath();
 
-char* sh_getAbsolutePath(char* path) {
-	fs_path* p;
-	char* abs_path;
-	
-	p = fs.pathFromString(current_dir);
+	fs.getAbsolutePathDV(dv, p);
+	path = fs.stringFromPath(p);
 
-	if ('/' == path[0])	/* Path is already absolute*/
-		return path;
-
-	if ('.' == path[0]) {
-		if ('.' == path[1])	printf(".. not yet implemented\n");
-		else			printf(". not yet implemented\n");
-		return NULL;
-	}
-
-	fs.pathAppend(p, path);
-	abs_path = fs.stringFromPath(p);
-
-	free(p);
-	return abs_path;
+	fs.pathFree(p);
+	return path;
 }
 
-void sh_tree_recurse(filesystem *fs, uint depth, uint maxdepth, dentv* dv) {
+void sh_update_current_path() {
+	current_path = sh_get_dv_path(cur_dv);
+}
+
+char* sh_path_cat(char* path, char* suffix) {
+	char* ret = NULL;
+	fs_path* p = fs.newPath();
+
+	fs.pathAppend(p, path);
+	fs.pathAppend(p, suffix);
+	ret = fs.stringFromPath(p);
+
+	fs.pathFree(p);
+	return ret;
+}
+
+void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 	uint i;
-	dentv *iterator = NULL;
+	dentv* iterator = NULL;
+	char *next, *dv_path;
+
+	if (NULL == dv) return;
 
 	if (NULL == dv->head) {
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
 		return;
 	}
 	
-	
-	if (!dv->head->v_attached)
-		dv->head->datav.dir = _fs._load_dir(fs, dv->head->num);	/* Dynamically load into memory from disk */
+	dv_path = sh_get_dv_path(dv);
+	next = sh_path_cat(dv_path, dv->head->data.dir.name);
 
-	iterator = dv->head->datav.dir;
-	if (NULL == iterator) return;			/* Reached a leaf node of the directory tree */
-
-	for (i = 0; i < dv->ndirs; i++)			// For each subdir at this level
+	for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
 	{
+		iterator = fs.opendir(next);
+		if (NULL == iterator) {
+			printf("sh_tree_recurse: Could not open directory \"%s\"",next);
+			return;
+		}
 		printf("%*s" "%s\n", depth*2, " ", iterator->name);
 
-		if (depth < maxdepth)
-			sh_tree_recurse(fs, depth+1, maxdepth, iterator);
+		if (depth < maxdepth) {
 
-		if (!iterator->next->v_attached)
-			iterator->next->datav.dir = _fs._load_dir(fs, iterator->next->num);
+			sh_tree_recurse(depth+1, maxdepth, iterator);
+			free(next);
 
-		iterator = iterator->next->datav.dir;
-		if (NULL == iterator) continue;
+		}
+
+		if (	NULL == iterator->next ||
+			0 == iterator->next->data.dir.ino ||			/* If the dir has a next */			
+			iterator->ino->num == iterator->next->data.dir.ino)	/* If the dir doesn't point to itself */
+		{
+			//fs.closedir(iterator);
+			//iterator = NULL;
+			break;
+		}
+			
+		next = sh_path_cat(dv_path, iterator->next->data.dir.name);
+		//fs.closedir(iterator);
+		//iterator = NULL;
 	}
 
-	for (i = 0; i < dv->nfiles; i++) {		// For each file at this level
-		//if (!dv->files[i].v_attached)
-		//	dv->files[i].datav.file = fs_priv._load_file(fs, dv->files[i].num);
-
+	for (i = 0; i < dv->nfiles; i++)		// For each file at this level
 		printf("%s\n", dv->files[i].data.file.name);	
-	}
 
-	for (i = 0; i < dv->ino->nlinks; i++)		// For each link at this level
+	for (i = 0; i < dv->ino->nlinks; i++)	// For each link at this level
 		printf("%s\n", dv->links[i].data.file.name);	
+
+	free(dv_path);
 }
 
-void sh_tree(filesystem *shfs, char* name) {
-	dentv* root_v = NULL;
+void sh_tree(char* name) {
+	dentv* root = NULL;
 	inode* ino = NULL;
 
-	if (NULL == shfs || NULL == &shfs->sb) {
-		printf("NULL filesystem!\n");
-		return;
-	}
+	root = fs.opendir("/");
 
-	ino = fs.stat(shfs, name);
-	root_v = ino->datav.dir;
-
-	if (NULL == root_v) {
+	if (NULL == root) {
 		printf("NULL root directory!\n");
 		return;
 	}
 
-	if (NULL == root_v->ino) {
+	if (NULL == root->ino) {
 		printf("NULL filesystem inode!\n");
 		return;
 	}
 	
-	if ('\0' == root_v->name[0] || strlen(root_v->name) == 0) {
+	if ('\0' == root->name[0] || strlen(root->name) == 0) {
 
 		printf("Filesystem root name not \"/\"!\n");
 		return;
 	}
 
-	printf("%s\n", root_v->name);
-	sh_tree_recurse(shfs, 1, FS_MAXPATHFIELDS, root_v);
+	printf("%s\n", root->name);
+	fs.closedir(root);
+
+	sh_tree_recurse(1, FS_MAXPATHFIELDS, root);
 }
 
-void sh_stat(filesystem* shfs, char* name) {
+void sh_stat(char* name) {
 	inode* ret;
-	if (NULL == shfs) printf("No filesystem yet!");
-	
-	ret = fs.stat(shfs, name);
+
+	ret = fs.stat(name);
 	if (NULL == ret) printf("Inode not found for \"%s\"!", name);
 	else printf("%d %d", ret->mode, ret->size);
 	printf("\n");
 }
 
-int sh_mkdir(filesystem* shfs, char* currentdir, char* dirname) {
+int sh_mkdir(char* dir_name) {
 	int i;
 	char* abs_path;
+	char* cur_path;
+	fs_path *p;
 
-	if (NULL == shfs) {
-		printf("No filesystem yet!\n");
-		return FS_ERR;
-	}
-
-	abs_path = sh_getAbsolutePath(dirname);
+	p = fs.newPath();
+	cur_path = fs.getAbsolutePathDV(cur_dv, p);
+	fs.pathFree(p);
+	
+	abs_path = fs.getAbsolutePath(cur_path, dir_name);
 
 	if (NULL == abs_path) {
 		printf("Bad or unsupported path\n");
 		return FS_ERR;
 	}
 
-	i = fs.fs_mkdir(shfs, currentdir, abs_path);
+	i = fs.mkdir(cur_path, abs_path);
 	printf("%s\n", fs_responses[i]);
-	return FS_OK;
-}
-
-filesystem* sh_mkfs() {	
-	filesystem* shfs = NULL;
-	shfs = fs.fs_mkfs();
-	return shfs;
+	return i;
 }
 
 // Show the shell prompt
 void prompt() { 
-	if (strlen(current_dir) > 0) 
-		printf("%s ", current_dir); 
+	if (NULL != cur_dv) 
+		printf("%s ", cur_dv->name); 
 	printf("> ");
 }
 
 // Try to open a preexisting filesystem
-filesystem* sh_openfs() {
-	filesystem* fs = NULL;
-
-	current_dir[0] = '\0';
-	fs = _fs._open();
-	if (NULL == fs)
-		return NULL;
-	return fs;
+void sh_openfs() {
+	fs.openfs();
+	sh_getfsroot();
 }
 
-char* sh_cd(filesystem *shfs, char* path) {
-	inode* ino;
+int sh_cd(char* path) {
+	dentv* dv;
 	char* abs_path = NULL;
 
 	if (NULL == path || 0 == strlen(path)) {
 		printf("Bad arguments\n");
-		return NULL;
+		return FS_ERR;
 	}
 
-	abs_path = sh_getAbsolutePath(path);
+	sh_update_current_path();
+	abs_path = fs.getAbsolutePath(current_path, path);
 
-	if (NULL == abs_path) {
-		printf("Bad or unsupported path\n");
-		return NULL;
-	}
+	if (NULL == abs_path) return FS_ERR;
 
-	ino = fs.stat(shfs, abs_path);
+	dv = fs.opendir(abs_path);
+	if (NULL == dv) return FS_ERR;
 
-	if (NULL == ino) {
-		printf("No such directory \"%s\"\n", path);
-		return NULL;
-	}
-
-	if (FS_DIR != ino->mode) {
-		printf("Found \"%s\", but it's not a directory.\n", path);
-		return NULL;
-	}
-
-	return abs_path;
+	cur_dv = dv;
+	return FS_OK;
 }
 
-void sh_ls(filesystem* shfs, char* path) {
-	inode* ino;
-	char* abs_path;
+int sh_ls(char* path) {
+	dentv* dv;
+	char* abs_path = NULL;
 
 	if (NULL == path || 0 == strlen(path)) {
-		printf("Bad arguments");
-		return;
+		printf("sh_ls: Bad arguments\n");
+		return FS_ERR;
 	}
 
-	abs_path = sh_getAbsolutePath(path);
+	abs_path = fs.getAbsolutePath(current_path, path);
+	if (NULL == abs_path) return FS_ERR;
 
-	if (NULL == abs_path) {
-		printf("Bad or unsupported path\n");
-		return;
-	}
+	dv = fs.opendir(abs_path);
+	if (NULL == dv) return FS_ERR;
 
-	ino = fs.stat(shfs, abs_path);
-
-	if (NULL == ino) {
-		printf("No such directory \"%s\"\n", path);
-		return;
-	}
-
-	if (FS_DIR != ino->mode) {
-		printf("Found \"%s\", but it's not a directory.\n", path);
-		return;
-	}
-
-	if (!ino->v_attached)
-		ino->datav.dir = _fs._load_dir(shfs, ino->num);
-
-	if (NULL == ino->datav.dir) {
-		printf("Could not load \"%s\".\n", path);
-		return;
-	}
-
-	sh_tree_recurse(shfs, 0, 0, ino->datav.dir);
+	sh_tree_recurse(0, 0, dv);
+	return FS_NORMAL;
 }
 
-dentv* sh_getfsroot(filesystem *fs) {
-	dentv* root_v = NULL;
+int sh_getfsroot() {
+	dentv* dv = NULL;
 
-	if (NULL == fs)
-		return NULL;
-	root_v = fs->root;
+	dv = fs.opendir("/");
 
-	if (NULL == root_v) {
-		printf("openfs() problem: root directory is NULL!\n");
-		return NULL;
-	}
+	if (NULL == dv || NULL == dv->ino)
+		return FS_ERR;
 
-	if (NULL == root_v->ino) {
-		printf("openfs() problem: root inode is NULL!\n");
-		return NULL;
-	}
-
-	return root_v;
+	cur_dv = dv;
+	sh_update_current_path();
+	return FS_OK;
 }
 
 int main() {
-	uint i;
-	char buf[SH_BUFLEN]		= "";		// Buffer for user input
+	int retv;
+	char buf[SH_BUFLEN] = "";	// Buffer for user input
 	char* delimiter = "\t ";
 
-	filesystem* shfs = NULL;
 	fs_path* cmd;
-	dentv* root = NULL;
-	current_dir[0] = '\0';
 
 	_fs._debug_print();
-	shfs = sh_openfs();
-
-	if (NULL != shfs)
-		root = sh_getfsroot(shfs);
-
-	if (NULL != root)
-		strcpy(current_dir, root->name); 
+	sh_openfs();
 
 	prompt();							
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {		// Get user input
@@ -274,65 +229,65 @@ int main() {
 		buf[strlen(buf)-1] = '\0';				// Remove trailing newline
 
 		// Break input into cmd->fields separated by whitespace. 
-		cmd = _fs._tokenize(buf, delimiter);
+		cmd = fs.tokenize(buf, delimiter);
 
 		if (!strcmp(cmd->fields[0], "exit")) break;
 		
 		else if (!strcmp(cmd->fields[0], "ls")) {
+
+			// If the user provided more than one field
 			if (cmd->nfields > 1)
-				sh_ls(shfs, cmd->fields[1]);
-			else sh_ls(shfs, current_dir);
+				retv = sh_ls(cmd->fields[1]);
+			else retv = sh_ls(cur_dv->name);
 		}
 
 		else if (!strcmp(cmd->fields[0], "cd")) {
 
-			if (cmd->nfields > 1) { // If the user provided more than one field
-
-				char* tmp = sh_cd(shfs, cmd->fields[1]); 
-				if (NULL != tmp && '\0' != tmp[0])
-					strcpy(current_dir, tmp);
-			}
+			if (cmd->nfields > 1)
+				retv = sh_cd(cmd->fields[1]); 
 		}
 
-		else if (!strcmp(cmd->fields[0], "pwd")) { printf("%s\n", current_dir); }
+		else if (!strcmp(cmd->fields[0], "pwd")) { 
+			printf("%s\n", current_path); 
+			retv = FS_NORMAL;
+		}
 
-		else if (!strcmp(cmd->fields[0], "tree")) { sh_tree(shfs, "/"); }
+		else if (!strcmp(cmd->fields[0], "tree")) { 
+			sh_tree("/"); 
+			retv = FS_NORMAL;
+		}
 
 		else if (!strcmp(cmd->fields[0], "mkdir")) { 
 			if (cmd->nfields > 1) {
-				sh_mkdir(shfs, current_dir, cmd->fields[1]); 
+				retv = sh_mkdir(cmd->fields[1]); 
+				retv = FS_NORMAL;
 			}
 		}
 
 		else if (!strcmp(cmd->fields[0], "stat")) { 
 			if (cmd->nfields > 1) {
-				sh_stat(shfs, cmd->fields[1]); 
+				sh_stat(cmd->fields[1]); 
+				retv = FS_NORMAL;
 			}
+			retv = FS_ERR;
 		}
 
 		else if (!strcmp(cmd->fields[0], "mkfs")) {
 			printf("mkfs() ... ");
 
-			if (NULL != shfs) {
-				fs.fs_delete(shfs);
-				shfs = NULL;
-			}
-			shfs = sh_mkfs();
-			if (NULL != shfs)
-				root = sh_getfsroot(shfs);
-			if (NULL != root) { 
-				printf("OK"); 
-				strcpy(current_dir, root->name); 
-			}
-			else { printf("ERROR"); }
-			printf("\n");
+			fs.mkfs();
+			retv = sh_getfsroot();
 
-		} else { printf("Bad command \"%s\"\n", buf); }
+		} else { 
+			printf("Bad command \"%s\"", buf); 
+			retv = FS_NORMAL; 
+		}
 
-		for (i = 0; i < cmd->nfields; i++)
-			free(cmd->fields[i]);
-		free(cmd);
+		if (FS_OK == retv)		printf("OK");
+		else if (FS_ERR == retv)	printf("ERROR");
+		printf("\n");
 
+		fs.pathFree(cmd);
 		prompt();
 	}
 	printf("exit()\n");

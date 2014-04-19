@@ -25,9 +25,10 @@
 /* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
 #define PRINT_STRUCT(p)  print_mem((p), sizeof(*(p)))
 
-char* fs_responses[5]		= {	"OK", "General Error", "Directory exists", 
+char* fs_responses[6]		= {	"OK", "General Error", "Directory exists", 
 					"stat() failed for the given path",
-					"An inode was not found on disk"	 };
+					"An inode was not found on disk",
+					"Too few arguments" };
 
 char* fname = "fs";			/* The name our filesystem will have on disk */
 block block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
@@ -70,6 +71,15 @@ static fs_path* _newPath() {
 	path->firstField = 0;
 
 	return path;
+}
+
+static void _pathFree(fs_path* p) {
+	uint i;
+	if (NULL == p) return;
+
+	for (i = 0; i < FS_MAXPATHFIELDS; i++)
+		free(p->fields[i]);
+	free(p);
 }
 
 /* Split a string on delimiter(s) */
@@ -375,7 +385,7 @@ static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 	dv->ino->datav.dir	= dv;
 
 	dv->ndirs		= dv->ino->data.dir.ndirs;
-	dv->nfiles		= dv->ino->data.dir.ndirs;
+	dv->nfiles		= dv->ino->data.dir.nfiles;
 	dv->nlinks		= dv->ino->data.dir.nlinks;
 
 	dv->ino->v_attached	= 1;
@@ -439,6 +449,21 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 	return dv;
 }
 
+/* Free the memory occupied by a dentv*/
+static int _unload_dir(filesystem* fs, inode* ino) {
+	int status1, status2;
+	
+	status1 = _fs._sync(fs);
+	status2 = _fs.writeblocks(ino, ino->blocks, ino->nblocks, sizeof(inode));
+
+	free(ino->datav.dir);
+	ino->datav.dir = NULL;
+
+	if (FS_ERR == status1 || FS_ERR == status2)
+		return FS_ERR;
+	return FS_OK;
+}
+
 /* Create a new directory in the directory tree.
  * Sets up pointers (dentv) and indices (dent) for 
  * linked-list traversal. Writes new dent and
@@ -473,7 +498,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 
 		/* If we need to load the tail (the last dir added to @param parent)*/
 		tail = parent->tail;	/* Try in memory */
-		if (NULL == tail || !tail->v_attached) {
+		if (NULL == tail || NULL == tail->datav.dir || !tail->v_attached) {
 			parent->ino->datav.dir->tail = 
 				_inode_load(fs, parent->ino->data.dir.tail); /* Try from disk */
 			tail = parent->ino->datav.dir->tail;
@@ -518,7 +543,8 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 		} else {
 			dv->prev = parent->tail;
 			dv->next = parent->head;
-			parent->tail->datav.dir->next = dv->ino;	/* Updating the tail in-memory requires no disk write */
+			dv->prev->datav.dir->next = dv->ino;
+			//parent->tail->datav.dir->next = dv->ino;	/* Updating the tail in-memory requires no disk write */
 			parent->tail = dv->ino;
 		}
 
@@ -538,12 +564,49 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 }
 
 /* Load a dentv from disk and put it in an inode*/
-static int _attach_datav(filesystem* fs, inode* ino) {
+static int _v_attach(filesystem* fs, inode* ino) {
+	if (NULL == ino) return FS_ERR;
+
 	if (!ino->v_attached) {
-		ino->datav.dir = _load_dir(fs, ino->num);
-		ino->v_attached = true;
+		switch (ino->mode) {
+
+		case FS_DIR: 
+		{
+			ino->datav.dir = _load_dir(fs, ino->num);
+			break;
+		}
+		case FS_FILE:
+			break; /* TODO */
+		case FS_LINK:
+			break; /* TODO */
+		}
+
 		if (NULL == ino->datav.dir) return FS_ERR;
+		ino->v_attached = true;
 	}
+	return FS_OK;
+}
+
+/* Write the data in an inode disk and free the in-memory data */
+static int _v_detach(filesystem* fs, inode* ino) {
+	if (NULL == ino) return FS_ERR;
+	
+	if (ino->v_attached) {
+		switch (ino->mode) {
+
+		case FS_DIR: 
+		{
+			_unload_dir(fs, ino);
+			break;
+		}
+		case FS_FILE:
+			break; /* TODO */
+		case FS_LINK:
+			break; /* TODO */
+		}
+		ino->v_attached = false;
+	}
+
 	return FS_OK;
 }
 
@@ -565,7 +628,7 @@ static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_
 		return NULL;
 	
 	if (!dir->head->v_attached) {						// Load the first directory from disk if not already in memory
-		if (FS_ERR == _attach_datav(fs, dir->head))
+		if (FS_ERR == _v_attach(fs, dir->head))
 			return NULL;
 	}
 
@@ -589,7 +652,7 @@ static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_
 		if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
 
 		if (!iterator->next->v_attached) {				// Load the next directory from disk if not already in memory
-			if (FS_ERR == _attach_datav(fs, iterator->next))
+			if (FS_ERR == _v_attach(fs, iterator->next))
 				return NULL;
 		}
 
@@ -597,6 +660,7 @@ static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_
 	}
 	return NULL;					// If nothing found, return a special error inode
 }
+
 
 /* Return the given string less the first character */
 static char* _strSkipFirst(char* cpy) {
@@ -709,6 +773,46 @@ static int _path_append(fs_path* p, const char* appendage) {
 	return FS_OK;
 }
 
+static char* _getAbsolutePath(char* current_dir, char* path) {
+	fs_path* p = NULL;
+	char* abs_path = NULL;
+	
+	p = _pathFromString(current_dir);
+
+	if ('/' == path[0])	/* Path is already absolute*/
+		return path;
+
+	if ('.' == path[0]) {
+		if ('.' == path[1])	printf("_getAbsolutePath(): .. not yet implemented\n");
+		else			printf("_getAbsolutePath(): . not yet implemented\n");
+		return NULL;
+	}
+
+	_path_append(p, path);
+	abs_path = _stringFromPath(p);
+
+	free(p);
+	return abs_path;
+}
+
+/* Traverse a directory up to the root, append dir ames while recursing back down*/
+static char* _getAbsolutePathDV(dentv* dv, fs_path *p) {
+	char *tmp;
+
+	if (NULL == dv || NULL == dv->parent) return NULL;
+
+	if (!strcmp(dv->name, "/"))	/* Stop at root or we will loop forever */
+		return "/";
+
+	if (!dv->parent->v_attached) return NULL;
+
+	tmp = _getAbsolutePathDV(dv->parent->datav.dir, p);
+	_path_append(p, tmp);
+	_path_append(p, dv->name);
+
+	return _stringFromPath(p);
+}
+
 /* A special version of mkdir that makes the root dir
  * @param newfs if true, load a preexisting root dir
  * Else make a new root dir */
@@ -755,7 +859,7 @@ static block* _newBlock() {
  * Therefore, this offers merely a performance benefit.
  * Returns FS_OK on success, FS_ERR on failure. */
 static int _prealloc() {
-	int ERR;
+	int status;
 #if defined(_WIN64) || defined(_WIN32)	// Have to put declaration here.
 	LARGE_INTEGER offset;		// because Visual C compiler is OLD school
 #endif
@@ -765,20 +869,20 @@ static int _prealloc() {
 
 #if defined(_WIN64) || defined(_WIN32)
 	offset.QuadPart = BLKSIZE*MAXBLOCKS;
-	ERR = SetFilePointerEx(fp, offset, NULL, FILE_BEGIN);
+	status = SetFilePointerEx(fp, offset, NULL, FILE_BEGIN);
 	SetEndOfFile(fp);
 #elif __APPLE__	/* __MACH__ also works */
-	fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*MAXBLOCKS};
-	ERR = fcntl(fileno(fp), F_PREALLOCATE, &store);
+	fstore_t store = {F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, BLKSIZE*MAXBLOCKS, 0};
+	status = fcntl(fileno(fp), F_PREALLOCATE, &store);
 #elif __unix__
-	ERR = posix_fallocate(fp, 0, BLKSIZE*MAXBLOCKS);
+	status = posix_fallocate(fp, 0, BLKSIZE*MAXBLOCKS);
 #endif
-    
+
 	_safeclose();
 
-	if (ERR < 0) { 
+	if (status < 0) { 
 		perror("allocation error");
-		return ERR;
+		return status;
 	}
 
 	return FS_OK;
@@ -872,39 +976,6 @@ static int _fill_block_indices(inode* ino, block_t* block_indices, uint count) {
 	//return i;
 	return FS_OK;
 }
-
-/* Fill @param count @param block indices into the block indices of @param ino. 
- * Spill into indirect block pointers, doubly-indirected block pointers, and 
- * triply-indirected block pointers as needed. */
-//static int _fill_iblocks(inode* ino, uint count, block_t* blockIndices) {
-//	uint alloc_cnt = 0, indirection = 0;
-//	uint i, j;
-//
-//	while (alloc_cnt < count) {
-//		switch (indirection)
-//		{
-//			case DIRECT: alloc_cnt += _fill_dblocks(ino->blocks, count, blockIndices, NBLOCKS); break;
-//
-//			// If we used up all the direct blocks, start using singly indirected blocks
-//			case INDIRECT1: alloc_cnt += _fill_dblocks(ino->ib1.blocks, count, blockIndices, NBLOCKS_IBLOCK); break;
-//
-//			// If we used up all the singly indirected blocks, start using doubly indirected blocks
-//			case INDIRECT2: for (i = 0; i < NIBLOCKS; i++)	
-//						alloc_cnt += _fill_dblocks(	ino->ib2.iblocks[i].blocks, 
-//											count, blockIndices, NBLOCKS_IBLOCK); break;
-//
-//			// If we used up all the doubly indirected blocks, start using triply indirected blocks
-//			case INDIRECT3: for (i = 0; i < NIBLOCKS; i++)
-//						for (j = 0; j < NIBLOCKS; j++)
-//							alloc_cnt += _fill_dblocks(	ino->ib3.iblocks[i].iblocks[j].blocks, 
-//												count, blockIndices, NBLOCKS_IBLOCK); break;
-//			default: return FS_ERR; /* Out of blocks */
-//		}
-//		++indirection;
-//	}
-//
-//	return FS_OK;
-//}
 
 /* Read a block from disk */
 static int readblock(void* dest, block_t b) {
@@ -1018,6 +1089,23 @@ static filesystem* _open() {
 	return fs;
 }
 
+static filesystem* _mkfs() {
+	filesystem *fs = NULL;
+
+	fs = _init(true);
+	if (NULL == fs) return NULL;
+	
+	/* Write root inode to disk. TODO: Need to write iblocks */
+	writeblocks( fs->root->ino, fs->root->ino->blocks, fs->root->ino->nblocks, sizeof(inode)); 
+
+	/* Write superblock and other important first blocks */
+	if (FS_ERR == _fs._sync(fs)) {
+		free(fs);
+		return NULL;
+	}
+	return fs;
+}
+
 /* Print a hex dump of a struct, color nonzeros red
  * Can also use hexdump -C filename 
  * or :%!xxd in vim */
@@ -1085,16 +1173,18 @@ static void _debug_print() {
 
 fs_private_interface const _fs = 
 { 
-	_newPath, _tokenize, _pathFromString, _stringFromPath,				/* Path management */
-	_pathSkipLast, _pathGetLast, _path_append, _pathTrimSlashes,
+	_pathFree, _newPath, _tokenize, _pathFromString, _stringFromPath,		/* Path management */
+	_pathSkipLast, _pathGetLast, _path_append, _pathTrimSlashes, 
+	_getAbsolutePathDV, _getAbsolutePath,
 	_strSkipFirst, _strSkipLast,
-	_newd, _newdv, _ino_to_dv, _mkroot, _load_dir, _new_dir, _attach_datav,		/* Directory management */
+	_newd, _newdv, _ino_to_dv, _mkroot, 
+	_load_dir, _unload_dir,	
+	_new_dir, _v_attach, _v_detach,							/* Directory management */
 	_prealloc, _zero,								/* Native filsystem file allocation */
-	_open, _init,									/* Filesystem creation, opening */
+	_open, _mkfs, _init,								/* Filesystem creation, opening */
 	__balloc, _balloc, _bfree, _newBlock,						/* Block allocation */
 	_ialloc, _ifree,								/* Inode allocation */
 	_fill_block_indices,
-	/*_fill_iblocks, _inode_write_dblocks, _inode_write_iblocks, */
 	_inode_load,
 	readblock, writeblock,
 	readblocks, writeblocks,

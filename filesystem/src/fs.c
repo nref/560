@@ -3,48 +3,39 @@
 #include <string.h>
 #include "fs.h"
 
+
+filesystem* shfs = NULL;
+
 /* Free the memory occupied by a filesystem 
- * TODO: Traverse the whole directory tree and free
- */
-static void fs_delete(filesystem *fs) {
-	if (fs) {
+ * TODO: Traverse the whole directory tree and free */
+static void destruct() {
+	if (shfs) {
 
-		if (fs->root) {
-			free(fs->root->ino);
-			free(fs->root->files);
-			free(fs->root->links);
-			if (fs->root->head)
-				free(fs->root->head);
+		if (shfs->root) {
+			free(shfs->root->ino);
+			free(shfs->root->files);
+			free(shfs->root->links);
+			if (shfs->root->head)
+				free(shfs->root->head);
 
-			free(fs->root);
+			free(shfs->root);
 		}
-		free(fs);
+		free(shfs);
 	}
 }
 
-static filesystem* fs_mkfs() {
-	filesystem *fs = NULL;
+/* Open an existing filesystem on disk */
+static void openfs() { shfs = _fs._open(); }
 
-	fs = _fs._init(true);
-	if (NULL == fs) return NULL;
-	
-	/* Write root inode to disk. TODO: Need to write iblocks */
-	_fs.writeblocks( fs->root->ino, fs->root->ino->blocks, fs->root->ino->nblocks, sizeof(inode)); 
-
-	/* Write superblock and other important first blocks */
-	if (FS_ERR == _fs._sync(fs)) {
-		free(fs);
-		return NULL;
-	}
-
-	printf("Root is \"%s\". Filesystem size is %d KByte.\n", fs->root->name, BLKSIZE*MAXBLOCKS/1024);
-	return fs;
+/* Make a new filesystem, write it to disk, and keep an open pointer */
+static void mkfs() { 
+	destruct();
+	shfs =  _fs._mkfs(); 
 }
 
-/* cur_path should always be an absolute path; dir_path can be relative
- * to cur_dir
- */
-static int fs_mkdir(filesystem *thefs, char* cur_path, char* dir_path) {
+/* cur_path should always be an absolute path; 
+ * dir_path can be relative to cur_path */
+static int mkdir(char* cur_path, char* dir_path) {
 	dentv* parent_dv = NULL, *new_dv = NULL;
 
 	inode* parent_inode;
@@ -80,23 +71,23 @@ static int fs_mkdir(filesystem *thefs, char* cur_path, char* dir_path) {
 	newdir_name = _fs._pathGetLast(abs_path);
 	parent_str = _fs._pathSkipLast(abs_path);
 
-	if (NULL != fs.stat(thefs, path_str)) 
+	if (NULL != fs.stat(path_str)) 
 		return DIREXISTS;				// The requested directory already exists
 
-	parent_inode = fs.stat(thefs, parent_str);
+	parent_inode = fs.stat(parent_str);
 	if (NULL == parent_inode)	return BADPATH;
 
 	// Get parent dir from memory or disk
 	if (!parent_inode->v_attached)
-		parent_dv = _fs._ino_to_dv(thefs, parent_inode);	 // Try from memory
+		parent_dv = _fs._ino_to_dv(shfs, parent_inode);	 // Try from memory
 	else parent_dv = parent_inode->datav.dir;
 
 	if (!parent_inode->v_attached)
-		parent_dv = _fs._load_dir(thefs, parent_dv->ino->num);	// Try from disk
+		parent_dv = _fs._load_dir(shfs, parent_dv->ino->num);	// Try from disk
 
 	if (NULL == parent_dv) return NOTONDISK;			// Give up
 
-	new_dv = _fs._new_dir(thefs, parent_dv, newdir_name);
+	new_dv = _fs._new_dir(shfs, parent_dv, newdir_name);
 	if (NULL == new_dv) return FS_ERROR;
 
 	return OK;
@@ -105,21 +96,21 @@ static int fs_mkdir(filesystem *thefs, char* cur_path, char* dir_path) {
 /*
  * Return the inode of the directory at the path "name"
  */
-static inode* stat(filesystem* fs, char* name) {
+static inode* stat(char* name) {
 
 	uint i		= 0;
 	uint depth	= 0;			// The depth of the path, e.g. depth of "/a/b/c" is 3
 	inode* ino	= NULL;
 	fs_path* dPath	= NULL;
 
-	if (NULL == fs) return NULL;		// No filesystem yet, bail!
+	if (NULL == shfs) return NULL;		// No filesystem yet, bail!
 
 	dPath = _fs._tokenize(name, "/");
 	depth = dPath->nfields;
 
-	if (depth == 0) return fs->root->ino;	// Return if we are at the root
+	if (depth == 0) return shfs->root->ino;	// Return if we are at the root
 	else {					// Else traverse the path, get matching inode
-		ino = _fs._recurse(fs, fs->root, 0, depth-1, dPath->fields);	
+		ino = _fs._recurse(shfs, shfs->root, 0, depth-1, dPath->fields);	
 		for (i = 0; i < depth; i++) 
 			free(dPath->fields[i]);
 		return ino;
@@ -127,40 +118,101 @@ static inode* stat(filesystem* fs, char* name) {
 	return NULL;
 }
 
-/* Load a dentv from disk and put it in an inode*/
-static int attach_datav(filesystem* fs, inode* ino) {
-	return _fs._attach_datav(fs, ino);
+static void	pathFree(fs_path* p)				{ _fs._pathFree(p); }
+static fs_path*	newPath()					{ return _fs._newPath(); }
+static fs_path*	tokenize(const char* str, const char* delim)	{ return _fs._tokenize(str, delim); }
+static fs_path*	pathFromString(const char* str)			{ return _fs._pathFromString(str); }
+static char*	stringFromPath(fs_path*p )			{ return _fs._stringFromPath(p); }
+static char*	pathSkipLast(fs_path* p)			{ return _fs._pathSkipLast(p); }
+static char*	pathGetLast(fs_path* p)				{ return _fs._pathGetLast(p); }
+static int	pathAppend(fs_path* p, const char* str)		{ return _fs._path_append(p, str); }
+static char*	getAbsolutePathDV(dentv* dv, fs_path* p)	{ return _fs._getAbsolutePathDV(dv, p); }
+static char*	getAbsolutePath(char* current_path, char* next)	{ return _fs._getAbsolutePath(current_path, next); }
+static char*	pathTrimSlashes(char* path)			{ return _fs._pathTrimSlashes(path); }
+static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
+static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
+
+/* Return a file descriptor (just an inode number) corresponding to the file at the path*/
+static filev* open(char* path, char* mode) { 
+
+	printf("open: %s %s\n", path, mode);
+	return 0; 
 }
 
-static fs_path*	newPath() { return _fs._newPath(); }
+static void close (filev* fv) { 
 
-static fs_path*	tokenize(const char* str, const char* delim) { return _fs._tokenize(str, delim); }
-static fs_path*	pathFromString(const char* str) { return _fs._pathFromString(str); }
-static char*	stringFromPath(fs_path*p ) { return _fs._stringFromPath(p); }
-static char*	pathSkipLast(fs_path* p) { return _fs._pathSkipLast(p); }
-static char*	pathGetLast(fs_path* p) { return _fs._pathGetLast(p); }
-static int	pathAppend(fs_path* p, const char* str) { return _fs._path_append(p, str); }
-static char*	pathTrimSlashes(char* path) { return _fs._pathTrimSlashes(path); }
-static char*	strSkipFirst(char* cpy) { return _fs._strSkipFirst(cpy); }
-static char*	strSkipLast(char* cpy) { return _fs._strSkipLast(cpy); }
+	printf("close: %s\n", fv->name); 
+}
 
-static int	fs_open		(char* filename, char* mode) { return 0; }
-static void	fs_close	(int fd) { }
-static void	fs_rmdir	(int fd) { }
-static char*	fs_read		(int fd, int size) { return NULL; }
-static void	fs_write	(int fd, char* string) { }
-static void	fs_seek		(int fd, int offset) { }
-static void	fs_link		(inode_t from, inode_t to) { }
-static void	fs_unlink	(inode_t ino) { }
+static dentv* opendir(char* path) { 
+	inode* ino = NULL;
+	inode* parent = NULL;
+	fs_path* p = NULL;
+
+	p = pathFromString(path);
+
+	ino = stat(path);
+	parent = stat(pathSkipLast(p));
+	
+	free(p);
+
+	if (NULL == parent) {
+		printf("opendir: Could not stat parent directory for \"%s\"\n", path);
+		return NULL;
+	}
+
+	if (NULL == ino) {
+		printf("opendir: Could not stat \"%s\"\n", path);
+		return NULL;
+	}
+
+	if (FS_DIR != ino->mode) {
+		printf("opendir: Found \"%s\", but it's not a directory.\n", path);
+		return NULL;
+	}
+
+	if (NULL == ino->datav.dir) {
+		printf("opendir: Could not load \"%s\".\n", path);
+		return NULL;
+	}
+
+	if (!ino->v_attached) {
+		//printf("opendir: Attaching directory \"%s\".\n", ino->data.dir.name);
+		_fs._v_attach(shfs, ino);
+	}
+
+	ino->datav.dir->parent = parent;
+
+	return ino->datav.dir; 
+}
+
+static void closedir (dentv* dv) { 
+	if (NULL == dv) return;
+
+	/* Only free dir if it's not the root */
+	if (strcmp(dv->name, "/")) {
+		//printf("closedir: Detaching directory \"%s\".\n", dv->name);
+		_fs._v_detach(shfs, dv->ino);
+		dv = NULL;
+	}
+}
+
+
+static void	rmdir		(int fd) { printf("fs_rmdir: %d\n", fd); }
+static char*	read		(int fd, int size) { printf("fs_read: %d %d\n", fd, size); return NULL; }
+static void	write		(filev* fv, char* str) { printf("fs_write: %s %s\n", fv->name, str);}
+static void	seek		(int fd, int offset) { printf("fs_seek: %d %d\n", fd, offset); }
+static void	link		(inode_t from, inode_t to) { printf("fs_link: %d %d\n", from, to); }
+static void	ulink		(inode_t ino) { printf("fs_unlink: %d\n", ino); }
 
 fs_public_interface const fs = 
 { 
-	newPath, tokenize, pathFromString, stringFromPath,		/* Path management */
-	pathSkipLast, pathGetLast, pathAppend, pathTrimSlashes,
-	strSkipFirst, strSkipLast,
+	pathFree, newPath, tokenize, pathFromString, stringFromPath,		/* Path management */
+	pathSkipLast, pathGetLast, pathAppend, getAbsolutePathDV, getAbsolutePath, pathTrimSlashes,
+	strSkipFirst, strSkipLast, 
 
-	fs_delete, fs_mkfs, fs_mkdir,
-	stat, attach_datav, fs_open, fs_close, 
-	fs_rmdir, fs_read, fs_write, fs_seek,
-	fs_link, fs_unlink
+	destruct, openfs, mkfs, mkdir,
+	stat, open, close, opendir, closedir, 
+	rmdir, read, write, seek,
+	link, ulink
 };
