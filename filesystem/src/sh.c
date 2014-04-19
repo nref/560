@@ -219,7 +219,9 @@ int main() {
 	prompt();							
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {		// Get user input
 
-		if (strlen(buf) == 0) { prompt(); continue; }		// Repeat loop on empty input
+		if (strlen(buf) == 0 || '\n' == buf[0]) { 
+			prompt(); continue;	// Repeat loop on empty input
+		}		
 		buf[strlen(buf)-1] = '\0';				// Remove trailing newline
 
 		// Break input into cmd->fields separated by whitespace. 

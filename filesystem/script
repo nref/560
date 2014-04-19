@@ -1,0 +1,26 @@
+mkfs
+mkdir b
+mkdir c
+mkdir b/c/
+mkdir b/c/d/
+mkdir b/c/d/e
+mkdir c/d
+tree
+ls
+cd b
+ls
+cd c
+ls
+cd d
+ls
+cd e
+ls
+cd /
+cd c
+ls
+cd d
+ls
+cd /b/c/d
+ls
+cd /b
+tree

@@ -46,6 +46,7 @@
 		2A5A9C7218F7851F00484816 /* sh.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sh.h; sourceTree = "<group>"; };
 		2AB7577A19008AC0003BCEB3 /* _fs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = _fs.h; sourceTree = "<group>"; };
 		2AB7577B19008AC6003BCEB3 /* _fs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = _fs.c; sourceTree = "<group>"; };
+		2AB7577D1902E030003BCEB3 /* script */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = script; path = ../../script; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -78,6 +79,7 @@
 		2A5A9C4F18F7824900484816 /* fs_xcode */ = {
 			isa = PBXGroup;
 			children = (
+				2AB7577D1902E030003BCEB3 /* script */,
 				2A5A9C5A18F7828D00484816 /* makefile */,
 				2A5A9C5B18F7828D00484816 /* bin */,
 				2A5A9C6218F7828D00484816 /* inc */,
