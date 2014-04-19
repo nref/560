@@ -132,6 +132,18 @@ static int attach_datav(filesystem* fs, inode* ino) {
 	return _fs._attach_datav(fs, ino);
 }
 
+static fs_path*	newPath() { return _fs._newPath(); }
+
+static fs_path*	tokenize(const char* str, const char* delim) { return _fs._tokenize(str, delim); }
+static fs_path*	pathFromString(const char* str) { return _fs._pathFromString(str); }
+static char*	stringFromPath(fs_path*p ) { return _fs._stringFromPath(p); }
+static char*	pathSkipLast(fs_path* p) { return _fs._pathSkipLast(p); }
+static char*	pathGetLast(fs_path* p) { return _fs._pathGetLast(p); }
+static int	pathAppend(fs_path* p, const char* str) { return _fs._path_append(p, str); }
+static char*	pathTrimSlashes(char* path) { return _fs._pathTrimSlashes(path); }
+static char*	strSkipFirst(char* cpy) { return _fs._strSkipFirst(cpy); }
+static char*	strSkipLast(char* cpy) { return _fs._strSkipLast(cpy); }
+
 static int	fs_open		(char* filename, char* mode) { return 0; }
 static void	fs_close	(int fd) { }
 static void	fs_rmdir	(int fd) { }
@@ -143,6 +155,10 @@ static void	fs_unlink	(inode_t ino) { }
 
 fs_public_interface const fs = 
 { 
+	newPath, tokenize, pathFromString, stringFromPath,		/* Path management */
+	pathSkipLast, pathGetLast, pathAppend, pathTrimSlashes,
+	strSkipFirst, strSkipLast,
+
 	fs_delete, fs_mkfs, fs_mkdir,
 	stat, attach_datav, fs_open, fs_close, 
 	fs_rmdir, fs_read, fs_write, fs_seek,
