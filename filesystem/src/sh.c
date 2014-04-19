@@ -39,50 +39,58 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 	char *next, *dv_path;
 
 	if (NULL == dv) return;
+	dv_path = sh_get_dv_path(dv);
 
-	if (NULL == dv->head) {
+	if (NULL == dv->head && 
+		dv->ndirs == 0 &&
+		dv->nfiles == 0 &&
+		dv->nlinks == 0) 
+	{
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
 		return;
 	}
-	
-	dv_path = sh_get_dv_path(dv);
-	next = sh_path_cat(dv_path, dv->head->data.dir.name);
 
-	for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
-	{
-		iterator = fs.opendir(next);
-		if (NULL == iterator) {
-			printf("sh_tree_recurse: Could not open directory \"%s\"",next);
-			return;
-		}
-		printf("%*s" "%s\n", depth*2, " ", iterator->name);
+	if (NULL != dv->head) {
+		next = sh_path_cat(dv_path, dv->head->data.dir.name);
 
-		if (depth < maxdepth) {
-
-			sh_tree_recurse(depth+1, maxdepth, iterator);
-			free(next);
-
-		}
-
-		if (	NULL == iterator->next ||
-			0 == iterator->next->data.dir.ino ||			/* If the dir has a next */			
-			iterator->ino->num == iterator->next->data.dir.ino)	/* If the dir doesn't point to itself */
+		for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
 		{
+			iterator = fs.opendir(next);
+			if (NULL == iterator) {
+				printf("sh_tree_recurse: Could not open directory \"%s\"",next);
+				return;
+			}
+			printf("%*s" "%s [dir]\n", depth*2, " ", iterator->name);
+
+			if (depth < maxdepth) {
+
+				sh_tree_recurse(depth+1, maxdepth, iterator);
+				free(next);
+
+			}
+
+			if (	NULL == iterator->next ||
+				0 == iterator->next->data.dir.ino ||			/* If the dir has a next */			
+				iterator->ino->num == iterator->next->data.dir.ino)	/* If the dir doesn't point to itself */
+			{
+				//fs.closedir(iterator);
+				//iterator = NULL;
+				break;
+			}
+			
+			next = sh_path_cat(dv_path, iterator->next->data.dir.name);
 			//fs.closedir(iterator);
 			//iterator = NULL;
-			break;
 		}
-			
-		next = sh_path_cat(dv_path, iterator->next->data.dir.name);
-		//fs.closedir(iterator);
-		//iterator = NULL;
 	}
 
-	for (i = 0; i < dv->nfiles; i++)		// For each file at this level
-		printf("%s\n", dv->files[i].data.file.name);	
+	for (i = 0; i < dv->nfiles; i++) {	// For each file at this level
+		//fs.open(dv_path, dv->files[i]->data.file.name, "r");
+		printf("%*s" "%s [file]\n", depth*2, " ", dv->files[i]->data.file.name);
+	}
 
 	for (i = 0; i < dv->ino->nlinks; i++)	// For each link at this level
-		printf("%s\n", dv->links[i].data.file.name);	
+		printf("%*s" "%s [link]\n", depth*2, " ", dv->links[i]->data.file.name);
 
 	free(dv_path);
 }
@@ -277,11 +285,34 @@ int main() {
 		} else if (!strcmp(cmd->fields[0], "seek")) {
 			printf("Not Implemented\n");
 		} else if (!strcmp(cmd->fields[0], "open")) {
-			printf("Not Implemented\n");
+
+			if (cmd->nfields > 2) {
+				char* parent;
+				char* name;
+				int fd = 0;
+				fs_path* p;
+
+				p = fs.pathFromString(cmd->fields[1]);
+				parent = fs.pathSkipLast(p);
+				name = fs.pathGetLast(p);
+
+				fd = fs.open(parent, name, cmd->fields[2]);
+
+				if (FS_ERR == fd)
+					printf("file open error\n");
+				else printf("got file descriptor \"%d\"\n", fd);
+
+			}
+
 		} else if (!strcmp(cmd->fields[0], "write")) {
 			printf("Not Implemented\n");
 		} else if (!strcmp(cmd->fields[0], "close")) {
-			printf("Not Implemented\n");
+
+			if (cmd->nfields > 1) {
+				fs.close(atoi(cmd->fields[1]));
+				retv = FS_OK;
+			}
+
 		} else {
 			printf("Bad command \"%s\"", buf); 
 			retv = FS_NORMAL; 

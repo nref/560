@@ -20,7 +20,6 @@ static void destruct() {
 
 			free(shfs->root);
 		}
-		free(shfs->filedescriptors);
 		free(shfs);
 	}
 }
@@ -61,10 +60,10 @@ static int mkdir(char* cur_path, char* dir_path) {
 		rel_path = _fs._pathFromString(dir_path);
 
 		abs_path = _fs._newPath();
-		_fs._path_append(abs_path, cur_path);
+		_fs._pathAppend(abs_path, cur_path);
 
 		for (i = 0; i < rel_path->nfields; i++)
-			_fs._path_append(abs_path, rel_path->fields[i]);
+			_fs._pathAppend(abs_path, rel_path->fields[i]);
 	}
 
 	path_str = _fs._stringFromPath(abs_path);
@@ -89,7 +88,7 @@ static int mkdir(char* cur_path, char* dir_path) {
 	if (NULL == parent_dv) return NOTONDISK;			// Give up
 
 	new_dv = _fs._new_dir(shfs, parent_dv, newdir_name);
-	if (NULL == new_dv) return FS_ERROR;
+	if (NULL == new_dv) return ERR;
 
 	return OK;
 }
@@ -126,7 +125,7 @@ static fs_path*	pathFromString(const char* str)			{ return _fs._pathFromString(s
 static char*	stringFromPath(fs_path*p )			{ return _fs._stringFromPath(p); }
 static char*	pathSkipLast(fs_path* p)			{ return _fs._pathSkipLast(p); }
 static char*	pathGetLast(fs_path* p)				{ return _fs._pathGetLast(p); }
-static int	pathAppend(fs_path* p, const char* str)		{ return _fs._path_append(p, str); }
+static int	pathAppend(fs_path* p, const char* str)		{ return _fs._pathAppend(p, str); }
 static char*	getAbsolutePathDV(dentv* dv, fs_path* p)	{ return _fs._getAbsolutePathDV(dv, p); }
 static char*	getAbsolutePath(char* current_path, char* next)	{ return _fs._getAbsolutePath(current_path, next); }
 static char*	pathTrimSlashes(char* path)			{ return _fs._pathTrimSlashes(path); }
@@ -134,46 +133,62 @@ static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
 static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
-static filev* open(char* path, char* mode) { 
-	int mode_i = FS_READ;
-	inode* ino = NULL;
-	fs_path* p = NULL;
+static int open(char* parent_dir, char* name, char* mode) { 
+	int mode_i = -1;
+	int fd = -1;
+	inode* p_ino = NULL;	/* Path inode */
+	inode* f_ino = NULL;	/* File inode */
+	char* f_path;		/* Fully-qualified path to the file */
+	filev* newfv;
 
-	p = pathFromString(path);
-	ino = stat(path);
-	free(p);
+	p_ino = stat(parent_dir);
+		
+	if (FS_DIR != p_ino->mode) {
+		printf("open: Parent of \"%s\" is not a valid directory.\n", name);
+		return FS_ERR;
+	}
 
 	if (!strcmp("r", mode))		mode_i = FS_READ;
 	else if (!strcmp("w", mode))	mode_i = FS_WRITE;
+	else if (!strcmp("rw", mode))	mode_i = FS_RW;
 	else { 
 		printf("open: Bad mode \"%s\"\n",mode); 
-		return NULL; 
+		return -1; 
 	}
 
-	if (NULL == ino) {
+	f_path = fs.getAbsolutePath(parent_dir, name);
+	f_ino = stat(f_path);
+
+	if (NULL == f_ino) {
 		if (FS_READ == mode_i) {
-			printf("open: File does not exist \"%s\"\n", path);
-			return NULL;
+			printf("open: File does not exist \"%s\"\n", name);
+			return FS_ERR;
 		}
 		if (FS_WRITE == mode_i) {
+			
 			// Create file
-			return NULL;
+			newfv = _fs._new_file(shfs, p_ino->datav.dir, name);
+			if (NULL == newfv) return FS_ERR;
+			f_ino = newfv->ino;
 		}
 	}
-	
-	if (FS_FILE != ino->mode) {
-		printf("open: Found \"%s\", but it's a directory.\n", path);
-		return NULL;
-	}
 
-	/* TODO: Return a file descriptor which indexes into the filev */
-	ino->datav.file->mode = mode_i;
-	return ino->datav.file; 
+	f_ino->datav.file->mode = mode_i;
+
+	/* Return a file descriptor which indexes to the filev */
+	fd = _fs._get_fd(shfs);
+	shfs->fds[fd] = f_ino->datav.file;
+
+	return fd;
 }
 
-static void close (filev* fv) { 
+static void close(fd_t fd) { 
 
-	printf("close: %s\n", fv->name); 
+	if (false == shfs->allocated_fds[fd]) return; /* fd not allocated */
+	if (shfs->fds[fd])
+		free(shfs->fds[fd]);
+
+	_fs._free_fd(shfs, fd);
 }
 
 static dentv* opendir(char* path) { 
@@ -231,7 +246,28 @@ static void closedir (dentv* dv) {
 
 static void	rmdir		(int fd) { printf("fs_rmdir: %d\n", fd); }
 static char*	read		(int fd, int size) { printf("fs_read: %d %d\n", fd, size); return NULL; }
-static void	write		(filev* fv, char* str) { printf("fs_write: %s %s\n", fv->name, str);}
+
+static size_t write (fd_t fd, char* str) { 
+	filev* fv = NULL;
+	size_t slen;
+
+	if (false == shfs->allocated_fds[fd]) return FS_ERR; /* fd not allocated, file not open */
+
+	fv = shfs->fds[fd];
+	if (NULL == fv || !fv->ino->v_attached ) return FS_ERR;	/* TODO: Read in from disk */
+
+	if (NULL == str || '\0' == str[0])
+		return FS_ERR;
+
+	/* TODO: Also write to iblocks */
+	slen = strlen(str);
+	memcpy(&fv->ino->dblocks[fv->seek_pos], str, slen);
+	fv->seek_pos += slen;
+
+	_fs.commit_write(fv->ino);
+	return slen;
+}
+
 static void	seek		(int fd, int offset) { printf("fs_seek: %d %d\n", fd, offset); }
 static void	link		(inode_t from, inode_t to) { printf("fs_link: %d %d\n", from, to); }
 static void	ulink		(inode_t ino) { printf("fs_unlink: %d\n", ino); }

@@ -35,7 +35,7 @@ block block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
 size_t stride;				/* The data field is smaller than BLKSIZE
 					 * so our writes to disk are not BLKSIZE but rather 
 					 * BLKSIZE - sizeof(other fields in block struct) */
-block_t  rootblocks[] = { 0, 1, 2 };	/* Indices to the first and second blocks */
+block_t  rootblocks[] = { 0, 1, 2 };	/* Indices to the first blocks */
 FILE* fp = NULL;			/* Pointer to file storage */
 
 /* Close the filesystem file if is was open */
@@ -138,8 +138,35 @@ static int _sync(filesystem* fs) {
 	return FS_OK;
 }
 
-/* Free the index of an inode and its malloc'd memory
+/* Read from disk the inode to which @param num refers. */
+static inode* _inode_load(filesystem* fs, inode_t num) {
+	inode* ino = NULL;
+	block_t first_block_num;
 
+	if (NULL == fs) return NULL;
+	if (MAXBLOCKS <= num) return NULL;	/* Sanity check */
+
+	first_block_num = fs->sb.inode_first_blocks[num];
+
+	if (0 == first_block_num)
+		return NULL;			/* An inode of 0 does not exist on disk */
+
+	ino = (inode*)malloc(sizeof(inode));
+	if (FS_ERR == 
+		_fs.readblocks(	ino, &first_block_num, 
+					fs->sb.inode_block_counts[num], 
+					sizeof(inode))	) {
+		/* If the disk read failed */
+		if (NULL != ino)
+			free(ino);
+		return NULL;
+	}
+
+	ino->v_attached = 0;
+	return ino;
+}
+
+/* Free the index of an inode and its malloc'd memory
  * @param blk pointer to the block to free
  * Returns FS_OK on success, FS_ERR if the blockv*/
 static int _ifree(filesystem* fs, inode_t num) {
@@ -280,11 +307,11 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	dv		= (dentv*)	malloc(sizeof(dentv));
 	dv->ino		= (inode*)	malloc(sizeof(inode));
 
-	dv->files	= (inode*)	malloc(FS_MAXFILES*sizeof(inode));
-	dv->links	= (inode*)	malloc(FS_MAXLINKS*sizeof(inode));
+	dv->files	= (inode**)	malloc(FS_MAXFILES*sizeof(inode*));
+	dv->links	= (inode**)	malloc(FS_MAXLINKS*sizeof(inode*));
 
-	memset(	dv->files, 0, FS_MAXFILES*sizeof(inode));
-	memset(	dv->links, 0, FS_MAXLINKS*sizeof(inode));
+	memset(	dv->files, 0, FS_MAXFILES*sizeof(inode*));
+	memset(	dv->links, 0, FS_MAXLINKS*sizeof(inode*));
 
 	memset(	dv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
 	memset(	dv->ino->dblocks, 0, sizeof(block_t)*NBLOCKS);
@@ -300,6 +327,7 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	dv->nlinks	= 0;
 	dv->ino->nlinks	= 0;
 	dv->ino->nblocks= sizeof(inode)/stride+1;   /* How many blocks the inode consumes */
+	dv->ino->inode_blocks = sizeof(inode)/stride+1;
 	dv->ino->size	= BLKSIZE;
 	dv->ino->mode	= FS_DIR;
 	dv->ino->v_attached = 1;
@@ -316,40 +344,206 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	return dv;
 }
 
-/* Read from disk the inode to which @param num refers. */
-static inode* _inode_load(filesystem* fs, inode_t num) {
-	inode* ino = NULL;
-	block_t first_block_num;
+/* Create a new directory in the directory tree.
+ * Sets up pointers (dentv) and indices (dent) for 
+ * linked-list traversal. Writes new dent and
+ * changed existing dents to disk. Calls _sync();
+ */
+static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
+	dentv* dv = NULL;
+	inode* tail = NULL;
+	int makingRoot = 0;
 
-	if (NULL == fs) return NULL;
-	if (MAXBLOCKS <= num) return NULL;	/* Sanity check */
+	/* We're making the root */
+	if (NULL == parent && !strcmp(name, "/")) 
+		makingRoot = 1;
 
-	first_block_num = fs->sb.inode_first_blocks[num];
+	/* Allocate a new inode number */
+	dv = _newdv(fs, true, name);
+	if (NULL == dv) return NULL;
 
-	if (0 == first_block_num)
-		return NULL;			/* An inode of 0 does not exist on disk */
-
-	ino = (inode*)malloc(sizeof(inode));
+	/* Allocate n blocks, tell us which we got */
 	if (FS_ERR == 
-		_fs.readblocks(	ino, &first_block_num, 
-					fs->sb.inode_block_counts[num], 
-					sizeof(inode))	) {
-		/* If the disk read failed */
-		if (NULL != ino)
-			free(ino);
+		_balloc(	fs, dv->ino->nblocks, 
+				dv->ino->blocks) ) 
+	{
+		free(dv);
 		return NULL;
 	}
+		
+	fs->sb.inode_first_blocks[dv->ino->num] = dv->ino->blocks[0];
+	fs->sb.inode_block_counts[dv->ino->num] = dv->ino->nblocks;
 
-	ino->v_attached = 0;
-	return ino;
+	if (!makingRoot) {
+
+		/* If we need to load the tail (the last dir added to @param parent)*/
+		tail = parent->tail;	/* Try in memory */
+		if (NULL == tail || NULL == tail->datav.dir || !tail->v_attached) {
+			parent->ino->datav.dir->tail = 
+				_inode_load(fs, parent->ino->data.dir.tail); /* Try from disk */
+			tail = parent->ino->datav.dir->tail;
+
+			if (NULL != tail)
+				tail->v_attached = 1;
+
+		}
+
+		/* Setup linked list pointers */
+		if (NULL == parent->head) { /* If it's the first entry here  */
+
+			parent->ino->data.dir.head = dv->ino->data.dir.ino;
+			dv->ino->data.dir.prev = dv->ino->data.dir.ino;
+			dv->ino->data.dir.next = dv->ino->data.dir.ino;
+			parent->ino->data.dir.tail = parent->ino->data.dir.head;
+
+		} else {
+
+			dv->ino->data.dir.prev = parent->ino->data.dir.tail;
+			dv->ino->data.dir.next = parent->ino->data.dir.head;
+
+			tail->data.dir.next = dv->ino->data.dir.ino;
+			parent->ino->data.dir.tail = dv->ino->data.dir.ino;
+
+			/* Update changes to tail */
+			_fs.writeblocks(tail, tail->blocks, tail->nblocks, sizeof(inode));
+		}
+
+		parent->ndirs++;
+		parent->ino->data.dir.ndirs++;
+
+		dv->parent = parent->ino;
+		dv->ino->data.dir.parent = parent->ino->num;
+
+		/* Do the same setup for the in-memory version */
+		if (NULL == parent->head) {
+			parent->head = dv->ino;
+			dv->prev = dv->ino;
+			dv->next = dv->ino;
+			parent->tail = parent->head;
+		} else {
+			dv->prev = parent->tail;
+			dv->next = parent->head;
+			dv->prev->datav.dir->next = dv->ino;
+			//parent->tail->datav.dir->next = dv->ino;	/* Updating the tail in-memory requires no disk write */
+			parent->tail = dv->ino;
+		}
+
+		/* Update change to parent */
+		_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->nblocks, sizeof(inode));
+
+	} else {
+		/* Making root */
+	}
+
+	/* Write changes to disk */
+	_fs.writeblocks(dv->ino, dv->ino->blocks, dv->ino->nblocks, sizeof(inode));
+	if (FS_ERR == _sync(fs))
+		return NULL;
+
+	return dv;
 }
 
-static int _get_fd(filesystem* fs) {
-	return ++fs->first_free_fd;
+static file* _newf(filesystem* fs, const char* name) {
+	file* f = NULL;
+	f = (file*)malloc(sizeof(file));
+
+	f->ino = _ialloc(fs);
+	f->f_pos = 0;
+
+	// Copy name
+	strncpy(f->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
+	f->name[FS_NAMEMAXLEN-1] = '\0';
+
+	return f;
 }
 
-static int _free_fd(filesystem* fs) {
+static filev* _newfv(filesystem* fs, const char* name) {
+	file*	f	= NULL;
+	filev*	fv	= NULL;
 
+	fv = (filev*)malloc(sizeof(filev));
+	fv->ino = (inode*)malloc(sizeof(inode));
+
+	memset(	fv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
+	memset(	fv->ino->dblocks, 0, sizeof(block_t)*NBLOCKS);
+
+	fv->ino->nlinks	= 0;
+	fv->ino->nblocks= 8;   /* Just allocate direct blocks for now */
+	fv->ino->inode_blocks = sizeof(inode)/stride+1;
+	fv->ino->mode = FS_FILE;
+	fv->ino->size	= BLKSIZE;
+	fv->ino->v_attached = 1;
+	fv->ino->datav.file = fv;
+
+	strncpy(fv->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
+	fv->name[FS_NAMEMAXLEN-1] = '\0';
+	fv->seek_pos = 0;
+
+	f = _newf(fs, name);
+	memcpy(&fv->ino->data.file, f, sizeof(fv->ino->data.file));
+	fv->ino->num = f->ino;
+	free(f);
+	
+	return fv;
+}
+
+static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
+	filev* fv = NULL;
+
+	
+	/* Allocate a new inode number */
+	fv = _newfv(fs, name);
+	if (NULL == fv) return NULL;
+
+	/* Allocate n blocks, tell us which we got */
+	if (FS_ERR == _balloc(fs, fv->ino->nblocks, fv->ino->blocks) ) {
+		free(fv);
+		return NULL;
+	}
+		
+	fs->sb.inode_first_blocks[fv->ino->num] = fv->ino->blocks[0];
+	fs->sb.inode_block_counts[fv->ino->num] = fv->ino->nblocks;
+
+	parent->files[parent->nfiles] = fv->ino;
+	parent->ino->data.dir.files[parent->ino->data.dir.nfiles] = fv->ino->num;
+
+	parent->nfiles++;
+	parent->ino->data.dir.nfiles++;
+
+	_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->nblocks, sizeof(inode));
+	_fs.writeblocks(fv->ino, fv->ino->blocks, fv->ino->inode_blocks, sizeof(inode));
+
+	if (FS_ERR == _sync(fs))
+		return NULL;
+
+	return fv;
+}
+
+/* Get an unallocated file descriptor */
+static fd_t _get_fd(filesystem* fs) {
+	uint i;
+
+	for (i = fs->first_free_fd; i < FS_MAXOPENFILES; i++)
+	{
+		if (false == fs->allocated_fds[i]) {
+			fs->allocated_fds[i] = true;
+			fs->first_free_fd = i;
+			return i;
+		}
+	}
+	return FS_ERR;
+
+}
+
+/* Free an allocated file descriptor */
+static fd_t _free_fd(filesystem* fs, int fd) {
+	if (false == fs->allocated_fds[fd])	/* fd was already free */
+		return FS_ERR;
+
+	fs->allocated_fds[fd] = false;
+	fs->first_free_fd = fd;
+
+	return FS_OK;
 }
 
 /* Convert an inode to an in-memory directory */
@@ -470,105 +664,6 @@ static int _unload_dir(filesystem* fs, inode* ino) {
 	if (FS_ERR == status1 || FS_ERR == status2)
 		return FS_ERR;
 	return FS_OK;
-}
-
-/* Create a new directory in the directory tree.
- * Sets up pointers (dentv) and indices (dent) for 
- * linked-list traversal. Writes new dent and
- * changed existing dents to disk. Calls _sync();
- */
-static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
-	dentv* dv = NULL;
-	inode* tail = NULL;
-	int makingRoot = 0;
-
-	/* We're making the root */
-	if (NULL == parent && !strcmp(name, "/")) 
-		makingRoot = 1;
-
-	/* Allocate a new inode number */
-	dv = _newdv(fs, true, name);
-	if (NULL == dv) return NULL;
-
-	/* Allocate n blocks, tell us which we got */
-	if (FS_ERR == 
-		_balloc(	fs, dv->ino->nblocks, 
-				dv->ino->blocks) ) 
-	{
-		free(dv);
-		return NULL;
-	}
-		
-	fs->sb.inode_first_blocks[dv->ino->num] = dv->ino->blocks[0];
-	fs->sb.inode_block_counts[dv->ino->num] = dv->ino->nblocks;
-
-	if (!makingRoot) {
-
-		/* If we need to load the tail (the last dir added to @param parent)*/
-		tail = parent->tail;	/* Try in memory */
-		if (NULL == tail || NULL == tail->datav.dir || !tail->v_attached) {
-			parent->ino->datav.dir->tail = 
-				_inode_load(fs, parent->ino->data.dir.tail); /* Try from disk */
-			tail = parent->ino->datav.dir->tail;
-
-			if (NULL != tail)
-				tail->v_attached = 1;
-
-		}
-
-		/* Setup linked list pointers */
-		if (NULL == parent->head) { /* If it's the first entry here  */
-
-			parent->ino->data.dir.head = dv->ino->data.dir.ino;
-			dv->ino->data.dir.prev = dv->ino->data.dir.ino;
-			dv->ino->data.dir.next = dv->ino->data.dir.ino;
-			parent->ino->data.dir.tail = parent->ino->data.dir.head;
-
-		} else {
-
-			dv->ino->data.dir.prev = parent->ino->data.dir.tail;
-			dv->ino->data.dir.next = parent->ino->data.dir.head;
-
-			tail->data.dir.next = dv->ino->data.dir.ino;
-			parent->ino->data.dir.tail = dv->ino->data.dir.ino;
-
-			/* Update changes to tail */
-			_fs.writeblocks(tail, tail->blocks, tail->nblocks, sizeof(inode));
-		}
-
-		parent->ndirs++;
-		parent->ino->data.dir.ndirs++;
-
-		dv->parent = parent->ino;
-		dv->ino->data.dir.parent = parent->ino->num;
-
-		/* Do the same setup for the in-memory version */
-		if (NULL == parent->head) {
-			parent->head = dv->ino;
-			dv->prev = dv->ino;
-			dv->next = dv->ino;
-			parent->tail = parent->head;
-		} else {
-			dv->prev = parent->tail;
-			dv->next = parent->head;
-			dv->prev->datav.dir->next = dv->ino;
-			//parent->tail->datav.dir->next = dv->ino;	/* Updating the tail in-memory requires no disk write */
-			parent->tail = dv->ino;
-		}
-
-		/* Update change to parent */
-		_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->nblocks, sizeof(inode));
-
-	} else {
-		/* Making root */
-	}
-
-	/* Write changes to disk */
-	_fs.writeblocks(dv->ino, dv->ino->blocks, dv->ino->nblocks, sizeof(inode));
-	if (FS_ERR == _sync(fs))
-		return NULL;
-
-	return dv;
 }
 
 /* Load a dentv from disk and put it in an inode*/
@@ -750,7 +845,7 @@ static char* _pathGetLast(fs_path* p) {
 }
 
 /* Append a path element to a path structure*/
-static int _path_append(fs_path* p, const char* appendage) {
+static int _pathAppend(fs_path* p, const char* appendage) {
 	size_t len;
 	char* cpy;
 
@@ -795,7 +890,7 @@ static char* _getAbsolutePath(char* current_dir, char* path) {
 		return NULL;
 	}
 
-	_path_append(p, path);
+	_pathAppend(p, path);
 	abs_path = _stringFromPath(p);
 
 	free(p);
@@ -812,7 +907,7 @@ static char* _getAbsolutePathDV(dentv* dv, fs_path *p) {
 	if (!dv->parent->v_attached) return NULL;
 
 	_getAbsolutePathDV(dv->parent->datav.dir, p);
-	_path_append(p, dv->name);
+	_pathAppend(p, dv->name);
 
 	return _stringFromPath(p);
 }
@@ -938,7 +1033,6 @@ static filesystem* _init(int newfs) {
 	if (NULL == fp) return NULL;
 
 	fs = (filesystem*)malloc(sizeof(filesystem));
-	fs->filedescriptors = (filev*)malloc(FS_MAXOPENFILES*sizeof(filev));
 	fs->first_free_fd = 0;
 
 	/* Zero-out fields */
@@ -947,6 +1041,7 @@ static filesystem* _init(int newfs) {
 	memset(&fs->sb_i.blocks, 0, SUPERBLOCK_MAXBLOCKS*sizeof(block_t));
 	memset(&fs->sb.inode_first_blocks, 0, MAXBLOCKS*sizeof(block_t));
 	memset(&fs->sb.inode_block_counts, 0, MAXBLOCKS*sizeof(uint));
+	memset(&fs->allocated_fds, 0, FS_MAXOPENFILES*sizeof(fd_t));
 
 	fs->sb.root = 0;
 	fs->sb.free_blocks_base = 4;					/* Start allocating from 5th block */
@@ -1072,6 +1167,26 @@ static int writeblocks(void* source, block_t* blocks, uint numblocks, size_t typ
 	return FS_OK;
 }
 
+/* Write the blocks of an inode to disk */
+static int commit_write(inode* ino) {
+	uint i = 0, start = 0, remainder = 0;
+
+	/* Write the inoe itself. */
+	writeblocks( ino, ino->blocks, ino->nblocks, sizeof(inode)); 
+
+	/* The first few blocks were for the inode metadata itself. 
+	 * The Remaining are for actual data */
+	start = sizeof(inode)/BLKSIZE + 1;
+	remainder = ino->nblocks - start;
+
+	/* Write the data the inode points to. TODO: write iblocks */
+	/* Direct blocks */
+	for (i = start; i < ino->nblocks; i++) {
+		writeblock(i, BLKSIZE, ino->dblocks[i]);
+	}
+	return FS_OK;
+}
+
 /* Open a filesystem stored on disk */
 static filesystem* _open() {
 	filesystem* fs = NULL;
@@ -1181,13 +1296,21 @@ static void _debug_print() {
 fs_private_interface const _fs = 
 { 
 	_pathFree, _newPath, _tokenize, _pathFromString, _stringFromPath,		/* Path management */
-	_pathSkipLast, _pathGetLast, _path_append, _pathTrimSlashes, 
+	_pathSkipLast, _pathGetLast, _pathAppend, _pathTrimSlashes, 
 	_getAbsolutePathDV, _getAbsolutePath,
 	_strSkipFirst, _strSkipLast,
 
-	_newd, _newdv, _ino_to_dv, _mkroot, 
+	_newd, _newdv,
+	
+	_newf, _newfv, 
+
+	_ino_to_dv, _mkroot, 
 	_load_dir, _unload_dir,	
-	_new_dir, _v_attach, _v_detach,							/* Directory management */
+	_new_dir, _new_file,
+	
+	_v_attach, _v_detach,								/* Directory management */
+
+	_get_fd, _free_fd,								/* File descriptors */
 
 	_prealloc, _zero,								/* Native filsystem file allocation */
 
@@ -1202,10 +1325,11 @@ fs_private_interface const _fs =
 	readblock, writeblock,
 	readblocks, writeblocks,
 
+	commit_write, 
+
 	_recurse, _sync, 
 
 	_safeopen, _safeclose,
 
 	_print_mem, _debug_print
 };
-

@@ -30,9 +30,6 @@
 
 #define FS_MAXOPENFILES 16
 
-#define FS_READ 0
-#define FS_WRITE 1
-
 #define FS_ERR -1
 #define FS_NORMAL 0
 #define FS_OK 1
@@ -43,8 +40,9 @@
 /* The types that we want to write to or read from disk */
 enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
 enum { DIRECT, INDIRECT1, INDIRECT2, INDIRECT3 } INDIRECTION;
-enum { OK, FS_ERROR, DIREXISTS, BADPATH, NOTONDISK, TOOFEWARGS } FS_MESSAGE;
+enum { OK, ERR, DIREXISTS, BADPATH, NOTONDISK, TOOFEWARGS } FS_MESSAGE;
 enum { FS_FILE, FS_DIR, FS_LINK } FILETYPE;
+enum { FS_READ, FS_WRITE, FS_RW } FILEMODES;
 
 extern char* fname;				/* The name our filesystem will have on disk */
 extern char* fs_responses[6];
@@ -53,6 +51,7 @@ typedef unsigned int uint;
 typedef uint16_t block_t;			// Block number
 typedef uint16_t inode_t;			// Inode number
 typedef uint8_t fs_mode_t;			// File mode (0 =='r', 1 =='w')
+typedef unsigned int fd_t;			/* File descriptor */
 
 typedef struct map {
 	char data[BLKSIZE];
@@ -107,7 +106,7 @@ typedef struct dent {				// On-disk directory entry
 struct inode;					/* Forward declaration because of mutual 
 						 * dependence inode <-> { file, dent, link } */
 typedef struct filev {
-	struct inode* f_inode;			// pointer to the file's inode
+	struct inode* ino;			// pointer to the file's inode
 	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
 	uint seek_pos;				// Byte offset seek'ed to
 	char name[FS_NAMEMAXLEN];		// Filename
@@ -127,8 +126,8 @@ typedef struct dentv {				// In-memory directory entry
 	struct inode* next;			// Next dir in parent
 	struct inode* prev;			// Previous dir in parent
 
-	struct inode* files;			// Files in this dir
-	struct inode* links;			// Links in this dir
+	struct inode** files;			// Files in this dir
+	struct inode** links;			// Links in this dir
 
 	uint ndirs, nfiles, nlinks;
 
@@ -195,8 +194,9 @@ typedef struct superblock_i {
 
 typedef struct filesystem {	
 	dentv* root;				/* Root directory entry */
-	filev* filedescriptors;			/* Pointers to open files */
-	uint first_free_fd;			/* Index into the first free file descriptor */
+	filev* fds[FS_MAXOPENFILES];		/* File descriptors. Pointers to open files */
+	fd_t first_free_fd;			/* Index into the first free file descriptor */
+	fd_t allocated_fds[FS_MAXOPENFILES];	/* Table of free file descriptors */
 
 	map fb_map;				/* Block 0. Free block map. 
 						 * Since filesystem size == 100MB == 25600 4096-byte blocks,
@@ -223,7 +223,7 @@ typedef struct {
 	char*			(* _stringFromPath)	(fs_path* p);
 	char*			(* _pathSkipLast)	(fs_path* p);
 	char*			(* _pathGetLast)	(fs_path* p);
-	int			(* _path_append)	(fs_path*, const char*);
+	int			(* _pathAppend)	(fs_path*, const char*);
 	char*			(* _pathTrimSlashes)	(char* path);
 	char*			(* _getAbsolutePathDV)	(dentv* dv, fs_path *p);
 	char*			(* _getAbsolutePath)	(char* current_dir, char* next_dir);
@@ -232,14 +232,25 @@ typedef struct {
 
 	dent*			(* _newd)		(filesystem*, const int, const char*);
 	dentv*			(* _newdv)		(filesystem* , const int, const char*);
+	
+	file*			(* _newf)		(filesystem*, const char*);
+	filev*			(* _newfv)		(filesystem*, const char*);
+
 	dentv*			(* _ino_to_dv)		(filesystem* , inode*);
 	dentv*			(* _mkroot)		(filesystem *, int);
+	
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
 	int			(* _unload_dir)		(filesystem* , inode*);
+	
 	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
+	filev*			(* _new_file)		(filesystem *, dentv*, const char*);
+	
 	int			(* _v_attach)		(filesystem* , inode*); 
 	int			(* _v_detach)	(filesystem* , inode*); 
 	
+	fd_t			(* _get_fd)		(filesystem*);
+	fd_t			(* _free_fd)		(filesystem*, int);
+
 	int			(* _prealloc)		();
 	int			(* _zero)		();
 	filesystem*		(* _open)		();
@@ -267,7 +278,7 @@ typedef struct {
 
 	int			(* readblocks)		(void*, block_t*, uint, size_t);
 	int			(* writeblocks)		(void*, block_t*, uint, size_t);
-
+	int			(* commit_write)	(inode*);
 	inode*			(* _recurse)		(filesystem* , dentv*, uint, uint, char*[]);
 	int			(* _sync)		(filesystem* );
 
