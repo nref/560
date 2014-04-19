@@ -88,31 +88,30 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 }
 
 void sh_tree(char* name) {
-	dentv* root = NULL;
-	inode* ino = NULL;
+	dentv* dv = NULL;
 
-	root = fs.opendir("/");
+	dv = fs.opendir(name);
 
-	if (NULL == root) {
+	if (NULL == dv) {
 		printf("NULL root directory!\n");
 		return;
 	}
 
-	if (NULL == root->ino) {
+	if (NULL == dv->ino) {
 		printf("NULL filesystem inode!\n");
 		return;
 	}
 	
-	if ('\0' == root->name[0] || strlen(root->name) == 0) {
+	if ('\0' == dv->name[0] || strlen(dv->name) == 0) {
 
 		printf("Filesystem root name not \"/\"!\n");
 		return;
 	}
 
-	printf("%s\n", root->name);
-	fs.closedir(root);
+	printf("%s\n", dv->name);
+	fs.closedir(dv);
 
-	sh_tree_recurse(1, FS_MAXPATHFIELDS, root);
+	sh_tree_recurse(1, FS_MAXPATHFIELDS, dv);
 }
 
 void sh_stat(char* name) {
