@@ -28,6 +28,11 @@
 #define FS_MAXFILES 256				// Max number of files in a dir
 #define FS_MAXLINKS 256				// Max number of links in a dir
 
+#define FS_MAXOPENFILES 16
+
+#define FS_READ 0
+#define FS_WRITE 1
+
 #define FS_ERR -1
 #define FS_NORMAL 0
 #define FS_OK 1
@@ -190,6 +195,8 @@ typedef struct superblock_i {
 
 typedef struct filesystem {	
 	dentv* root;				/* Root directory entry */
+	filev* filedescriptors;			/* Pointers to open files */
+	uint first_free_fd;			/* Index into the first free file descriptor */
 
 	map fb_map;				/* Block 0. Free block map. 
 						 * Since filesystem size == 100MB == 25600 4096-byte blocks,

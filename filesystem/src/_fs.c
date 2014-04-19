@@ -344,6 +344,14 @@ static inode* _inode_load(filesystem* fs, inode_t num) {
 	return ino;
 }
 
+static int _get_fd(filesystem* fs) {
+	return ++fs->first_free_fd;
+}
+
+static int _free_fd(filesystem* fs) {
+
+}
+
 /* Convert an inode to an in-memory directory */
 static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 	dentv *dv;
@@ -661,7 +669,6 @@ static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_
 	return NULL;					// If nothing found, return a special error inode
 }
 
-
 /* Return the given string less the first character */
 static char* _strSkipFirst(char* cpy) {
 	return &cpy[1];
@@ -931,6 +938,8 @@ static filesystem* _init(int newfs) {
 	if (NULL == fp) return NULL;
 
 	fs = (filesystem*)malloc(sizeof(filesystem));
+	fs->filedescriptors = (filev*)malloc(FS_MAXOPENFILES*sizeof(filev));
+	fs->first_free_fd = 0;
 
 	/* Zero-out fields */
 	memset(&fs->fb_map, 0, sizeof(map));

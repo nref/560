@@ -1,4 +1,4 @@
-mkfs
+treemkfs
 mkdir b
 mkdir c
 mkdir b/c/

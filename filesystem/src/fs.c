@@ -20,6 +20,7 @@ static void destruct() {
 
 			free(shfs->root);
 		}
+		free(shfs->filedescriptors);
 		free(shfs);
 	}
 }
@@ -134,9 +135,40 @@ static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
 static filev* open(char* path, char* mode) { 
+	int mode_i = FS_READ;
+	inode* ino = NULL;
+	fs_path* p = NULL;
 
-	printf("open: %s %s\n", path, mode);
-	return 0; 
+	p = pathFromString(path);
+	ino = stat(path);
+	free(p);
+
+	if (!strcmp("r", mode))		mode_i = FS_READ;
+	else if (!strcmp("w", mode))	mode_i = FS_WRITE;
+	else { 
+		printf("open: Bad mode \"%s\"\n",mode); 
+		return NULL; 
+	}
+
+	if (NULL == ino) {
+		if (FS_READ == mode_i) {
+			printf("open: File does not exist \"%s\"\n", path);
+			return NULL;
+		}
+		if (FS_WRITE == mode_i) {
+			// Create file
+			return NULL;
+		}
+	}
+	
+	if (FS_FILE != ino->mode) {
+		printf("open: Found \"%s\", but it's a directory.\n", path);
+		return NULL;
+	}
+
+	/* TODO: Return a file descriptor which indexes into the filev */
+	ino->datav.file->mode = mode_i;
+	return ino->datav.file; 
 }
 
 static void close (filev* fv) { 

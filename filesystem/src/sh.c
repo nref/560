@@ -93,12 +93,12 @@ void sh_tree(char* name) {
 	dv = fs.opendir(name);
 
 	if (NULL == dv) {
-		printf("NULL root directory!\n");
+		printf("tree: Null directory!\n");
 		return;
 	}
 
 	if (NULL == dv->ino) {
-		printf("NULL filesystem inode!\n");
+		printf("tree: Null inode!\n");
 		return;
 	}
 	
@@ -109,9 +109,9 @@ void sh_tree(char* name) {
 	}
 
 	printf("%s\n", dv->name);
-	fs.closedir(dv);
 
 	sh_tree_recurse(1, FS_MAXPATHFIELDS, dv);
+	//fs.closedir(dv);
 }
 
 void sh_stat(char* name) {
@@ -161,7 +161,6 @@ int sh_cd(char* path) {
 		return FS_ERR;
 	}
 
-	sh_update_current_path();
 	abs_path = fs.getAbsolutePath(current_path, path);
 
 	if (NULL == abs_path) return FS_ERR;
@@ -170,6 +169,7 @@ int sh_cd(char* path) {
 	if (NULL == dv) return FS_ERR;
 
 	cur_dv = dv;
+	sh_update_current_path();
 	return FS_OK;
 }
 
@@ -234,7 +234,7 @@ int main() {
 			// If the user provided more than one field
 			if (cmd->nfields > 1)
 				retv = sh_ls(cmd->fields[1]);
-			else retv = sh_ls(cur_dv->name);
+			else retv = sh_ls(current_path);
 		}
 
 		else if (!strcmp(cmd->fields[0], "cd")) {
@@ -249,7 +249,7 @@ int main() {
 		}
 
 		else if (!strcmp(cmd->fields[0], "tree")) { 
-			sh_tree("/"); 
+			sh_tree(current_path); 
 			retv = FS_NORMAL;
 		}
 
