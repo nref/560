@@ -443,11 +443,13 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 	return dv;
 }
 
-static file* _newf(filesystem* fs, const char* name) {
+static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	file* f = NULL;
 	f = (file*)malloc(sizeof(file));
 
-	f->ino = _ialloc(fs);
+	if (alloc_inode)
+		f->ino = _ialloc(fs);
+	else f->ino = 0;
 	f->f_pos = 0;
 
 	// Copy name
@@ -457,7 +459,7 @@ static file* _newf(filesystem* fs, const char* name) {
 	return f;
 }
 
-static filev* _newfv(filesystem* fs, const char* name) {
+static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
 	file*	f	= NULL;
 	filev*	fv	= NULL;
 
@@ -479,7 +481,7 @@ static filev* _newfv(filesystem* fs, const char* name) {
 	fv->name[FS_NAMEMAXLEN-1] = '\0';
 	fv->seek_pos = 0;
 
-	f = _newf(fs, name);
+	f = _newf(fs, alloc_inode, name);
 	memcpy(&fv->ino->data.file, f, sizeof(fv->ino->data.file));
 	fv->ino->num = f->ino;
 	free(f);
@@ -492,7 +494,7 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 
 	
 	/* Allocate a new inode number */
-	fv = _newfv(fs, name);
+	fv = _newfv(fs, true, name);
 	if (NULL == fv) return NULL;
 
 	/* Allocate n blocks, tell us which we got */
@@ -595,10 +597,44 @@ static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 	return dv;
 }
 
+static filev* _ino_to_fv(filesystem* fs, inode* ino) {
+	filev* fv = NULL;
+	if (NULL == ino) return NULL;
+
+	fv = _newfv(fs, false, ino->data.file.name);
+	if (NULL == fv) return NULL;
+
+	fv->ino			= ino;
+	fv->ino->datav.file	= fv;
+	fv->ino->v_attached	= 1;
+	return NULL;
+}
+
+static inode* _load_file(filesystem* fs, inode_t num) {
+	inode* ino = _inode_load(fs, num);
+	ino->datav.file = _ino_to_fv(fs, ino);
+	return ino;
+}
+
+static int _unload_file(filesystem* fs, inode* ino) {
+	int status1, status2;
+	
+	status1 = _fs._sync(fs);
+	status2 = _fs.writeblocks(ino, ino->blocks, ino->nblocks, sizeof(inode));
+
+	free(ino->datav.file);
+	ino->datav.file = NULL;
+
+	if (FS_ERR == status1 || FS_ERR == status2)
+		return FS_ERR;
+	return FS_OK;
+}
+
 /* Given an inode number, load the corresponding dent
  * Return a dentv whose field data.dir contains it. */
 static dentv* _load_dir(filesystem* fs, inode_t num) {
 	dentv *dv;
+	uint i;
 
 	inode* ino = _inode_load(fs, num);
 	if (NULL == ino) return NULL;
@@ -648,6 +684,11 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 		return NULL;
 	}
 
+	for (i = 0; i < dv->nfiles; i++)
+		dv->files[i] = _load_file(fs, dv->ino->data.dir.files[i]);
+
+	//for (i = 0; i < dv->nlinks; i++)	// TODO
+	//	dv->files[i] = _load_link(fs, dv->ino->data.dir.links[i]);
 	return dv;
 }
 
@@ -1304,8 +1345,11 @@ fs_private_interface const _fs =
 	
 	_newf, _newfv, 
 
-	_ino_to_dv, _mkroot, 
+	_ino_to_dv, _ino_to_fv, _mkroot, 
+	
+	_load_file, _unload_file,
 	_load_dir, _unload_dir,	
+
 	_new_dir, _new_file,
 	
 	_v_attach, _v_detach,								/* Directory management */

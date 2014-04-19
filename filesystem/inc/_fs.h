@@ -233,12 +233,16 @@ typedef struct {
 	dent*			(* _newd)		(filesystem*, const int, const char*);
 	dentv*			(* _newdv)		(filesystem* , const int, const char*);
 	
-	file*			(* _newf)		(filesystem*, const char*);
-	filev*			(* _newfv)		(filesystem*, const char*);
+	file*			(* _newf)		(filesystem*, const int, const char*);
+	filev*			(* _newfv)		(filesystem*, const int, const char*);
 
 	dentv*			(* _ino_to_dv)		(filesystem* , inode*);
+	filev*			(* _ino_to_fv)		(filesystem* , inode*);
 	dentv*			(* _mkroot)		(filesystem *, int);
 	
+	inode*			(* _load_file)		(filesystem*, inode_t);
+	int			(* _unload_file)	(filesystem*, inode*);
+
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
 	int			(* _unload_dir)		(filesystem* , inode*);
 	
