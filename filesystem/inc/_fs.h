@@ -276,9 +276,13 @@ typedef struct {
 	inode_t			(* _ialloc)		(filesystem *);
 	int			(* _ifree)		(filesystem* , inode_t);
 
-	int			(* _fill_block_indices)	(inode*, block_t*, uint);
-	int			(* _fill_inode_blocks)	(inode*, uint, char*);
+	int			(* _fill_block_indices)	(inode*, block_t*, size_t);
+	
+	int			(* _fill_inode_blocks)	(inode*, size_t, char*);
 	size_t			(* _fill_direct_blocks)	(block**, size_t, size_t, char*);
+
+	char*			(* _read_direct_blocks)	(block**, size_t, size_t);
+	char*			(* _read_inode_blocks)	(inode*, size_t, size_t);
 
 	inode*			(* _inode_load)		(filesystem* , inode_t);
 

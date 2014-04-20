@@ -141,7 +141,7 @@ static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
 static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
-static int open(char* parent_dir, char* name, char* mode) { 
+static fd_t open(char* parent_dir, char* name, char* mode) { 
 	int mode_i = -1;
 	int fd = -1;
 	inode* p_ino = NULL;	/* Path inode */
@@ -252,37 +252,34 @@ static void closedir (dentv* dv) {
 	}
 }
 
-static void	rmdir		(int fd) { printf("fs_rmdir: %d\n", fd); }
+static void rmdir(fd_t fd) { printf("fs_rmdir: %d\n", fd); }
 
-/* Read read the contents of the file
- * to stdout
+/* Read text from a file
  * @ param fd file descriptor
  * @ param size number of bytes to read from file */
-static char* read (int fd, int size) {
-    //printf("fs_read: %d %d\n", fd, size);
-    filev* fv = NULL;
-    //char* tmpbuf;
-    
-    //Check if the fd has been loaded into the shellfs
-    if (false == shfs->allocated_fds[fd]) return NULL; /* fd not allocated, file not open */
-    
-    //Load the file
-    fv = shfs->fds[fd];
-    
-    //Check the permissions
-    if (fv->mode != FS_READ || fv->mode != FS_RW) {
-	printf("File \"%s\" is not opened for reading",fv->name);
-	return NULL;
-    }
-    
-    //Check the size.
-    //If size > file.size() then size = file.size()
-    //If sisze == 0 return nothing
+static char* read(fd_t fd, size_t size) {
+	//printf("fs_read: %d %d\n", fd, size);
+	filev* fv = NULL;
+	char* buf;
+	
+	// Check if the fd has been loaded into the shellfs
+	if (false == shfs->allocated_fds[fd]) return NULL; /* fd not allocated, file not open */
+	
+	// Load the file
+	fv = shfs->fds[fd];
+	
+	// Check file mode
+	if (fv->mode != FS_READ || fv->mode != FS_RW) {
+		printf("File \"%s\" is not opened for reading",fv->name);
+		return NULL;
+	}
+	
+	/* No need to check file size.
+	 * _read_inode_blocks will read as many are are allocated */
+	buf = _fs._read_inode_blocks(fv->ino, fv->seek_pos, size);
+	fv->seek_pos += strlen(buf);
 
-    //fs.readblocks(fv->ino,fv->seek_pos)
-    //All clear. Read @size bytes from file
-    //data blocks are not guaranteed to be contiguous
-    return NULL;
+	return buf;
 }
 
 
@@ -310,7 +307,7 @@ static size_t write (fd_t fd, char* str) {
 	return slen;
 }
 
-static void	seek		(int fd, int offset) { printf("fs_seek: %d %d\n", fd, offset); }
+static void	seek		(fd_t fd, size_t offset) { printf("fs_seek: %d %zu\n", fd, offset); }
 static void	link		(inode_t from, inode_t to) { printf("fs_link: %d %d\n", from, to); }
 static void	ulink		(inode_t ino) { printf("fs_unlink: %d\n", ino); }
 

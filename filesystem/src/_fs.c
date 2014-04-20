@@ -1123,7 +1123,7 @@ static filesystem* _init(int newfs) {
 }
 
 /* Fill in indices to the blocks of an inode. Return the count of allocated blocks */
-static int _fill_block_indices(inode* ino, block_t* block_indices, uint count) {
+static int _fill_block_indices(inode* ino, block_t* block_indices, size_t count) {
 
 	if (MAXFILEBLOCKS < count)
 		return FS_ERR;
@@ -1158,7 +1158,7 @@ static size_t _fill_direct_blocks(block** blocks, size_t offset, size_t count, c
  * doubly-indirected block pointers, and triply-indirected block 
  * pointers as needed.
  */
-static int _fill_inode_blocks(inode* ino, uint seek_pos, char* data) {
+static int _fill_inode_blocks(inode* ino, size_t seek_pos, char* data) {
 	size_t write_cnt = 0, write_size = 0; 
 	uint indirectionLevel = 0, i, j;
 	size_t slen;
@@ -1232,6 +1232,34 @@ static int _fill_inode_blocks(inode* ino, uint seek_pos, char* data) {
 	}
 
 	return FS_OK;
+}
+
+/* Read the string data from a direct blocks */
+static char* _read_direct_blocks(block** blocks, size_t offset, size_t count) {
+	char* buf = NULL;
+
+	buf = (char*)malloc(128);
+	sprintf(buf, "_read_direct_blocks: Not implemented. \
+			(blknum, offset, count) = (%d %lu %lu)\n", blocks[0]->num, offset, count);
+
+	return buf;
+}
+
+/* Read the string data from the direct and indirect blocks of an inode */
+static char* _read_inode_blocks(inode* ino, size_t seek_pos, size_t len) {
+	char* buf = NULL;
+	char* buf2 = NULL;
+	
+	buf2 = (char*)malloc(256);
+
+	buf = _read_direct_blocks(ino->dblocks, 0, 1);
+	sprintf(buf2, "%s", buf);
+	free(buf);
+
+	sprintf(buf2, "_read_inode_blocks: Not implemented. \
+			(seek_pos, len) = (%lu %lu)\n", seek_pos, len);
+
+	return buf;
 }
 
 /* Read a block from disk */
@@ -1483,7 +1511,9 @@ fs_private_interface const _fs =
 
 	/* Inode allocation */
 	_ialloc, _ifree,
-	_fill_block_indices, _fill_inode_blocks, _fill_direct_blocks,
+	_fill_block_indices, 
+	_fill_inode_blocks, _fill_direct_blocks,
+	_read_direct_blocks, _read_inode_blocks,
 	_inode_load,
 
 	/* Reading and writing disk blocks */
