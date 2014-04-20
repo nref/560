@@ -539,17 +539,23 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 /* Get an unallocated file descriptor */
 static fd_t _get_fd(filesystem* fs) {
 	uint i;
-
-	for (i = fs->first_free_fd; i < FS_MAXOPENFILES; i++)
-	{
-		if (false == fs->allocated_fds[i]) {
-			fs->allocated_fds[i] = true;
-			fs->first_free_fd = i;
-			return i;
-		}
+	uint ret= 0;
+	uint found_fd = false;
+    
+	for (i = fs->first_free_fd; i < FS_MAXOPENFILES; i++){
+	    if (false == found_fd && false == fs->allocated_fds[i]) {
+		fs->allocated_fds[i] = true;
+		ret = i;
+		//BUG: Should this be synced to the shfs?
+		//DONE: Isn't this the same value your returning. no allocated files will be set properly
+		found_fd = true;
+	} else if(true == found_fd && false == fs->allocated_fds[i]){
+		fs->first_free_fd = i;
+		return ret;
+	    }
 	}
-	return FS_ERR;
-
+    return FS_ERR;
+    
 }
 
 /* Free an allocated file descriptor */

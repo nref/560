@@ -225,6 +225,7 @@ int main() {
 	sh_getfsroot();
 
 	prompt();							
+	//TODO: Needs to be able to parse "" as a whole field
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {		// Get user input
 
 		if (strlen(buf) == 0 || '\n' == buf[0]) { 
@@ -309,6 +310,11 @@ int main() {
 			if (cmd->nfields > 2) {
 				fs.write(atoi(cmd->fields[1]), cmd->fields[2]);
 			}
+		} else if (!strcmp(cmd->fields[0], "read")) {
+		    
+		    if (cmd->nfields > 2) {
+			fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
+		    }
 
 		} else if (!strcmp(cmd->fields[0], "close")) {
 
@@ -318,6 +324,7 @@ int main() {
 			}
 
 		} else {
+			//TODO: No need to display buf for release
 			printf("Bad command \"%s\"", buf); 
 			retv = FS_NORMAL; 
 		}
@@ -327,6 +334,8 @@ int main() {
 		printf("\n");
 
 		fs.pathFree(cmd);
+		//DONE: zero out the buffer
+		memset(buf,0,SH_BUFLEN);
 		prompt();
 	}
 	printf("exit()\n");

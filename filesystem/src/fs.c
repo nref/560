@@ -163,7 +163,7 @@ static int open(char* parent_dir, char* name, char* mode) {
 		printf("open: Bad mode \"%s\"\n",mode); 
 		return -1; 
 	}
-
+	//BUG: returning directories for files, throwing off read
 	f_path = fs.getAbsolutePath(parent_dir, name);
 	f_ino = stat(f_path);
 
@@ -178,6 +178,7 @@ static int open(char* parent_dir, char* name, char* mode) {
 			newfv = _fs._new_file(shfs, p_ino->datav.dir, name);
 			if (NULL == newfv) return FS_ERR;
 			f_ino = newfv->ino;
+			//TODO open an existing file should amrk it for appending, not create a new file
 		}
 	}
 
@@ -186,7 +187,6 @@ static int open(char* parent_dir, char* name, char* mode) {
 	/* Return a file descriptor which indexes to the filev */
 	fd = _fs._get_fd(shfs);
 	shfs->fds[fd] = f_ino->datav.file;
-
 	return fd;
 }
 
@@ -253,7 +253,38 @@ static void closedir (dentv* dv) {
 }
 
 static void	rmdir		(int fd) { printf("fs_rmdir: %d\n", fd); }
-static char*	read		(int fd, int size) { printf("fs_read: %d %d\n", fd, size); return NULL; }
+
+/* Read read the contents of the file
+ * to stdout
+ * @ param fd file descriptor
+ * @ param size number of bytes to read from file */
+static size_t read (int fd, int size) {
+    //printf("fs_read: %d %d\n", fd, size);
+    filev* fv = NULL;
+    //char* tmpbuf;
+    
+    //Check if the fd has been loaded into the shellfs
+    if (false == shfs->allocated_fds[fd]) return FS_ERR; /* fd not allocated, file not open */
+    
+    //Load the file
+    fv = shfs->fds[fd];
+    
+    //Check the permissions
+    if (fv->mode != FS_READ || fv->mode != FS_RW) {
+	printf("File \"%s\" is not opened for reading",fv->name);
+	return FS_ERR;
+    }
+    
+    //Check the size.
+    //If size > file.size() then size = file.size()
+    //If sisze == 0 return nothing
+
+    //fs.readblocks(fv->ino,fv->seek_pos)
+    //All clear. Read @size bytes from file
+    //data blocks are not guaranteed to be contiguous
+    return FS_OK;
+}
+
 
 /* Write text to a file
  * @param str the string to write
