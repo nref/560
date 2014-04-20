@@ -16,10 +16,12 @@
 #define SUPERBLOCK_MAXBLOCKS 64			// Number of blocks we can allocate to the superblock
 
 // Maximum number of blocks that an inode can address
-#define MAXFILEBLOCKS								\
-	  NBLOCKS + NIBLOCKS	/* Direct blocks + first-level indirect */	\
-	+ NIBLOCKS * NBLOCKS_IBLOCK		/* Second-level indirect */	\
-	+ NIBLOCKS * NIBLOCKS * NBLOCKS_IBLOCK	/* Third-level indirect */
+#define MAXBLOCKS_DIRECT NBLOCKS
+#define MAXBLOCKS_IB1 NBLOCKS_IBLOCK
+#define MAXBLOCKS_IB2 NIBLOCKS * NBLOCKS_IBLOCK
+#define MAXBLOCKS_IB3 NIBLOCKS * NIBLOCKS * NBLOCKS_IBLOCK
+#define MAXFILEBLOCKS MAXBLOCKS_DIRECT + \
+		MAXBLOCKS_IB1 + MAXBLOCKS_IB2 + MAXBLOCKS_IB3
 
 #define FS_NAMEMAXLEN 256			// Max length of a directory or file name
 #define FS_MAXPATHFIELDS 32			// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
@@ -37,6 +39,10 @@
 #define true 1
 #define false 0
 
+#ifndef min
+#define min(a,b)	(((a) < (b)) ? (a) : (b))
+#endif
+
 /* The types that we want to write to or read from disk */
 enum { BLOCK, MAP, SUPERBLOCK_I, SUPERBLOCK, INODE } TYPE;
 enum { DIRECT, INDIRECT1, INDIRECT2, INDIRECT3 } INDIRECTION;
@@ -46,6 +52,7 @@ enum { FS_READ, FS_WRITE, FS_RW } FILEMODES;
 
 extern char* fname;				/* The name our filesystem will have on disk */
 extern char* fs_responses[6];
+extern size_t stride;
 
 typedef unsigned int uint;
 typedef uint16_t block_t;			// Block number
@@ -250,7 +257,7 @@ typedef struct {
 	filev*			(* _new_file)		(filesystem *, dentv*, const char*);
 	
 	int			(* _v_attach)		(filesystem* , inode*); 
-	int			(* _v_detach)	(filesystem* , inode*); 
+	int			(* _v_detach)		(filesystem* , inode*); 
 	
 	fd_t			(* _get_fd)		(filesystem*);
 	fd_t			(* _free_fd)		(filesystem*, int);
@@ -270,10 +277,8 @@ typedef struct {
 	int			(* _ifree)		(filesystem* , inode_t);
 
 	int			(* _fill_block_indices)	(inode*, block_t*, uint);
-	//int			(* _fill_iblocks)	(inode*, uint, block_t*);
-
-	//int			(* _inode_write_dblocks)(block_t* blocks, uint nblocks);
-	//int			(* _inode_write_all_blocks)(inode* ino);
+	int			(* _fill_inode_blocks)	(inode*, uint, char*);
+	int			(* _fill_direct_blocks)	(block**, uint, uint, char*);
 
 	inode*			(* _inode_load)		(filesystem* , inode_t);
 

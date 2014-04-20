@@ -4,17 +4,25 @@
 #include "fs.h"
 
 
-filesystem* shfs = NULL;
+filesystem* shfs = NULL; /* The current filesystem */
 
 /* Free the memory occupied by a filesystem 
  * TODO: Traverse the whole directory tree and free */
 static void destruct() {
+	//uint i;
 	if (shfs) {
 
 		if (shfs->root) {
 			free(shfs->root->ino);
-			free(shfs->root->files);
-			free(shfs->root->links);
+
+			//for (i = 0; i < shfs->root->nfiles; i++)
+			//	free(shfs->root->files[i]);
+			//free(shfs->root->files);
+
+			//for (i = 0; i < shfs->root->nlinks; i++)
+			//	free(shfs->root->links[i]);
+			//free(shfs->root->links);
+
 			if (shfs->root->head)
 				free(shfs->root->head);
 
@@ -247,6 +255,9 @@ static void closedir (dentv* dv) {
 static void	rmdir		(int fd) { printf("fs_rmdir: %d\n", fd); }
 static char*	read		(int fd, int size) { printf("fs_read: %d %d\n", fd, size); return NULL; }
 
+/* Write text to a file
+ * @param str the string to write
+ * @param fd the file descriptor to write to */
 static size_t write (fd_t fd, char* str) { 
 	filev* fv = NULL;
 	size_t slen;
@@ -259,12 +270,12 @@ static size_t write (fd_t fd, char* str) {
 	if (NULL == str || '\0' == str[0])
 		return FS_ERR;
 
-	/* TODO: Also write to iblocks */
 	slen = strlen(str);
-	memcpy(&fv->ino->dblocks[fv->seek_pos], str, slen);
+
+	_fs._fill_inode_blocks(fv->ino, fv->seek_pos, str);
+	_fs.commit_write(fv->ino);
 	fv->seek_pos += slen;
 
-	_fs.commit_write(fv->ino);
 	return slen;
 }
 

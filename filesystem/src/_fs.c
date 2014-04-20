@@ -17,10 +17,6 @@
 #include <windows.h>
 #endif
 
-#ifndef min
-#define min(a,b)	(((a) < (b)) ? (a) : (b))
-#endif
-
 /* Type-agnostic way to print the binary data of a struct */
 /* http://stackoverflow.com/questions/5349896/print-a-struct-in-c */
 #define PRINT_STRUCT(p)  print_mem((p), sizeof(*(p)))
@@ -443,6 +439,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 	return dv;
 }
 
+/* Create an on-disk file*/
 static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	file* f = NULL;
 	f = (file*)malloc(sizeof(file));
@@ -459,19 +456,26 @@ static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	return f;
 }
 
+/* Create an in-memory file */
 static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
+	uint i;
 	file*	f	= NULL;
 	filev*	fv	= NULL;
 
 	fv = (filev*)malloc(sizeof(filev));
 	fv->ino = (inode*)malloc(sizeof(inode));
 
+	for (i = 0; i < NBLOCKS; i++)
+	{
+		fv->ino->dblocks[i] = (block*)malloc(sizeof(block));
+		memset(	fv->ino->dblocks[i], 0, BLKSIZE);
+	}
+
 	memset(	fv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
-	memset(	fv->ino->dblocks, 0, sizeof(block_t)*NBLOCKS);
 
 	fv->ino->nlinks	= 0;
-	fv->ino->nblocks= 8;   /* Just allocate direct blocks for now */
 	fv->ino->inode_blocks = sizeof(inode)/stride+1;
+	fv->ino->nblocks= NBLOCKS + fv->ino->inode_blocks;   /* Just allocate direct blocks for now */
 	fv->ino->mode = FS_FILE;
 	fv->ino->size	= BLKSIZE;
 	fv->ino->v_attached = 1;
@@ -489,10 +493,12 @@ static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
 	return fv;
 }
 
+/* Create a new file of @param name in the given directory @parent */
 static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 	filev* fv = NULL;
+	uint i;
+	uint n_dblocks = 0;
 
-	
 	/* Allocate a new inode number */
 	fv = _newfv(fs, true, name);
 	if (NULL == fv) return NULL;
@@ -503,6 +509,15 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 		return NULL;
 	}
 		
+	n_dblocks = fv->ino->nblocks - fv->ino->inode_blocks;
+	for (i = 0; i < n_dblocks; i++)
+	{
+		fv->ino->dblocks[i]->num = fv->ino->blocks[i + fv->ino->inode_blocks];
+
+		if (i+1 < n_dblocks)
+			fv->ino->dblocks[i]->next = fv->ino->blocks[i+1 + fv->ino->inode_blocks];
+	}
+
 	fs->sb.inode_first_blocks[fv->ino->num] = fv->ino->blocks[0];
 	fs->sb.inode_block_counts[fv->ino->num] = fv->ino->nblocks;
 
@@ -597,6 +612,7 @@ static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 	return dv;
 }
 
+/* Convert an inode to an in-memory file */
 static filev* _ino_to_fv(filesystem* fs, inode* ino) {
 	filev* fv = NULL;
 	if (NULL == ino) return NULL;
@@ -610,12 +626,15 @@ static filev* _ino_to_fv(filesystem* fs, inode* ino) {
 	return NULL;
 }
 
+/* Given an inode number, load the corresponding file structure. 
+ * Wrap it in an inode which contains the in-memory version of the file */
 static inode* _load_file(filesystem* fs, inode_t num) {
 	inode* ino = _inode_load(fs, num);
 	ino->datav.file = _ino_to_fv(fs, ino);
 	return ino;
 }
 
+/* Free the memory allocated to an in-memory file structure */
 static int _unload_file(filesystem* fs, inode* ino) {
 	int status1, status2;
 	
@@ -1104,11 +1123,6 @@ static filesystem* _init(int newfs) {
 
 /* Fill in indices to the blocks of an inode. Return the count of allocated blocks */
 static int _fill_block_indices(inode* ino, block_t* block_indices, uint count) {
-	//uint i;
-	//for (i = 0; i < maxCount; i++) {
-	//	if (i == count) break;
-	//	blocks[i] = blockIndices[i];
-	//}
 
 	if (MAXFILEBLOCKS < count)
 		return FS_ERR;
@@ -1116,6 +1130,105 @@ static int _fill_block_indices(inode* ino, block_t* block_indices, uint count) {
 	memcpy(ino->blocks, block_indices, sizeof(block_t)*count);
 
 	//return i;
+	return FS_OK;
+}
+
+/* Return the count of allocated blocks */
+static int _fill_direct_blocks(block** blocks, uint offset, uint count, char* data) {
+	uint i;
+	uint write_cnt = 0;
+	for (i = 0; i < count; i++) {
+		if (i == count) break;
+
+		if (NULL == blocks[i])
+			return write_cnt;
+
+		memcpy(&blocks[i]->data[offset], data, min(BLKSIZE, strlen(data)));
+		write_cnt += min(BLKSIZE, strlen(data));
+		
+		offset = 0; /* Only applies to first write */
+		if (write_cnt == count) break;
+	}
+	return write_cnt;
+}
+
+/* Fill @param count @param blocks into the block pointers of
+ * @param ino. Spill into Indirect block pointers, 
+ * doubly-indirected block pointers, and triply-indirected block 
+ * pointers as needed.
+ */
+static int _fill_inode_blocks(inode* ino, uint seek_pos, char* data) {
+	uint write_cnt = 0, write_size = 0; 
+	uint indirectionLevel = 0, i, j;
+	size_t slen;
+	block_t blk;	/* Write at block blk + offset bytes*/
+	size_t offset;
+
+	if (NULL == data) return FS_ERR;
+	slen = strlen(data);
+
+	blk = seek_pos / stride;
+	offset = seek_pos % stride;
+	if	(blk < NBLOCKS) {
+		indirectionLevel = DIRECT;
+		write_size = min(strlen(data), MAXBLOCKS_DIRECT*BLKSIZE);
+	}
+	else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1) {
+		indirectionLevel = INDIRECT1;
+		write_size = min(strlen(data), MAXBLOCKS_IB1*BLKSIZE);
+	}
+	else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1 + MAXBLOCKS_IB2) {
+		indirectionLevel = INDIRECT2;
+		write_size = min(strlen(data), MAXBLOCKS_IB2*BLKSIZE);
+	}
+	else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1 + MAXBLOCKS_IB2 + MAXBLOCKS_IB3) {
+		indirectionLevel = INDIRECT3;
+		write_size = min(strlen(data), MAXBLOCKS_IB3*BLKSIZE);
+	}
+	else return FS_ERR;
+
+	while (write_cnt < slen) {
+		uint this_write_cnt = 0;
+
+		if (write_cnt >= ino->nblocks-ino->inode_blocks)
+			break;	/* Used up all allocated blocks. TODO: Put this check in _fill_direct_blocks */
+
+		switch (indirectionLevel)
+		{
+			case DIRECT: 
+				this_write_cnt = _fill_direct_blocks(
+							&ino->dblocks[blk], offset, 
+							write_size, &data[write_cnt]); break;
+
+			// If we used up all the direct blocks, start using singly indirected blocks
+			case INDIRECT1: 
+				this_write_cnt = _fill_direct_blocks(
+							&ino->ib1->blocks[blk], offset, 
+							write_size, &data[write_cnt]); break;
+
+			// If we used up all the singly indirected blocks, start using doubly indirected blocks
+			case INDIRECT2: for (i = 0; i < NBLOCKS_IBLOCK; i++)	
+						this_write_cnt = _fill_direct_blocks(
+									&ino->ib2->iblocks[i]->blocks[blk], 
+									offset, write_size, &data[write_cnt]); break;
+
+			// If we used up all the doubly indirected blocks, start using triply indirected blocks
+			case INDIRECT3: for (i = 0; i < NIBLOCKS; i++)
+						for (j = 0; j < NBLOCKS_IBLOCK; j++)
+							this_write_cnt = _fill_direct_blocks(
+										ino->ib3->iblocks[i]->iblocks[j]->blocks, 
+										offset, write_size, &data[write_cnt]); break;
+			case 4: return FS_ERR;	/* Out of blocks */
+		}
+
+		blk = 0;	/* Block number only applies to first level of indirection*/
+		offset = 0;	/* Offset only applies to first block write (further handled in _fill_direct_blocks) */
+		indirectionLevel++;
+
+		write_cnt += this_write_cnt;
+		write_size -= this_write_cnt;
+	}
+
 	return FS_OK;
 }
 
@@ -1208,11 +1321,13 @@ static int writeblocks(void* source, block_t* blocks, uint numblocks, size_t typ
 	return FS_OK;
 }
 
-/* Write the blocks of an inode to disk */
+/* Write the blocks of an inode to disk 
+ * Inteded context is a file was just written to,
+ * and the changes need to be put on disk. */
 static int commit_write(inode* ino) {
 	uint i = 0, start = 0, remainder = 0;
 
-	/* Write the inoe itself. */
+	/* Write the inode itself. */
 	writeblocks( ino, ino->blocks, ino->nblocks, sizeof(inode)); 
 
 	/* The first few blocks were for the inode metadata itself. 
@@ -1222,9 +1337,16 @@ static int commit_write(inode* ino) {
 
 	/* Write the data the inode points to. TODO: write iblocks */
 	/* Direct blocks */
-	for (i = start; i < ino->nblocks; i++) {
-		writeblock(i, BLKSIZE, ino->dblocks[i]);
+	for (i = start; i < min(ino->nblocks, NBLOCKS); i++) {
+		writeblock(ino->blocks[i], BLKSIZE, ino->dblocks[i]);
 	}
+
+	if (i < ino->nblocks) {
+		for (; i < min(ino->nblocks, NBLOCKS); i++) {
+			writeblock(ino->blocks[i], BLKSIZE, ino->ib1->blocks[i]);
+		}
+	}
+
 	return FS_OK;
 }
 
@@ -1251,6 +1373,7 @@ static filesystem* _open() {
 	return fs;
 }
 
+/* Make a brand-new filesystem. Overwrite any previous. */
 static filesystem* _mkfs() {
 	filesystem *fs = NULL;
 
@@ -1336,44 +1459,42 @@ static void _debug_print() {
 
 fs_private_interface const _fs = 
 { 
-	_pathFree, _newPath, _tokenize, _pathFromString, _stringFromPath,		/* Path management */
+	/* Path management */
+	_pathFree, _newPath, _tokenize, _pathFromString, _stringFromPath,		
 	_pathSkipLast, _pathGetLast, _pathAppend, _pathTrimSlashes, 
 	_getAbsolutePathDV, _getAbsolutePath,
 	_strSkipFirst, _strSkipLast,
 
+	/* Directory management */
 	_newd, _newdv,
-	
 	_newf, _newfv, 
-
 	_ino_to_dv, _ino_to_fv, _mkroot, 
-	
 	_load_file, _unload_file,
 	_load_dir, _unload_dir,	
-
 	_new_dir, _new_file,
-	
-	_v_attach, _v_detach,								/* Directory management */
+	_v_attach, _v_detach,
 
-	_get_fd, _free_fd,								/* File descriptors */
+	_get_fd, _free_fd,			/* File descriptors */
+	_prealloc, _zero,			/* Native filsystem file allocation */
+	_open, _mkfs, _init,			/* Filesystem, opening, creation */
+	__balloc, _balloc, _bfree, _newBlock,	/* Block allocation */
 
-	_prealloc, _zero,								/* Native filsystem file allocation */
-
-	_open, _mkfs, _init,								/* Filesystem creation, opening */
-
-	__balloc, _balloc, _bfree, _newBlock,						/* Block allocation */
-
-	_ialloc, _ifree,								/* Inode allocation */
-	_fill_block_indices,
+	/* Inode allocation */
+	_ialloc, _ifree,
+	_fill_block_indices, _fill_inode_blocks, _fill_direct_blocks,
 	_inode_load,
 
+	/* Reading and writing disk blocks */
 	readblock, writeblock,
 	readblocks, writeblocks,
 
+	/* Write commits, superblock synchronization, tree traversal */
 	commit_write, 
-
 	_recurse, _sync, 
 
+	/* Native filesystem interaction */
 	_safeopen, _safeclose,
 
+	/* Debug helpers */
 	_print_mem, _debug_print
 };

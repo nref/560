@@ -305,7 +305,11 @@ int main() {
 			}
 
 		} else if (!strcmp(cmd->fields[0], "write")) {
-			printf("Not Implemented\n");
+			
+			if (cmd->nfields > 2) {
+				fs.write(atoi(cmd->fields[1]), cmd->fields[2]);
+			}
+
 		} else if (!strcmp(cmd->fields[0], "close")) {
 
 			if (cmd->nfields > 1) {
