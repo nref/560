@@ -540,22 +540,17 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 static fd_t _get_fd(filesystem* fs) {
 	uint i;
 	uint ret= 0;
-	uint found_fd = false;
-    
+
 	for (i = fs->first_free_fd; i < FS_MAXOPENFILES; i++){
-	    if (false == found_fd && false == fs->allocated_fds[i]) {
-		fs->allocated_fds[i] = true;
-		ret = i;
-		//BUG: Should this be synced to the shfs?
-		//DONE: Isn't this the same value your returning. no allocated files will be set properly
-		found_fd = true;
-	} else if(true == found_fd && false == fs->allocated_fds[i]){
-		fs->first_free_fd = i;
-		return ret;
-	    }
+		if (false == fs->allocated_fds[i]) {
+			fs->allocated_fds[i] = true;
+			ret = i;
+			fs->first_free_fd = i+1;
+			return i;
+		}
 	}
-    return FS_ERR;
-    
+
+	return FS_ERR;
 }
 
 /* Free an allocated file descriptor */
@@ -1140,9 +1135,9 @@ static int _fill_block_indices(inode* ino, block_t* block_indices, uint count) {
 }
 
 /* Return the count of allocated blocks */
-static int _fill_direct_blocks(block** blocks, uint offset, uint count, char* data) {
+static size_t _fill_direct_blocks(block** blocks, size_t offset, size_t count, char* data) {
 	uint i;
-	uint write_cnt = 0;
+	size_t write_cnt = 0;
 	for (i = 0; i < count; i++) {
 		if (i == count) break;
 
@@ -1164,7 +1159,7 @@ static int _fill_direct_blocks(block** blocks, uint offset, uint count, char* da
  * pointers as needed.
  */
 static int _fill_inode_blocks(inode* ino, uint seek_pos, char* data) {
-	uint write_cnt = 0, write_size = 0; 
+	size_t write_cnt = 0, write_size = 0; 
 	uint indirectionLevel = 0, i, j;
 	size_t slen;
 	block_t blk;	/* Write at block blk + offset bytes*/
@@ -1175,6 +1170,7 @@ static int _fill_inode_blocks(inode* ino, uint seek_pos, char* data) {
 
 	blk = seek_pos / stride;
 	offset = seek_pos % stride;
+
 	if	(blk < NBLOCKS) {
 		indirectionLevel = DIRECT;
 		write_size = min(strlen(data), MAXBLOCKS_DIRECT*BLKSIZE);
@@ -1194,7 +1190,7 @@ static int _fill_inode_blocks(inode* ino, uint seek_pos, char* data) {
 	else return FS_ERR;
 
 	while (write_cnt < slen) {
-		uint this_write_cnt = 0;
+		size_t this_write_cnt = 0;
 
 		if (write_cnt >= ino->nblocks-ino->inode_blocks)
 			break;	/* Used up all allocated blocks. TODO: Put this check in _fill_direct_blocks */

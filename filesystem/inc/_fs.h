@@ -278,7 +278,7 @@ typedef struct {
 
 	int			(* _fill_block_indices)	(inode*, block_t*, uint);
 	int			(* _fill_inode_blocks)	(inode*, uint, char*);
-	int			(* _fill_direct_blocks)	(block**, uint, uint, char*);
+	size_t			(* _fill_direct_blocks)	(block**, size_t, size_t, char*);
 
 	inode*			(* _inode_load)		(filesystem* , inode_t);
 
