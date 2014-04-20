@@ -1,8 +1,11 @@
-﻿Build started 4/20/2014 12:12:16 AM.
+﻿Build started 4/20/2014 10:32:41 AM.
      1>Project "\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\filesystem\filesystem.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /I..\..\inc /ZI /nologo /W3 /WX- /Od /Oy- /D _CRT_SECURE_NO_WARNINGS /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TC /analyze- /errorReport:prompt ..\..\src\_fs.c
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /I..\..\inc /ZI /nologo /W3 /WX- /Od /Oy- /D _CRT_SECURE_NO_WARNINGS /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TC /analyze- /errorReport:prompt ..\..\src\_fs.c ..\..\src\fs.c ..\..\src\sh.c
+         sh.c
+         fs.c
          _fs.c
+         Generating Code...
        Link:
          C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.lib" /MACHINE:X86 Debug\fs.obj
          Debug\sh.obj
@@ -12,4 +15,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:02.58
+Time Elapsed 00:00:04.20

@@ -258,13 +258,13 @@ static void	rmdir		(int fd) { printf("fs_rmdir: %d\n", fd); }
  * to stdout
  * @ param fd file descriptor
  * @ param size number of bytes to read from file */
-static size_t read (int fd, int size) {
+static char* read (int fd, int size) {
     //printf("fs_read: %d %d\n", fd, size);
     filev* fv = NULL;
     //char* tmpbuf;
     
     //Check if the fd has been loaded into the shellfs
-    if (false == shfs->allocated_fds[fd]) return FS_ERR; /* fd not allocated, file not open */
+    if (false == shfs->allocated_fds[fd]) return NULL; /* fd not allocated, file not open */
     
     //Load the file
     fv = shfs->fds[fd];
@@ -272,7 +272,7 @@ static size_t read (int fd, int size) {
     //Check the permissions
     if (fv->mode != FS_READ || fv->mode != FS_RW) {
 	printf("File \"%s\" is not opened for reading",fv->name);
-	return FS_ERR;
+	return NULL;
     }
     
     //Check the size.
@@ -282,7 +282,7 @@ static size_t read (int fd, int size) {
     //fs.readblocks(fv->ino,fv->seek_pos)
     //All clear. Read @size bytes from file
     //data blocks are not guaranteed to be contiguous
-    return FS_OK;
+    return NULL;
 }
 
 
