@@ -1,4 +1,4 @@
-﻿Build started 4/20/2014 11:12:05 AM.
+﻿Build started 4/20/2014 11:25:55 AM.
      1>Project "\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\filesystem\filesystem.vcxproj" on node 2 (Build target(s)).
      1>Link:
          filesystem.vcxproj -> \\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.exe
@@ -6,4 +6,4 @@
 
 Build succeeded.
 
-Time Elapsed 00:00:00.58
+Time Elapsed 00:00:00.22

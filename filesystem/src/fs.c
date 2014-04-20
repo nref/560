@@ -163,7 +163,9 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 		printf("open: Bad mode \"%s\"\n",mode); 
 		return -1; 
 	}
-	//BUG: returning directories for files, throwing off read
+
+	// Chris: BUG: returning directories for files, throwing off read
+	// Doug: I see it, will fix
 	f_path = fs.getAbsolutePath(parent_dir, name);
 	f_ino = stat(f_path);
 
@@ -178,7 +180,12 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 			newfv = _fs._new_file(shfs, p_ino->datav.dir, name);
 			if (NULL == newfv) return FS_ERR;
 			f_ino = newfv->ino;
-			//TODO open an existing file should amrk it for appending, not create a new file
+
+			// Chris: TODO open an existing file should amrk it for appending, not create a new file
+			// Doug: If control flow gets here, then the file did not exist
+			//	 The lab assignment also specifies 
+			//	"The current file offset will be 0 when the file is opened"
+			//	i.e. the user has to remember to seek for append
 		}
 	}
 
@@ -274,8 +281,8 @@ static char* read(fd_t fd, size_t size) {
 		return NULL;
 	}
 	
-	/* No need to check file size.
-	 * _read_inode_blocks will read as many are are allocated */
+	/* No need to check file size; _read_inode_blocks
+	 * will read as many are are allocated */
 	buf = _fs._read_inode_blocks(fv->ino, fv->seek_pos, size);
 	fv->seek_pos += strlen(buf);
 
