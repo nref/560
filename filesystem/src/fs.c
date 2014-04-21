@@ -365,9 +365,25 @@ static size_t write (fd_t fd, char* str) {
 
 	return slen;
 }
+/* Sets the offset of the corresponding file
+ *  @param fd file descriptor
+ *  @param offset the offest of the file */
+static void	seek		(fd_t fd, size_t offset) {
+    //TODO; Implement seek. Paceholder for @chricrai when read is finished
+    printf("fs_seek: %d %zu\n", fd, offset);
+    
+}
 
-static void	seek		(fd_t fd, size_t offset) { printf("fs_seek: %d %zu\n", fd, offset); }
-static void	link		(inode_t from, inode_t to) { printf("fs_link: %d %d\n", from, to); }
+/* Creats a hardlink from a src file to a destination
+ * *param from inode pointing to the source
+ * @param to inode of the new file*/
+//TODO: This could actually get done before read is complete
+static void	link		(inode_t from, inode_t to) {
+    printf("fs_link: %d %d\n", from, to);
+    //Check from inode (if not file -> err)
+    //Pass off to fs.link()
+    //Check return errora
+}
 static void	ulink		(inode_t ino) { printf("fs_unlink: %d\n", ino); }
 
 fs_public_interface const fs = 
