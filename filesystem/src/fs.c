@@ -107,7 +107,7 @@ static int mkdir(char* cur_path, char* dir_path) {
 static inode* stat(char* name) {
 
 	uint i		= 0;
-	uint depth	= 0;			// The depth of the path, e.g. depth of "/a/b/c" is 3
+	size_t depth	= 0;			// The depth of the path, e.g. depth of "/a/b/c" is 3
 	inode* ino	= NULL;
 	fs_path* dPath	= NULL;
 
@@ -139,6 +139,7 @@ static char*	getAbsolutePath(char* current_path, char* next)	{ return _fs._getAb
 static char*	pathTrimSlashes(char* path)			{ return _fs._pathTrimSlashes(path); }
 static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
 static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
+static int	isNumeric(char* str)				{ return _fs._isNumeric(str); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
 static fd_t open(char* parent_dir, char* name, char* mode) { 
@@ -183,10 +184,13 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 
 			// Chris: TODO open an existing file should amrk it for appending, not create a new file
 			// Doug: If control flow gets here, then the file did not exist
-			//	 The lab assignment also specifies 
+			//	 The lab assignment also specifies:
 			//	"The current file offset will be 0 when the file is opened"
 			//	i.e. the user has to remember to seek for append
 		}
+	}
+	else {
+		_fs._read_inode_data(f_ino, f_ino->nblocks - f_ino->inode_nblks, f_ino->size);
 	}
 
 	f_ino->datav.file->mode = mode_i;
@@ -198,11 +202,15 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 }
 
 static void close(fd_t fd) { 
+	inode* ino = NULL;
 
 	if (false == shfs->allocated_fds[fd]) return; /* fd not allocated */
-	if (shfs->fds[fd])
-		free(shfs->fds[fd]);
+	if (shfs->fds[fd]) {
 
+		ino = shfs->fds[fd]->ino;
+		if (ino->v_attached)
+			_fs._v_detach(shfs, ino);
+	}
 	_fs._free_fd(shfs, fd);
 }
 
@@ -276,14 +284,14 @@ static char* read(fd_t fd, size_t size) {
 	fv = shfs->fds[fd];
 	
 	// Check file mode
-	if (fv->mode != FS_READ || fv->mode != FS_RW) {
+	if (fv->mode != FS_READ && fv->mode != FS_RW) {
 		printf("File \"%s\" is not opened for reading",fv->name);
 		return NULL;
 	}
 	
-	/* No need to check file size; _read_inode_blocks
+	/* No need to check file size; _read_inode_data
 	 * will read as many are are allocated */
-	buf = _fs._read_inode_blocks(fv->ino, fv->seek_pos, size);
+	buf = _fs._read_inode_data(fv->ino, fv->seek_pos, size);
 	fv->seek_pos += strlen(buf);
 
 	return buf;
@@ -307,8 +315,8 @@ static size_t write (fd_t fd, char* str) {
 
 	slen = strlen(str);
 
-	_fs._fill_inode_blocks(fv->ino, fv->seek_pos, str);
-	_fs.commit_write(fv->ino);
+	_fs._inode_fill_blocks_from_data(fv->ino, fv->seek_pos, str);
+	_fs.write_commit(shfs, fv->ino);
 	fv->seek_pos += slen;
 
 	return slen;
@@ -322,7 +330,7 @@ fs_public_interface const fs =
 { 
 	pathFree, newPath, tokenize, pathFromString, stringFromPath,		/* Path management */
 	pathSkipLast, pathGetLast, pathAppend, getAbsolutePathDV, getAbsolutePath, pathTrimSlashes,
-	strSkipFirst, strSkipLast, 
+	strSkipFirst, strSkipLast, isNumeric,
 
 	destruct, openfs, mkfs, mkdir,
 	stat, open, close, opendir, closedir, 

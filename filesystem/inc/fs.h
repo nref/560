@@ -19,6 +19,7 @@ typedef struct {
 	char*		(* pathTrimSlashes)	(char* path);
 	char*		(* strSkipFirst)	(char* cpy);
 	char*		(* strSkipLast)		(char* cpy);
+	int		(* isNumeric)		(char*);
 
 	void		(* destruct)		();
 	void		(* openfs)		();

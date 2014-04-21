@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <ctype.h>
 
 #define BLKSIZE 4096				// Block size in bytes
 //#define MAXBLOCKS 25600				// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
@@ -85,7 +86,7 @@ typedef struct iblock3 {
 /* files, directories, and links have an in-memory "volatile" structure as well as an on-disk structure */
 typedef struct file {
 	inode_t ino;				// Index of the file's inode
-	uint f_pos;				// Byte offset seek'ed to
+	size_t seek_pos;			// Byte offset seek'ed to
 	char name[FS_NAMEMAXLEN];		// filename
 } file;
 
@@ -105,7 +106,7 @@ typedef struct dent {				// On-disk directory entry
 
 	inode_t files[FS_MAXFILES];		// Files in this dir
 	inode_t links[FS_MAXLINKS];		// Links in this dir
-	uint ndirs, nfiles, nlinks;
+	size_t ndirs, nfiles, nlinks;
 
 	char name[FS_NAMEMAXLEN];		// dir name
 } dent;
@@ -115,7 +116,7 @@ struct inode;					/* Forward declaration because of mutual
 typedef struct filev {
 	struct inode* ino;			// pointer to the file's inode
 	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
-	uint seek_pos;				// Byte offset seek'ed to
+	size_t seek_pos;			// Byte offset seek'ed to
 	char name[FS_NAMEMAXLEN];		// Filename
 } filev;
 
@@ -136,7 +137,7 @@ typedef struct dentv {				// In-memory directory entry
 	struct inode** files;			// Files in this dir
 	struct inode** links;			// Links in this dir
 
-	uint ndirs, nfiles, nlinks;
+	size_t ndirs, nfiles, nlinks;
 
 	char name[FS_NAMEMAXLEN];		// Dir name
 } dentv;
@@ -144,11 +145,11 @@ typedef struct dentv {				// In-memory directory entry
 /* By intention the block, inode, and superblock have identical in-memory and disk structure */
 typedef struct inode {
 	inode_t num;				/* Inode number */
-	uint nblocks;				/* File size in blocks */
-	uint size;				/* File size in bytes */
-	uint nlinks;				/* Number of hard links to the inode */
+	size_t nblocks;				/* File size in blocks */
+	size_t size;				/* File size in bytes */
+	size_t nlinks;				/* Number of hard links to the inode */
 
-	uint16_t inode_blocks;			/* Of the allocated blocks, how many are for the inode itself */
+	uint16_t inode_nblks;			/* Of the allocated blocks, how many are for the inode itself */
 	uint16_t mode;				/* 0 file, 1 directory, 2 link */
 	uint16_t v_attached;			/* Did we load the volatile version already ? true : false */
 
@@ -161,7 +162,7 @@ typedef struct inode {
 	union {
 		struct filev* file;
 		struct dentv* dir;
-		struct hlink* link;
+		struct hlinkv* link;
 	} datav;				/* In-memory data of this inode  */
 	
 	block_t blocks[MAXFILEBLOCKS];		/* Indices to all blocks */
@@ -184,17 +185,17 @@ typedef struct inode {
 } inode;
 
 typedef struct superblock {
-	uint free_blocks_base;			// Index of lowest unallocated block
-	inode_t free_inodes_base;		// Index of lowest unallocated inode
-	inode_t root;				// Inode number of root directory entry
-	block_t inode_first_blocks[MAXBLOCKS];	// Index of first allocated block for each inode.
-	uint inode_block_counts[MAXBLOCKS];	// How many allocated blocks for each inode.
+	size_t free_blocks_base;			// Index of lowest unallocated block
+	inode_t free_inodes_base;			// Index of lowest unallocated inode
+	inode_t root;					// Inode number of root directory entry
+	block_t inode_first_blocks[MAXBLOCKS];		// Index of first allocated block for each inode.
+	size_t inode_block_counts[MAXBLOCKS];		// How many allocated blocks for each inode.
 
 } superblock;
 
 /* Need these fields outside of superblock because we can be certain they fit into one block */
 typedef struct superblock_i {
-	uint nblocks;				// The number of blocks allocated to the superblock
+	size_t nblocks;				// The number of blocks allocated to the superblock
 	block_t blocks[SUPERBLOCK_MAXBLOCKS];	// Indices to superblock's blocks
 
 } superblock_i;
@@ -218,24 +219,26 @@ typedef struct filesystem {
 
 typedef struct fs_path {
 	char* fields[FS_MAXPATHFIELDS];
-	uint nfields;
-	uint firstField;
+	size_t nfields;
+	size_t firstField;
 } fs_path;
 
 typedef struct { 
-	void			(* _pathFree)		(fs_path* p);
+	void			(* _pathFree)		(fs_path*);
 	fs_path*		(* _newPath)		();
 	fs_path*		(* _tokenize)		(const char*, const char*);
 	fs_path*		(* _pathFromString)	(const char*);
-	char*			(* _stringFromPath)	(fs_path* p);
-	char*			(* _pathSkipLast)	(fs_path* p);
-	char*			(* _pathGetLast)	(fs_path* p);
-	int			(* _pathAppend)	(fs_path*, const char*);
-	char*			(* _pathTrimSlashes)	(char* path);
-	char*			(* _getAbsolutePathDV)	(dentv* dv, fs_path *p);
-	char*			(* _getAbsolutePath)	(char* current_dir, char* next_dir);
-	char*			(* _strSkipFirst)	(char* cpy);
-	char*			(* _strSkipLast)	(char* cpy);
+	char*			(* _stringFromPath)	(fs_path*);
+	char*			(* _pathSkipLast)	(fs_path*);
+	char*			(* _pathGetLast)	(fs_path*);
+	int			(* _pathAppend)		(fs_path*, const char*);
+	char*			(* _pathTrimSlashes)	(char*);
+	char*			(* _getAbsolutePathDV)	(dentv*, fs_path *);
+	char*			(* _getAbsolutePath)	(char*, char*);
+	char*			(* _strSkipFirst)	(char*);
+	char*			(* _strSkipLast)	(char*);
+
+	int			(* _isNumeric)		(char* str);
 
 	dent*			(* _newd)		(filesystem*, const int, const char*);
 	dentv*			(* _newdv)		(filesystem* , const int, const char*);
@@ -247,7 +250,7 @@ typedef struct {
 	filev*			(* _ino_to_fv)		(filesystem* , inode*);
 	dentv*			(* _mkroot)		(filesystem *, int);
 	
-	inode*			(* _load_file)		(filesystem*, inode_t);
+	filev*			(* _load_file)		(filesystem*, inode_t);
 	int			(* _unload_file)	(filesystem*, inode*);
 
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
@@ -268,31 +271,32 @@ typedef struct {
 	filesystem*		(* _mkfs)		();
 	filesystem*		(* _init)		(int);
 
-	int			(* __balloc)		(filesystem* );
-	int			(* _balloc)		(filesystem* , const int, block_t*);
+	size_t			(* __balloc)		(filesystem* );
+	size_t			(* _balloc)		(filesystem* , const size_t, block_t*);
 	int			(* _bfree)		(filesystem* , block*);
 	block*			(* _newBlock)		();
 
 	inode_t			(* _ialloc)		(filesystem *);
 	int			(* _ifree)		(filesystem* , inode_t);
 
-	int			(* _fill_block_indices)	(inode*, block_t*, size_t);
-	
-	int			(* _fill_inode_blocks)	(inode*, size_t, char*);
-	size_t			(* _fill_direct_blocks)	(block**, size_t, size_t, char*);
+	int			(* _inode_fill_blocks_from_data) (inode*, size_t, char*);
+	int			(* _inode_fill_blocks_from_disk) (inode*);
 
 	char*			(* _read_direct_blocks)	(block**, size_t, size_t);
-	char*			(* _read_inode_blocks)	(inode*, size_t, size_t);
+	char*			(* _read_inode_data)	(inode*, size_t, size_t);
+	int			(* _write_inode_data) (inode*);
 
 	inode*			(* _inode_load)		(filesystem* , inode_t);
+	int			(* _inode_unload)	(filesystem*, inode*);
 
 	int			(* readblock)		(void*, block_t);
 	int			(* writeblock)		(block_t, size_t, void*);
 
-	int			(* readblocks)		(void*, block_t*, uint, size_t);
-	int			(* writeblocks)		(void*, block_t*, uint, size_t);
-	int			(* commit_write)	(inode*);
-	inode*			(* _recurse)		(filesystem* , dentv*, uint, uint, char*[]);
+	int			(* readblocks)		(void*, block_t*, size_t, size_t);
+	int			(* writeblocks)		(void*, block_t*, size_t, size_t);
+
+	int			(* write_commit)	(filesystem*, inode*);
+	inode*			(* _recurse)		(filesystem* , dentv*, size_t, size_t, char*[]);
 	int			(* _sync)		(filesystem* );
 
 	void			(* _safeopen)		(char*, char*);

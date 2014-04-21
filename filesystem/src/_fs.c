@@ -41,6 +41,16 @@ static void _safeclose() {
 	fp = NULL;
 }
 
+static int _isNumeric(char* str) {
+	uint i;
+
+	for (i = 0; i < strlen(str); i++) {
+		if (!isdigit(str[i]))
+			return false;
+	}
+	return true;
+}
+
 /* Open the filesystem file and check for NULL */
 static void _safeopen(char* fname, char* mode) {
 	_safeclose();	/* Close whatever was already open */
@@ -80,7 +90,7 @@ static void _pathFree(fs_path* p) {
 
 /* Split a string on delimiter(s) */
 static fs_path* _tokenize(const char* str, const char* delim) {
-	uint i = 0;
+	size_t i = 0;
 	char* next_field	= NULL;
 	size_t len;
 	char* str_cpy;
@@ -138,6 +148,7 @@ static int _sync(filesystem* fs) {
 static inode* _inode_load(filesystem* fs, inode_t num) {
 	inode* ino = NULL;
 	block_t first_block_num;
+	uint i;
 
 	if (NULL == fs) return NULL;
 	if (MAXBLOCKS <= num) return NULL;	/* Sanity check */
@@ -148,18 +159,43 @@ static inode* _inode_load(filesystem* fs, inode_t num) {
 		return NULL;			/* An inode of 0 does not exist on disk */
 
 	ino = (inode*)malloc(sizeof(inode));
+
+	/* Load the block(s) for the inode itlsef */
 	if (FS_ERR == 
 		_fs.readblocks(	ino, &first_block_num, 
-					fs->sb.inode_block_counts[num], 
-					sizeof(inode))	) {
+					sizeof(inode)/stride + 1,
+					sizeof(inode))	) 
+	{
 		/* If the disk read failed */
 		if (NULL != ino)
 			free(ino);
 		return NULL;
 	}
 
+	/* Allocate memory for the direct blocks */
+	for (i = 0; i < ino->nblocks - ino->inode_nblks; i++)
+		ino->dblocks[i] = (block*)malloc(sizeof(block));
+
 	ino->v_attached = 0;
 	return ino;
+}
+
+/* Write an inode to disk and free its associated memory */
+static int _inode_unload(filesystem* fs, inode* ino) {
+	uint i;
+	
+	if (FS_ERR == _fs.write_commit(fs, ino))
+		return FS_ERR;
+
+	/* Free memory for the direct blocks */
+	for (i = 0; i < ino->nblocks - ino->inode_nblks; i++) {
+		free(ino->dblocks[i]);
+		ino->dblocks[i] = NULL;
+	}
+	free(ino);
+	ino = NULL;
+
+	return FS_OK;
 }
 
 /* Free the index of an inode and its malloc'd memory
@@ -224,8 +260,8 @@ static int _bfree(filesystem* fs, block* blk) {
 
 /* Traverse the free block array and return a block 
  * whose field num is the index of the first free bock */
-static int __balloc(filesystem* fs) {
-	uint i, blockidx, blockval;
+static size_t __balloc(filesystem* fs) {
+	size_t i, blockidx, blockval;
 
 	/* One char in the free block map represents 
 	 * 8 blocks (sizeof(char) == 1 byte == 8 bits) */
@@ -248,8 +284,8 @@ static int __balloc(filesystem* fs) {
 }
 
 /* Allocate @param count blocks if possible. Store indices in @param blocks */
-static int _balloc(filesystem* fs, const int count, block_t* indices) {
-	int i, j;
+static size_t _balloc(filesystem* fs, const size_t count, block_t* indices) {
+	size_t i, j;
 
 	for (i = 0; i < count; i++) {	// Allocate free blocks
 		j = __balloc(fs);
@@ -323,7 +359,7 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	dv->nlinks	= 0;
 	dv->ino->nlinks	= 0;
 	dv->ino->nblocks= sizeof(inode)/stride+1;   /* How many blocks the inode consumes */
-	dv->ino->inode_blocks = sizeof(inode)/stride+1;
+	dv->ino->inode_nblks = sizeof(inode)/stride+1;
 	dv->ino->size	= BLKSIZE;
 	dv->ino->mode	= FS_DIR;
 	dv->ino->v_attached = 1;
@@ -447,7 +483,7 @@ static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	if (alloc_inode)
 		f->ino = _ialloc(fs);
 	else f->ino = 0;
-	f->f_pos = 0;
+	f->seek_pos = 0;
 
 	// Copy name
 	strncpy(f->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
@@ -474,11 +510,11 @@ static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
 	memset(	fv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
 
 	fv->ino->nlinks	= 0;
-	fv->ino->inode_blocks = sizeof(inode)/stride+1;
-	fv->ino->nblocks= NBLOCKS + fv->ino->inode_blocks;   /* Just allocate direct blocks for now */
+	fv->ino->inode_nblks = sizeof(inode)/stride+1;
+	fv->ino->nblocks= NBLOCKS + fv->ino->inode_nblks;   /* Just allocate direct blocks for now */
 	fv->ino->mode = FS_FILE;
 	fv->ino->size	= BLKSIZE;
-	fv->ino->v_attached = 1;
+	fv->ino->v_attached = true;
 	fv->ino->datav.file = fv;
 
 	strncpy(fv->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
@@ -496,8 +532,8 @@ static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
 /* Create a new file of @param name in the given directory @parent */
 static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 	filev* fv = NULL;
-	uint i;
-	uint n_dblocks = 0;
+	size_t i;
+	size_t n_dblocks = 0;
 
 	/* Allocate a new inode number */
 	fv = _newfv(fs, true, name);
@@ -509,13 +545,13 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 		return NULL;
 	}
 		
-	n_dblocks = fv->ino->nblocks - fv->ino->inode_blocks;
+	n_dblocks = fv->ino->nblocks - fv->ino->inode_nblks;
 	for (i = 0; i < n_dblocks; i++)
 	{
-		fv->ino->dblocks[i]->num = fv->ino->blocks[i + fv->ino->inode_blocks];
+		fv->ino->dblocks[i]->num = fv->ino->blocks[i + fv->ino->inode_nblks];
 
 		if (i+1 < n_dblocks)
-			fv->ino->dblocks[i]->next = fv->ino->blocks[i+1 + fv->ino->inode_blocks];
+			fv->ino->dblocks[i]->next = fv->ino->blocks[i+1 + fv->ino->inode_nblks];
 	}
 
 	fs->sb.inode_first_blocks[fv->ino->num] = fv->ino->blocks[0];
@@ -528,7 +564,7 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 	parent->ino->data.dir.nfiles++;
 
 	_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->nblocks, sizeof(inode));
-	_fs.writeblocks(fv->ino, fv->ino->blocks, fv->ino->inode_blocks, sizeof(inode));
+	_fs.writeblocks(fv->ino, fv->ino->blocks, fv->ino->inode_nblks, sizeof(inode));
 
 	if (FS_ERR == _sync(fs))
 		return NULL;
@@ -608,7 +644,7 @@ static dentv *_ino_to_dv(filesystem* fs, inode* ino) {
 	dv->nfiles		= dv->ino->data.dir.nfiles;
 	dv->nlinks		= dv->ino->data.dir.nlinks;
 
-	dv->ino->v_attached	= 1;
+	dv->ino->v_attached	= true;
 
 	return dv;
 }
@@ -623,16 +659,23 @@ static filev* _ino_to_fv(filesystem* fs, inode* ino) {
 
 	fv->ino			= ino;
 	fv->ino->datav.file	= fv;
-	fv->ino->v_attached	= 1;
-	return NULL;
+	fv->ino->v_attached	= true;
+	fv->ino->mode		= FS_FILE;
+	fv->mode		= FS_READ;
+	return fv;
 }
 
 /* Given an inode number, load the corresponding file structure. 
  * Wrap it in an inode which contains the in-memory version of the file */
-static inode* _load_file(filesystem* fs, inode_t num) {
+static filev* _load_file(filesystem* fs, inode_t num) {
+	uint i;
 	inode* ino = _inode_load(fs, num);
 	ino->datav.file = _ino_to_fv(fs, ino);
-	return ino;
+
+	for (i = 0; i < ino->nblocks - ino->inode_nblks; i++)
+		_fs.readblock(ino->dblocks[i], ino->blocks[i + ino->inode_nblks]);
+
+	return ino->datav.file;
 }
 
 /* Free the memory allocated to an in-memory file structure */
@@ -640,10 +683,13 @@ static int _unload_file(filesystem* fs, inode* ino) {
 	int status1, status2;
 	
 	status1 = _fs._sync(fs);
-	status2 = _fs.writeblocks(ino, ino->blocks, ino->nblocks, sizeof(inode));
 
 	free(ino->datav.file);
 	ino->datav.file = NULL;
+	ino->v_attached = false;
+
+	status2 = _fs.writeblocks(ino, ino->blocks, ino->inode_nblks, sizeof(inode));
+	_inode_unload(fs, ino);
 
 	if (FS_ERR == status1 || FS_ERR == status2)
 		return FS_ERR;
@@ -704,9 +750,10 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 		return NULL;
 	}
 
-	for (i = 0; i < dv->nfiles; i++)
-		dv->files[i] = _load_file(fs, dv->ino->data.dir.files[i]);
-
+	for (i = 0; i < dv->nfiles; i++) {
+		filev* fv = _load_file(fs, dv->ino->data.dir.files[i]);
+		dv->files[i] = fv->ino;
+	}
 	//for (i = 0; i < dv->nlinks; i++)	// TODO
 	//	dv->files[i] = _load_link(fs, dv->ino->data.dir.links[i]);
 	return dv;
@@ -714,16 +761,41 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 
 /* Free the memory occupied by a dentv*/
 static int _unload_dir(filesystem* fs, inode* ino) {
+	size_t i;
 	int status1, status2;
-	
+	dentv* dv = NULL;
+	inode* iterator;
+	inode* next;
+
+	if (FS_DIR != ino->mode) return FS_ERR;
+
+	dv = ino->datav.dir;
+	ino->v_attached = false;
+
 	status1 = _fs._sync(fs);
 	status2 = _fs.writeblocks(ino, ino->blocks, ino->nblocks, sizeof(inode));
+	
+	if (FS_ERR == status1 || FS_ERR == status2)
+		return FS_ERR;
+
+	/* Free the whole subtree under this directory */
+	iterator = dv->head;
+	next = dv->head;
+	while (NULL != next) {
+		next = iterator->datav.dir->next;
+		if (iterator->v_attached)
+			_unload_dir(fs, iterator);
+	}
+
+	for (i = 0; i < dv->nfiles; i++)
+		_unload_file(fs, dv->files[i]);
+	//for (int i = 0; i < dv->nlinks; i++)
+	//	_unload_link(fs, dv->files[i]);
 
 	free(ino->datav.dir);
 	ino->datav.dir = NULL;
+	_inode_unload(fs, ino);
 
-	if (FS_ERR == status1 || FS_ERR == status2)
-		return FS_ERR;
 	return FS_OK;
 }
 
@@ -740,7 +812,8 @@ static int _v_attach(filesystem* fs, inode* ino) {
 			break;
 		}
 		case FS_FILE:
-			break; /* TODO */
+			ino->datav.file = _load_file(fs, ino->num);
+			break;
 		case FS_LINK:
 			break; /* TODO */
 		}
@@ -764,11 +837,11 @@ static int _v_detach(filesystem* fs, inode* ino) {
 			break;
 		}
 		case FS_FILE:
-			break; /* TODO */
+			_unload_file(fs, ino);
+			break;
 		case FS_LINK:
 			break; /* TODO */
 		}
-		ino->v_attached = false;
 	}
 
 	return FS_OK;
@@ -784,61 +857,103 @@ static int _v_detach(filesystem* fs, inode* ino) {
  * @param path The fields of the path
  * Return the inode at the end of this path or NULL if not found.
  */ 
-static inode* _recurse(filesystem* fs, dentv* dir, uint current_depth, uint max_depth, char* path[]) {
+static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t max_depth, char* path[]) {
 	uint i;									// Declarations go here to satisfy Visual C compiler
 	dentv* iterator;
 
-	if (NULL == dir || NULL == dir->head) 
+	if (NULL == dv) 
 		return NULL;
 	
-	if (!dir->head->v_attached) {						// Load the first directory from disk if not already in memory
-		if (FS_ERR == _v_attach(fs, dir->head))
-			return NULL;
+	if (NULL == dv->head && 
+		dv->ndirs == 0 &&
+		dv->nfiles == 0 &&
+		dv->nlinks == 0) 
+	{
+		return NULL;								/* Dead-end in the filesystem tree */
 	}
 
-	if (NULL == dir->head->datav.dir) 
-		return NULL;
+	/* Recurse into subdirectories if there are any */
+	if (NULL != dv->head) {
 
-	iterator = dir->head->datav.dir;
-
-	for (i = 0; i < dir->ndirs; i++)					// For each subdir at this level
-	{
-		if (NULL == iterator) return NULL;				// This happens if there are no subdirs
-
-		if (!strcmp(iterator->name, path[current_depth])) {		// If we have a matching directory name
-			if (max_depth == current_depth)				// If we can't go any deeper
-				return iterator->ino;				// Return the inode of the matching dir
-
-			// Else recurse another level
-			else return _recurse(fs, iterator, current_depth + 1, max_depth, path); 
-		}
-
-		if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
-
-		if (!iterator->next->v_attached) {				// Load the next directory from disk if not already in memory
-			if (FS_ERR == _v_attach(fs, iterator->next))
+		if (!dv->head->v_attached) {					// Load the first directory from disk if not already in memory
+			if (FS_ERR == _v_attach(fs, dv->head))
 				return NULL;
 		}
 
-		iterator = iterator->next->datav.dir;
+		if (NULL == dv->head->datav.dir) 
+			return NULL;
+
+		iterator = dv->head->datav.dir;
+
+		/* For each subdirectory */
+		for (i = 0; i < dv->ndirs; i++)
+		{
+			if (NULL == iterator) return NULL;				// This happens if there are no subdirs
+
+			if (!strcmp(iterator->name, path[current_depth])) {		// If we have a matching directory name
+				if (max_depth == current_depth)				// If we can't go any deeper
+					return iterator->ino;				// Return the inode of the matching dir
+
+				else return _recurse(fs, iterator,			// Else recurse into subdir
+					current_depth + 1, max_depth, path); 
+			}
+
+			if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
+
+			if (!iterator->next->v_attached) {				// Load the next directory from disk if not already in memory
+				if (FS_ERR == _v_attach(fs, iterator->next))
+					return NULL;
+			}
+
+			iterator = iterator->next->datav.dir;
+		}
 	}
-	return NULL;					// If nothing found, return a special error inode
+
+	/* Iterate over files */
+	for (i = 0; i < dv->nfiles; i++) {						// For each file at this level
+		
+		filev* fv = _load_file(fs, dv->ino->data.dir.files[i]);
+
+		if (!strcmp(fv->name, path[current_depth])) {
+			dv->files[i] = fv->ino;
+
+			if (!dv->files[i]->v_attached) {				// Load the file from disk if not already in memory
+				if (FS_ERR == _v_attach(fs, dv->files[i]))
+					break;
+			}
+			return dv->files[i]->datav.file->ino;
+		}
+		else _unload_file(fs, fv->ino);		// TODO: this _load_file, _unload_file pair results in disk writes. Make write-free.
+	}
+
+	/* Iterate over links */
+	for (i = 0; i < dv->ino->nlinks; i++) {						// For each link at this level
+		if (!strcmp(dv->links[i]->data.link.name, path[current_depth])) {
+
+			if (!dv->links[i]->v_attached) {				// Load the file from disk if not already in memory
+				if (FS_ERR == _v_attach(fs, dv->links[i]))
+					break;
+			}
+			return dv->links[i]->datav.link->ino;
+		}
+	}
+	return NULL;	/* No matching inode found */
 }
 
 /* Return the given string less the first character */
-static char* _strSkipFirst(char* cpy) {
-	return &cpy[1];
+static char* _strSkipFirst(char* str) {
+	return &str[1];
 }
 
 /* Return the given string less the last character */
-static char* _strSkipLast(char* cpy) {
+static char* _strSkipLast(char* str) {
 	size_t len;
-	if (NULL == cpy || '\0' == cpy[0]) 
+	if (NULL == str || '\0' == str[0]) 
 		return NULL;
 
-	len = strlen(cpy);
-	cpy[len - 1] = '\0';
-	return cpy;
+	len = strlen(str);
+	str[len - 1] = '\0';
+	return str;
 }
 
 /* Remove leading and final forward slashes from a string
@@ -865,7 +980,7 @@ static fs_path* _pathFromString(const char* str) {
 
 /* Return an absolute path */
 static char* _stringFromPath(fs_path* p) {
-	uint i;
+	size_t i;
 	char* path;
 	
 	if (NULL == p) return NULL;
@@ -1094,21 +1209,21 @@ static filesystem* _init(int newfs) {
 	if (NULL == fp) return NULL;
 
 	fs = (filesystem*)malloc(sizeof(filesystem));
-	fs->first_free_fd = 0;
 
 	/* Zero-out fields */
-	memset(&fs->fb_map, 0, sizeof(map));
-	memset(&fs->ino_map, 0, sizeof(map));
-	memset(&fs->sb_i.blocks, 0, SUPERBLOCK_MAXBLOCKS*sizeof(block_t));
-	memset(&fs->sb.inode_first_blocks, 0, MAXBLOCKS*sizeof(block_t));
-	memset(&fs->sb.inode_block_counts, 0, MAXBLOCKS*sizeof(uint));
-	memset(&fs->allocated_fds, 0, FS_MAXOPENFILES*sizeof(fd_t));
+	memset( &fs->fb_map, 0,			sizeof(map));
+	memset( &fs->ino_map, 0,		sizeof(map));
+	memset( &fs->sb_i.blocks, 0,		SUPERBLOCK_MAXBLOCKS*sizeof(block_t));
+	memset( &fs->sb.inode_first_blocks, 0,	MAXBLOCKS*sizeof(block_t));
+	memset( &fs->sb.inode_block_counts, 0,	MAXBLOCKS*sizeof(uint));
+	memset( &fs->allocated_fds, 0,		FS_MAXOPENFILES*sizeof(fd_t));
 
-	fs->sb.root = 0;
-	fs->sb.free_blocks_base = 4;					/* Start allocating from 5th block */
-	fs->sb.free_inodes_base = 1;					/* Start allocating from 1st inode */
-	fs->sb_i.nblocks = sizeof(superblock)/stride + 1; 		/* How many free blocks needed */
-	fs->fb_map.data[0] = 0x04;					/* First four blocks reserved */
+	fs->fb_map.data[0]	= 0x04;					/* First four blocks reserved */
+	fs->sb.free_blocks_base	= 4;					/* Start allocating from 5th block */
+	fs->sb.free_inodes_base	= 1;					/* Start allocating from 2nd inode */
+	fs->sb.root		= 0;
+	fs->sb_i.nblocks	= sizeof(superblock)/stride + 1; 	/* How many free blocks needed for superblock */
+	fs->first_free_fd = 0;
 
 	if (newfs) {
 		_balloc(fs, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
@@ -1122,144 +1237,190 @@ static filesystem* _init(int newfs) {
 	return fs;
 }
 
-/* Fill in indices to the blocks of an inode. Return the count of allocated blocks */
-static int _fill_block_indices(inode* ino, block_t* block_indices, size_t count) {
+/* Fill the input @param data into the blocks pointed to by
+ * @param ino. Start at @param seek_pos. Spill into Indirect block pointers, 
+ * doubly-indirected block pointers, and triply-indirected block 
+ * pointers as needed.
+ */
+static int _inode_fill_blocks_from_data(inode* ino, size_t seek_pos, char* data) {
+	size_t write_cnt = 0;		/* Number of bytes written */
+	size_t blocks_written = 0;	/* Number of blocks filled */
+	uint indirectionLevel = DIRECT;	/* Which kind of blocks we are writing to (direct, indirect)*/
+	size_t slen;			/* Size in bytes of the input data */
+	
+	block_t blk;			/* First block to begin writing at */
+	size_t offset;			/* Byte offset in first block to begin writing at */
 
-	if (MAXFILEBLOCKS < count)
-		return FS_ERR;
+	if (NULL == data) return FS_ERR;
 
-	memcpy(ino->blocks, block_indices, sizeof(block_t)*count);
+	slen = strlen(data);
+	offset = seek_pos % stride;
+	blk = seek_pos / stride;
 
-	//return i;
+	while (write_cnt < slen) {
+
+		if (blocks_written >= ino->nblocks - ino->inode_nblks) /* Don't write to more blocks than allocated for data */
+			break;
+
+		if	(blk < MAXBLOCKS_DIRECT)					indirectionLevel = DIRECT;
+		else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1)			indirectionLevel = INDIRECT1;
+		else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1 + MAXBLOCKS_IB2)	indirectionLevel = INDIRECT2;
+		else if (blk < MAXFILEBLOCKS)						indirectionLevel = INDIRECT3;
+		else return FS_ERR;
+
+		switch (indirectionLevel)
+		{
+			case DIRECT: memcpy(&ino->dblocks[blk]->data[offset], &data[write_cnt], 1); break;
+
+			// If we used up all the direct blocks, start using singly indirected blocks
+			case INDIRECT1: memcpy(&ino->ib1->blocks[blk]->data[offset], &data[write_cnt], 1); break;
+
+			// If we used up all the singly indirected blocks, start using doubly indirected blocks
+			case INDIRECT2: break; // TODO
+
+			// If we used up all the doubly indirected blocks, start using triply indirected blocks
+			case INDIRECT3: break; // TODO
+
+			default: return FS_ERR;	/* Out of blocks */
+		}
+
+		/* Going to the next block. Reset byte offset to 0. */
+		if (blk < (seek_pos + offset) / stride) {
+			offset = 0;
+			blocks_written++;
+			blk++;
+		}
+		else offset++;
+		write_cnt++;
+	}
+
 	return FS_OK;
 }
 
-/* Return the count of allocated blocks */
-static size_t _fill_direct_blocks(block** blocks, size_t offset, size_t count, char* data) {
+/* Read data from blocks on disk into the blocks and iblocks of an inode */
+static int _inode_fill_blocks_from_disk(inode* ino) {
+	size_t block_index = 0;
+	size_t ib1 = 0;
+	size_t ib2 = 0;
+	size_t db = 0;
+
+	size_t nblocks_read = 0;
+	size_t nblocks_to_read = ino->nblocks - ino->inode_nblks;
+
+	uint indirectionLevel = DIRECT;
+	size_t i;
+
+
+	if (NULL == ino) return FS_ERR;
+
+	while (nblocks_read < nblocks_to_read) {
+		block_index = ino->inode_nblks + nblocks_read;
+
+		if	(block_index < MAXBLOCKS_DIRECT)					indirectionLevel = DIRECT;
+		else if (block_index < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1)			indirectionLevel = INDIRECT1;
+		else if (block_index < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1 + MAXBLOCKS_IB2)	indirectionLevel = INDIRECT2;
+		else if (block_index < MAXFILEBLOCKS)						indirectionLevel = INDIRECT3;
+		else return FS_ERR;
+
+		switch (indirectionLevel) {
+
+			case DIRECT:
+			{
+				db = block_index;
+				_fs.readblock(&ino->dblocks[db], ino->blocks[block_index]);
+				break;
+			}
+			case INDIRECT1:
+			{
+				db = block_index - MAXBLOCKS_DIRECT;
+				_fs.readblock(&ino->ib1->blocks[db], ino->blocks[block_index]);
+				break;
+			}
+			case INDIRECT2:
+			{
+				i = block_index - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1;
+				ib1 = i / MAXBLOCKS_IB1;
+				db = i - MAXBLOCKS_IB1*ib1;
+				_fs.readblock(	&ino->ib2->iblocks[ib1]->blocks[db],
+						ino->blocks[block_index]);
+				break;
+			}
+			case INDIRECT3:
+			{
+				i = block_index - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1 - MAXBLOCKS_IB2;
+				ib2 = i / MAXBLOCKS_IB2;
+				ib1 = i / MAXBLOCKS_IB1;
+				db = i - MAXBLOCKS_IB1*ib1 - MAXBLOCKS_IB2*ib2;
+				_fs.readblock(	&ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks[db],
+						ino->blocks[block_index]);
+				break;
+			}
+			default: return FS_ERR;
+		}
+		nblocks_read += 1;
+	}
+
+	return FS_ERR;
+}
+
+/* Read the string data from an array of direct blocks */
+static char* _read_direct_blocks(block** blocks, size_t offset, size_t count) {
 	uint i;
-	size_t write_cnt = 0;
+	size_t read_cnt = 0;
+	size_t remainder = count;
+
+	char* buf = NULL;
+	buf = (char*)malloc(BLKSIZE);
+
 	for (i = 0; i < count; i++) {
 		if (i == count) break;
 
 		if (NULL == blocks[i])
-			return write_cnt;
+			return buf;
 
-		memcpy(&blocks[i]->data[offset], data, min(BLKSIZE, strlen(data)));
-		write_cnt += min(BLKSIZE, strlen(data));
+		memcpy(buf, &blocks[i]->data[offset], min(BLKSIZE, remainder));
+		read_cnt += min(BLKSIZE, remainder);
 		
-		offset = 0; /* Only applies to first write */
-		if (write_cnt == count) break;
-	}
-	return write_cnt;
-}
-
-/* Fill @param count @param blocks into the block pointers of
- * @param ino. Spill into Indirect block pointers, 
- * doubly-indirected block pointers, and triply-indirected block 
- * pointers as needed.
- */
-static int _fill_inode_blocks(inode* ino, size_t seek_pos, char* data) {
-	size_t write_cnt = 0, write_size = 0; 
-	uint indirectionLevel = 0, i, j;
-	size_t slen;
-	block_t blk;	/* Write at block blk + offset bytes*/
-	size_t offset;
-
-	if (NULL == data) return FS_ERR;
-	slen = strlen(data);
-
-	blk = seek_pos / stride;
-	offset = seek_pos % stride;
-
-	if	(blk < NBLOCKS) {
-		indirectionLevel = DIRECT;
-		write_size = min(strlen(data), MAXBLOCKS_DIRECT*BLKSIZE);
-	}
-	else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1) {
-		indirectionLevel = INDIRECT1;
-		write_size = min(strlen(data), MAXBLOCKS_IB1*BLKSIZE);
-	}
-	else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1 + MAXBLOCKS_IB2) {
-		indirectionLevel = INDIRECT2;
-		write_size = min(strlen(data), MAXBLOCKS_IB2*BLKSIZE);
-	}
-	else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1 + MAXBLOCKS_IB2 + MAXBLOCKS_IB3) {
-		indirectionLevel = INDIRECT3;
-		write_size = min(strlen(data), MAXBLOCKS_IB3*BLKSIZE);
-	}
-	else return FS_ERR;
-
-	while (write_cnt < slen) {
-		size_t this_write_cnt = 0;
-
-		if (write_cnt >= ino->nblocks-ino->inode_blocks)
-			break;	/* Used up all allocated blocks. TODO: Put this check in _fill_direct_blocks */
-
-		switch (indirectionLevel)
-		{
-			case DIRECT: 
-				this_write_cnt = _fill_direct_blocks(
-							&ino->dblocks[blk], offset, 
-							write_size, &data[write_cnt]); break;
-
-			// If we used up all the direct blocks, start using singly indirected blocks
-			case INDIRECT1: 
-				this_write_cnt = _fill_direct_blocks(
-							&ino->ib1->blocks[blk], offset, 
-							write_size, &data[write_cnt]); break;
-
-			// If we used up all the singly indirected blocks, start using doubly indirected blocks
-			case INDIRECT2: for (i = 0; i < NBLOCKS_IBLOCK; i++)	
-						this_write_cnt = _fill_direct_blocks(
-									&ino->ib2->iblocks[i]->blocks[blk], 
-									offset, write_size, &data[write_cnt]); break;
-
-			// If we used up all the doubly indirected blocks, start using triply indirected blocks
-			case INDIRECT3: for (i = 0; i < NIBLOCKS; i++)
-						for (j = 0; j < NBLOCKS_IBLOCK; j++)
-							this_write_cnt = _fill_direct_blocks(
-										ino->ib3->iblocks[i]->iblocks[j]->blocks, 
-										offset, write_size, &data[write_cnt]); break;
-			case 4: return FS_ERR;	/* Out of blocks */
-		}
-
-		blk = 0;	/* Block number only applies to first level of indirection*/
-		offset = 0;	/* Offset only applies to first block write (further handled in _fill_direct_blocks) */
-		indirectionLevel++;
-
-		write_cnt += this_write_cnt;
-		write_size -= this_write_cnt;
+		offset = 0; /* Only applies to first read */
+		if (read_cnt == count) break;
 	}
 
-	return FS_OK;
-}
-
-/* Read the string data from a direct blocks */
-static char* _read_direct_blocks(block** blocks, size_t offset, size_t count) {
-	char* buf = NULL;
-
-	buf = (char*)malloc(128);
-	sprintf(buf, "_read_direct_blocks: Not implemented. \
-			(blknum, offset, count) = (%d %lu %lu)\n", blocks[0]->num, offset, count);
+	buf[read_cnt] = '\0'; /* Null terminator*/
 
 	return buf;
 }
 
-/* Read the string data from the direct and indirect blocks of an inode */
-static char* _read_inode_blocks(inode* ino, size_t seek_pos, size_t len) {
+/* Read the string data from the direct and indirect blocks of an inode 
+ * TODO: Implement it for iblocks */
+static char* _read_inode_data(inode* ino, size_t seek_pos, size_t len) {
 	char* buf = NULL;
-	char* buf2 = NULL;
+
+	if (seek_pos >= BLKSIZE*NBLOCKS || seek_pos + len >= BLKSIZE*NBLOCKS)
+		return NULL;	/* Read would go out-of-bounds */
+
+	buf = _fs._read_direct_blocks(ino->dblocks, seek_pos, len);
+
+	return buf;
+}
+
+/* Write the data blocks pointed to by an inode to disk */
+static int _write_inode_data(inode* ino) {
+	char* buf = NULL;
+	size_t buflen = 0;
+	size_t nblocks = 0;	/* Number of blocks which contain data */
+	size_t dblocks = 0;	/* Num data blocks from the inode */
+
+	buf = _fs._read_direct_blocks(ino->dblocks, 0, ino->size);
+	buflen = strlen(buf);
 	
-	buf2 = (char*)malloc(256);
+	dblocks = ino->nblocks - ino->inode_nblks;
+	nblocks = buflen / stride + 1;
 
-	buf = _read_direct_blocks(ino->dblocks, 0, 1);
-	sprintf(buf2, "%s", buf);
-	free(buf);
+	if (NULL == buf) return FS_ERR;
 
-	sprintf(buf2, "_read_inode_blocks: Not implemented. \
-			(seek_pos, len) = (%lu %lu)\n", seek_pos, len);
+	return _fs.writeblocks(	buf, &ino->blocks[ino->inode_nblks], 
+				min(dblocks, nblocks), strlen(buf));
 
-	return buf;
 }
 
 /* Read a block from disk */
@@ -1286,7 +1447,7 @@ static int writeblock(block_t b, size_t size, void* data) {
 }
 
 /* Read an arbitary number of blocks from disk. */
-static int readblocks(void* dest, block_t* blocks, uint numblocks, size_t type_size) {
+static int readblocks(void* dest, block_t* blocks, size_t numblocks, size_t type_size) {
 	block_t j = blocks[0];
 
 	/* Get strided blocks (more than one block or less than a whole block) */
@@ -1316,7 +1477,7 @@ static int readblocks(void* dest, block_t* blocks, uint numblocks, size_t type_s
 }
 
 /* Write an arbitrary number of blocks to disk */
-static int writeblocks(void* source, block_t* blocks, uint numblocks, size_t type_size) {
+static int writeblocks(void* source, block_t* blocks, size_t numblocks, size_t type_size) {
 	block_t j = blocks[0];
 
 	// Split @param source into strides if it will not fit in one block
@@ -1354,30 +1515,15 @@ static int writeblocks(void* source, block_t* blocks, uint numblocks, size_t typ
 /* Write the blocks of an inode to disk 
  * Inteded context is a file was just written to,
  * and the changes need to be put on disk. */
-static int commit_write(inode* ino) {
-	uint i = 0, start = 0, remainder = 0;
+static int write_commit(filesystem* fs, inode* ino) {
 
-	/* Write the inode itself. */
-	writeblocks( ino, ino->blocks, ino->nblocks, sizeof(inode)); 
-
-	/* The first few blocks were for the inode metadata itself. 
-	 * The Remaining are for actual data */
-	start = sizeof(inode)/BLKSIZE + 1;
-	remainder = ino->nblocks - start;
+	/* Write the inode metadata. */
+	writeblocks( ino, ino->blocks, ino->inode_nblks, sizeof(inode)); 
 
 	/* Write the data the inode points to. TODO: write iblocks */
-	/* Direct blocks */
-	for (i = start; i < min(ino->nblocks, NBLOCKS); i++) {
-		writeblock(ino->blocks[i], BLKSIZE, ino->dblocks[i]);
-	}
+	_write_inode_data(ino);
 
-	if (i < ino->nblocks) {
-		for (; i < min(ino->nblocks, NBLOCKS); i++) {
-			writeblock(ino->blocks[i], BLKSIZE, ino->ib1->blocks[i]);
-		}
-	}
-
-	return FS_OK;
+	return _fs._sync(fs);
 }
 
 /* Open a filesystem stored on disk */
@@ -1495,6 +1641,8 @@ fs_private_interface const _fs =
 	_getAbsolutePathDV, _getAbsolutePath,
 	_strSkipFirst, _strSkipLast,
 
+	_isNumeric,
+
 	/* Directory management */
 	_newd, _newdv,
 	_newf, _newfv, 
@@ -1511,17 +1659,18 @@ fs_private_interface const _fs =
 
 	/* Inode allocation */
 	_ialloc, _ifree,
-	_fill_block_indices, 
-	_fill_inode_blocks, _fill_direct_blocks,
-	_read_direct_blocks, _read_inode_blocks,
-	_inode_load,
+
+	_inode_fill_blocks_from_data, _inode_fill_blocks_from_disk,
+	
+	_read_direct_blocks, _read_inode_data, _write_inode_data,
+	_inode_load, _inode_unload,
 
 	/* Reading and writing disk blocks */
 	readblock, writeblock,
 	readblocks, writeblocks,
 
 	/* Write commits, superblock synchronization, tree traversal */
-	commit_write, 
+	write_commit, 
 	_recurse, _sync, 
 
 	/* Native filesystem interaction */

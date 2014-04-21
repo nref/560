@@ -127,7 +127,7 @@ void sh_stat(char* name) {
 
 	ret = fs.stat(name);
 	if (NULL == ret) printf("Inode not found for \"%s\"!", name);
-	else printf("%d %d", ret->mode, ret->size);
+	else printf("%d %lu", ret->mode, ret->size);
 	printf("\n");
 }
 
@@ -308,13 +308,28 @@ int main() {
 		} else if (!strcmp(cmd->fields[0], "write")) {
 			
 			if (cmd->nfields > 2) {
-				fs.write(atoi(cmd->fields[1]), cmd->fields[2]);
+
+				/* TODO It would be nice to move this and others into functions */
+				size_t count;
+				if (!fs.isNumeric(cmd->fields[1]))
+					retv = FS_ERR;
+				else {
+					count = fs.write(atoi(cmd->fields[1]), cmd->fields[2]);
+					if (FS_ERR == count) retv = FS_ERR;
+					else {
+						printf("Wrote %lu bytes to fd %d ", count, atoi(cmd->fields[1]));
+						retv = FS_OK;
+					}
+				}
 			}
 		} else if (!strcmp(cmd->fields[0], "read")) {
-		    
-		    if (cmd->nfields > 2) {
-			fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
-		    }
+		
+			if (cmd->nfields > 2) {
+				char* buf = NULL;
+
+				buf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
+				printf("%s\n",buf);
+			}
 
 		} else if (!strcmp(cmd->fields[0], "close")) {
 
