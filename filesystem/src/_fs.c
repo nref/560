@@ -57,7 +57,7 @@ static void _safeopen(char* fname, char* mode) {
 
 	fp = fopen(fname, mode);
 	if (NULL == fp) {
-		printf("_safeopen: \"%s\" %s\n", fname, strerror(errno));
+		//printf("fopen: \"%s\" %s\n", fname, strerror(errno));
 		return;
 	}
 }
@@ -260,7 +260,7 @@ static int _bfree(filesystem* fs, block* blk) {
 
 /* Traverse the free block array and return a block 
  * whose field num is the index of the first free bock */
-static size_t __balloc(filesystem* fs) {
+static int __balloc(filesystem* fs) {
 	size_t i, blockidx, blockval;
 
 	/* One char in the free block map represents 
@@ -277,19 +277,19 @@ static size_t __balloc(filesystem* fs) {
 			if (FS_ERR == _sync(fs))
 				return FS_ERR;
 
-			return fs->sb.free_blocks_base;
+			return (int)fs->sb.free_blocks_base;
 		}
 	}
 	return FS_ERR;
 }
 
 /* Allocate @param count blocks if possible. Store indices in @param blocks */
-static size_t _balloc(filesystem* fs, const size_t count, block_t* indices) {
+static int _balloc(filesystem* fs, const size_t count, block_t* indices) {
 	size_t i, j;
 
 	for (i = 0; i < count; i++) {	// Allocate free blocks
 		j = __balloc(fs);
-		if (FS_ERR == j) return FS_ERR;
+		if (FS_ERR == (int)j) return FS_ERR;
 		indices[i] = j;
 	}
 	return FS_OK;
@@ -956,6 +956,52 @@ static char* _strSkipLast(char* str) {
 	return str;
 }
 
+/* Trim the leading and trailing white space from a string. 
+ * The string is shifted into the first position so that free()
+ * still works. http://stackoverflow.com/a/122974/472308 */
+static char* _trim(char *str)
+{
+	size_t len = 0;
+	char *frontp = str - 1;
+	char *endp = NULL;
+
+	if( str == NULL )
+		return NULL;
+
+	if( str[0] == '\0' )
+		return str;
+
+	len = strlen(str);
+	endp = str + len;
+
+	/* Move the front and back pointers to address
+	* the first non-whitespace characters from
+	* each end.
+	*/
+	while( isspace(*(++frontp)) );
+	while( isspace(*(--endp)) && endp != frontp );
+
+	if( str + len - 1 != endp )
+		*(endp + 1) = '\0';
+	else if( frontp != str &&  endp == frontp )
+		*str = '\0';
+
+	/* Shift the string so that it starts at str so
+	* that if it's dynamically allocated, we can
+	* still free it on the returned pointer.  Note
+	* the reuse of endp to mean the front of the
+	* string buffer now.
+	*/
+	endp = str;
+	if( frontp != str )
+	{
+		while( *frontp ) *endp++ = *frontp++;
+		*endp = '\0';
+	}
+
+
+	return str;
+}
 /* Remove leading and final forward slashes from a string
  * if they exist */
 static char* _pathTrimSlashes(char* path) {
@@ -1001,6 +1047,9 @@ static char* _stringFromPath(fs_path* p) {
 /* Get the path minus the last field, e.g. "a/b" from "a/b/c" */
 static char* _pathSkipLast(fs_path* p) {
 	char* path;
+
+	if (NULL == p) return NULL;
+
 	p->nfields--;
 	path = _stringFromPath(p);
 	p->nfields++;
@@ -1011,6 +1060,9 @@ static char* _pathSkipLast(fs_path* p) {
 /* Get the last field in the path, e.g. "c" from "a/b/c" */
 static char* _pathGetLast(fs_path* p) {
 	char* p_str;
+
+	if (NULL == p) return NULL;
+
 	p->firstField = p->nfields - 1;
 	p_str = _stringFromPath(p);
 	p->firstField = 0;
@@ -1635,11 +1687,11 @@ static void _debug_print() {
 
 fs_private_interface const _fs = 
 { 
-	/* Path management */
+	/* Path and string management */
 	_pathFree, _newPath, _tokenize, _pathFromString, _stringFromPath,		
 	_pathSkipLast, _pathGetLast, _pathAppend, _pathTrimSlashes, 
 	_getAbsolutePathDV, _getAbsolutePath,
-	_strSkipFirst, _strSkipLast,
+	_strSkipFirst, _strSkipLast, _trim,
 
 	_isNumeric,
 

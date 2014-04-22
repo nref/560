@@ -237,6 +237,7 @@ typedef struct {
 	char*			(* _getAbsolutePath)	(char*, char*);
 	char*			(* _strSkipFirst)	(char*);
 	char*			(* _strSkipLast)	(char*);
+	char*			(* _trim)		(char*);
 
 	int			(* _isNumeric)		(char* str);
 
@@ -271,8 +272,8 @@ typedef struct {
 	filesystem*		(* _mkfs)		();
 	filesystem*		(* _init)		(int);
 
-	size_t			(* __balloc)		(filesystem* );
-	size_t			(* _balloc)		(filesystem* , const size_t, block_t*);
+	int			(* __balloc)		(filesystem* );
+	int			(* _balloc)		(filesystem* , const size_t, block_t*);
 	int			(* _bfree)		(filesystem* , block*);
 	block*			(* _newBlock)		();
 

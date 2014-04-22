@@ -98,21 +98,20 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 void sh_tree(char* name) {
 	dentv* dv = NULL;
 
+	if (NULL == name) {
+		printf("No filesystem.\n");
+		return;
+	}
+
 	dv = fs.opendir(name);
 
 	if (NULL == dv) {
-		printf("tree: Null directory!\n");
+		printf("tree: Could not open the directory. (null dv) \"%s\"\n", name);
 		return;
 	}
 
 	if (NULL == dv->ino) {
-		printf("tree: Null inode!\n");
-		return;
-	}
-	
-	if ('\0' == dv->name[0] || strlen(dv->name) == 0) {
-
-		printf("Filesystem root name not \"/\"!\n");
+		printf("tree: Could not open the directory. (null inode)\n");
 		return;
 	}
 
@@ -120,6 +119,47 @@ void sh_tree(char* name) {
 
 	sh_tree_recurse(1, FS_MAXPATHFIELDS, dv);
 	//fs.closedir(dv);
+}
+
+int sh_write(fs_path* cmd, fs_path* cmd_quotes) {
+	
+	size_t write_byte_count;
+	size_t write_expected_byte_count;
+	fd_t fd;
+	uint i;
+	uint retv;
+
+	char* write_buf = (char*)malloc(1024);
+	memset(write_buf, 0, 1024);
+
+	if (cmd->nfields < 2) return FS_ERR;
+
+	if (!fs.isNumeric(cmd->fields[1]))
+		return FS_ERR;
+	else {
+		fd = atoi(cmd->fields[1]);
+
+		if (NULL != cmd_quotes) {
+			strcat(write_buf, cmd_quotes->fields[1]);
+		}
+		else {
+			for (i = 2; i < cmd->nfields; i++)
+			{
+				strcat(write_buf, cmd->fields[i]);
+				strcat(write_buf, " ");
+			}
+		}
+		write_expected_byte_count = strlen(write_buf);
+
+		write_byte_count = fs.write(fd, write_buf);
+
+		if (write_expected_byte_count != write_byte_count) retv = FS_ERR;
+		else {
+			printf("Wrote %lu bytes to fd %d ", write_byte_count, fd);
+			retv = FS_OK;
+		}
+	}
+	return retv;
 }
 
 void sh_stat(char* name) {
@@ -149,8 +189,11 @@ int sh_mkdir(char* dir_name) {
 	}
 
 	i = fs.mkdir(cur_path, abs_path);
-	printf("%s\n", fs_responses[i]);
-	return i;
+
+	if (OK == i)
+		return FS_OK;
+	else printf("%s\n", fs_responses[i]);
+	return FS_ERR;
 }
 
 // Show the shell prompt
@@ -215,63 +258,120 @@ int sh_getfsroot() {
 
 int main() {
 	int retv = 0;
+	int input_is_quoted;
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
 	char* delimiter = "\t ";
 
 	fs_path* cmd;
+	fs_path* cmd_quotes;
+	current_path = NULL;
 
 	_fs._debug_print();
 	fs.openfs();
 	sh_getfsroot();
 
 	prompt();							
-	//TODO: Needs to be able to parse "" as a whole field
-	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {		// Get user input
+	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {	// Get user input
 
 		if (strlen(buf) == 0 || '\n' == buf[0]) { 
-			prompt(); continue;	// Repeat loop on empty input
+			prompt(); 
+			continue;		// Repeat loop on empty input
 		}		
-		buf[strlen(buf)-1] = '\0';				// Remove trailing newline
 
-		// Break input into cmd->fields separated by whitespace. 
+		buf[strlen(buf)-1] = '\0';	// Remove trailing newline
+
+		// Split input on whitespace. 
 		cmd = fs.tokenize(buf, delimiter);
+		
+		/* Split input on quoted strings.
+		 * First element will be the unquoted leading input,
+		 * Second to n elements will be quoted fields, and the (n+1)th
+		 * Element will be the trailing unquoted input
+		 * e.g. write 0 "this is a long string   " works
+		 *as well as "open "long file name" w */
+		cmd_quotes = fs.tokenize(buf, "\"");
+
+		input_is_quoted = false;
+		if (cmd_quotes->nfields > 1)
+			input_is_quoted = true;
 
 		if (!strcmp(cmd->fields[0], "exit")) break;
 		
 		else if (!strcmp(cmd->fields[0], "ls")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
 
+	
 			// If the user provided more than one field
 			if (cmd->nfields > 1)
-				retv = sh_ls(cmd->fields[1]);
+
+				if (input_is_quoted)	retv = sh_ls(cmd_quotes->fields[1]);
+				else			retv = sh_ls(cmd->fields[1]);
 			else retv = sh_ls(current_path);
 		}
 
 		else if (!strcmp(cmd->fields[0], "cd")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
 
-			if (cmd->nfields > 1)
-				retv = sh_cd(cmd->fields[1]); 
+			if (cmd->nfields > 1) {
+				if (input_is_quoted)	retv = sh_cd(cmd_quotes->fields[1]);
+				else			retv = sh_cd(cmd->fields[1]); 
+			}
 		}
 
 		else if (!strcmp(cmd->fields[0], "pwd")) { 
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
 			printf("%s\n", current_path); 
 			retv = FS_NORMAL;
 		}
 
 		else if (!strcmp(cmd->fields[0], "tree")) { 
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
 			sh_tree(current_path); 
 			retv = FS_NORMAL;
 		}
 
 		else if (!strcmp(cmd->fields[0], "mkdir")) { 
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
 			if (cmd->nfields > 1) {
-				retv = sh_mkdir(cmd->fields[1]); 
-				retv = FS_NORMAL;
+				if (input_is_quoted)	retv = sh_mkdir(cmd_quotes->fields[1]);
+				else			retv = sh_mkdir(cmd->fields[1]); 
 			}
 		}
 
 		else if (!strcmp(cmd->fields[0], "stat")) { 
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
 			if (cmd->nfields > 1) {
-				sh_stat(cmd->fields[1]); 
+
+				if (input_is_quoted)	sh_stat(cmd_quotes->fields[1]); 
+				else			sh_stat(cmd->fields[1]); 
 				retv = FS_NORMAL;
 			}
 			retv = FS_ERR;
@@ -284,20 +384,40 @@ int main() {
 			retv = sh_getfsroot();
 
 		} else if (!strcmp(cmd->fields[0], "seek")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
 			printf("Not Implemented\n");
+
 		} else if (!strcmp(cmd->fields[0], "open")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
 
 			if (cmd->nfields > 2) {
 				char* parent;
 				char* name;
+				char* mode;
 				int fd = 0;
 				fs_path* p;
 
-				p = fs.pathFromString(cmd->fields[1]);
+				if (input_is_quoted) {
+					p = fs.pathFromString(cmd_quotes->fields[1]);
+					mode = fs.trim(cmd_quotes->fields[2]);
+				}
+				else {
+					p = fs.pathFromString(cmd->fields[1]);
+					mode = cmd->fields[2];
+				}
 				parent = fs.pathSkipLast(p);
 				name = fs.pathGetLast(p);
 
-				fd = fs.open(parent, name, cmd->fields[2]);
+				fd = fs.open(parent, name, mode);
 
 				if (FS_ERR == fd)
 					printf("file open error\n");
@@ -306,40 +426,48 @@ int main() {
 			}
 
 		} else if (!strcmp(cmd->fields[0], "write")) {
-			
-			if (cmd->nfields > 2) {
-
-				/* TODO It would be nice to move this and others into functions */
-				size_t count;
-				if (!fs.isNumeric(cmd->fields[1]))
-					retv = FS_ERR;
-				else {
-					count = fs.write(atoi(cmd->fields[1]), cmd->fields[2]);
-					if (FS_ERR == count) retv = FS_ERR;
-					else {
-						printf("Wrote %lu bytes to fd %d ", count, atoi(cmd->fields[1]));
-						retv = FS_OK;
-					}
-				}
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
 			}
+
+			if (input_is_quoted)	retv = sh_write(cmd, cmd_quotes);
+			else			retv = sh_write(cmd, NULL);
+
 		} else if (!strcmp(cmd->fields[0], "read")) {
-		
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
 			if (cmd->nfields > 2) {
 				char* buf = NULL;
 
-				buf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
-				printf("%s\n",buf);
+				if (input_is_quoted)	buf = fs.read(atoi(cmd_quotes->fields[1]), atoi(cmd_quotes->fields[2]));
+				else			buf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
+				if (NULL == buf) retv = FS_ERR;
+				else {
+					retv = FS_OK;
+					printf("%s\n",buf);
+				}
 			}
 
 		} else if (!strcmp(cmd->fields[0], "close")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
 
 			if (cmd->nfields > 1) {
+
 				fs.close(atoi(cmd->fields[1]));
 				retv = FS_OK;
 			}
 
 		} else {
-			//TODO: No need to display buf for release
 			printf("Bad command \"%s\"", buf); 
 			retv = FS_NORMAL; 
 		}
@@ -349,8 +477,7 @@ int main() {
 		printf("\n");
 
 		fs.pathFree(cmd);
-		//DONE: zero out the buffer
-		memset(buf,0,SH_BUFLEN);
+		memset(buf, 0, SH_BUFLEN);
 		prompt();
 	}
 	printf("exit()\n");

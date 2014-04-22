@@ -8,7 +8,7 @@ extern void		sh_openfs	();
 extern void		sh_mkfs		();
 extern int		sh_open		(char* filename, char* mode);
 extern char*		sh_read		(int fd, int size);
-extern void		sh_write	(int fd, char* string);
+extern int		sh_write	(fs_path*, fs_path*);
 extern void		sh_seek		(int fd, int offset);
 extern void		sh_close	(int fd);
 extern int		sh_mkdir	(char* name);

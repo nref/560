@@ -6,19 +6,20 @@
 typedef struct { 
 
 	/* Path utilities */
-	void		(* pathFree)		(fs_path* p);
+	void		(* pathFree)		(fs_path*);
 	fs_path*	(* newPath)		();
 	fs_path*	(* tokenize)		(const char*, const char*);
 	fs_path*	(* pathFromString)	(const char*);
 	char*		(* stringFromPath)	(fs_path*);
-	char*		(* pathSkipLast)	(fs_path* p);
-	char*		(* pathGetLast)		(fs_path* p);
+	char*		(* pathSkipLast)	(fs_path*);
+	char*		(* pathGetLast)		(fs_path*);
 	int		(* pathAppend)		(fs_path*, const char*);
-	char*		(* getAbsolutePathDV)	(dentv* dv, fs_path *p);
+	char*		(* getAbsolutePathDV)	(dentv*, fs_path *);
 	char*		(* getAbsolutePath)	(char* current_dir, char* next_dir);
-	char*		(* pathTrimSlashes)	(char* path);
-	char*		(* strSkipFirst)	(char* cpy);
-	char*		(* strSkipLast)		(char* cpy);
+	char*		(* pathTrimSlashes)	(char*);
+	char*		(* strSkipFirst)	(char*);
+	char*		(* strSkipLast)		(char*);
+	char*		(* trim)		(char*);
 	int		(* isNumeric)		(char*);
 
 	void		(* destruct)		();

@@ -139,6 +139,7 @@ static char*	getAbsolutePath(char* current_path, char* next)	{ return _fs._getAb
 static char*	pathTrimSlashes(char* path)			{ return _fs._pathTrimSlashes(path); }
 static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
 static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
+static char*	trim(char* cpy)					{ return _fs._trim(cpy); }
 static int	isNumeric(char* str)				{ return _fs._isNumeric(str); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
@@ -165,8 +166,6 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 		return -1; 
 	}
 
-	// Chris: BUG: returning directories for files, throwing off read
-	// Doug: I see it, will fix
 	f_path = fs.getAbsolutePath(parent_dir, name);
 	f_ino = stat(f_path);
 
@@ -204,7 +203,21 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 static void close(fd_t fd) { 
 	inode* ino = NULL;
 
-	if (false == shfs->allocated_fds[fd]) return; /* fd not allocated */
+	if (NULL == shfs) {
+		printf("No filesystem.\n");
+		return;
+	}
+
+	if (fd > FS_MAXOPENFILES) {
+		printf("Invalid file descriptor.\n");
+		return;
+	}
+
+	if (false == shfs->allocated_fds[fd]) {
+		printf("File descriptor \"%d\" not open. \n", fd);
+		return; /* fd not allocated */
+	}
+
 	if (shfs->fds[fd]) {
 
 		ino = shfs->fds[fd]->ino;
@@ -222,17 +235,19 @@ static dentv* opendir(char* path) {
 	p = pathFromString(path);
 
 	ino = stat(path);
+
+	if (NULL == ino) {
+		if (!strcmp(path, "/"))
+			printf("No filesystem.\n");
+		else printf("opendir: Could not stat \"%s\"\n", path);
+		return NULL;
+	}
+
 	parent = stat(pathSkipLast(p));
-	
 	free(p);
 
 	if (NULL == parent) {
 		printf("opendir: Could not stat parent directory for \"%s\"\n", path);
-		return NULL;
-	}
-
-	if (NULL == ino) {
-		printf("opendir: Could not stat \"%s\"\n", path);
 		return NULL;
 	}
 
@@ -277,15 +292,28 @@ static char* read(fd_t fd, size_t size) {
 	filev* fv = NULL;
 	char* buf;
 	
+	if (NULL == shfs) {
+		printf("No filesystem.\n");
+		return NULL;
+	}
+
+	if (fd > FS_MAXOPENFILES) {
+		printf("Invalid file descriptor.\n");
+		return NULL;
+	}
+
 	// Check if the fd has been loaded into the shellfs
-	if (false == shfs->allocated_fds[fd]) return NULL; /* fd not allocated, file not open */
-	
+	if (false == shfs->allocated_fds[fd]) {
+		printf("File descriptor \"%d\" is not open\n", fd);
+		return NULL; /* fd not allocated, file not open */
+	}
+
 	// Load the file
 	fv = shfs->fds[fd];
 	
 	// Check file mode
 	if (fv->mode != FS_READ && fv->mode != FS_RW) {
-		printf("File \"%s\" is not opened for reading",fv->name);
+		printf("File \"%s\" is not opened for reading\n",fv->name);
 		return NULL;
 	}
 	
@@ -304,14 +332,30 @@ static char* read(fd_t fd, size_t size) {
 static size_t write (fd_t fd, char* str) { 
 	filev* fv = NULL;
 	size_t slen;
+	
+	if (NULL == shfs) {
+		printf("No filesystem.\n");
+		return 0;
+	}
 
-	if (false == shfs->allocated_fds[fd]) return FS_ERR; /* fd not allocated, file not open */
+	if (fd > FS_MAXOPENFILES) {
+		printf("Invalid file descriptor.\n");
+		return 0;
+	}
+
+	if (false == shfs->allocated_fds[fd]) {
+		printf("File descriptor \"%d\" is not open\n", fd);
+		return 0; /* fd not allocated, file not open */
+	}
 
 	fv = shfs->fds[fd];
-	if (NULL == fv || !fv->ino->v_attached ) return FS_ERR;	/* TODO: Read in from disk */
+	if (NULL == fv || !fv->ino->v_attached ) { 
+		printf("Could not write to file.\n");
 
+		return 0;	/* TODO: Read in from disk */
+	}
 	if (NULL == str || '\0' == str[0])
-		return FS_ERR;
+		return 0;
 
 	slen = strlen(str);
 
@@ -330,7 +374,7 @@ fs_public_interface const fs =
 { 
 	pathFree, newPath, tokenize, pathFromString, stringFromPath,		/* Path management */
 	pathSkipLast, pathGetLast, pathAppend, getAbsolutePathDV, getAbsolutePath, pathTrimSlashes,
-	strSkipFirst, strSkipLast, isNumeric,
+	strSkipFirst, strSkipLast, trim, isNumeric,
 
 	destruct, openfs, mkfs, mkdir,
 	stat, open, close, opendir, closedir, 
