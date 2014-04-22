@@ -1,6 +1,6 @@
 mkfs
 mkdir a
-mkdir b
+mkdir "a b c"
 mkdir c
 mkdir d
 cd a
@@ -33,9 +33,11 @@ mkdir a
 mkdir b
 mkdir c
 mkdir d
-open testfile w
+open " big  testfile  " w
 write 0 This is a string
 write 0 This is more of a string
+close 0
+open "big testfile" r
 
 cd /
 tree
