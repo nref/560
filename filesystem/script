@@ -37,11 +37,13 @@ open " big  testfile  " w
 write 0 This is a string
 write 0 This is more of a string
 close 0
-open "big testfile" r
+open " big  testfile  " r
+read 0 20
+close 0
 
 cd /
 tree
 cd /a
 ls
 cd a/a/a/a
-tree
+tree 

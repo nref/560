@@ -359,7 +359,7 @@ static size_t write (fd_t fd, char* str) {
 
 	slen = strlen(str);
 
-	_fs._inode_fill_blocks_from_data(fv->ino, fv->seek_pos, str);
+	_fs._inode_fill_blocks_from_data(shfs, fv->ino, fv->seek_pos, str);
 	_fs.write_commit(shfs, fv->ino);
 	fv->seek_pos += slen;
 

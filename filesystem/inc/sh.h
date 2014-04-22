@@ -1,14 +1,23 @@
 #include "fs.h"
 
-#define SH_BUFLEN 1024		// How many chars to accept per line from user
-#define SH_MAXFIELDS 16		// How many whitespace-separated fields to accept from user
+#define SH_BUFLEN 1024*1024	// How many chars to accept per line from user
+#define SH_MAXFIELDS 8		// How many whitespace-separated fields to accept from user
+#define SH_MAXFIELDSIZE 1024*1024
+
+typedef struct fs_args {
+	char* fields[8];	/* A struct for storing command arguments */
+	size_t nfields;
+	size_t firstField;
+	size_t fieldSize;
+
+} fs_args;
 
 extern int		sh_getfsroot	();
 extern void		sh_openfs	();
 extern void		sh_mkfs		();
 extern int		sh_open		(char* filename, char* mode);
 extern char*		sh_read		(int fd, int size);
-extern int		sh_write	(fs_path*, fs_path*);
+extern int		sh_write	(fs_args*, fs_args*);
 extern void		sh_seek		(int fd, int offset);
 extern void		sh_close	(int fd);
 extern int		sh_mkdir	(char* name);

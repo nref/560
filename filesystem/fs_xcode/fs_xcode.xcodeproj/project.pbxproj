@@ -30,6 +30,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		2A2603661906125700312E06 /* 2script */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = 2script; path = ../../2script; sourceTree = "<group>"; };
+		2A2603671906135100312E06 /* 3script */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = 3script; path = ../../3script; sourceTree = "<group>"; };
 		2A5A9C4D18F7824900484816 /* fs_xcode */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = fs_xcode; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A5A9C5218F7824900484816 /* fs_xcode.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = fs_xcode.1; sourceTree = "<group>"; };
 		2A5A9C5A18F7828D00484816 /* makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; name = makefile; path = ../../makefile; sourceTree = "<group>"; };
@@ -79,6 +81,8 @@
 		2A5A9C4F18F7824900484816 /* fs_xcode */ = {
 			isa = PBXGroup;
 			children = (
+				2A2603671906135100312E06 /* 3script */,
+				2A2603661906125700312E06 /* 2script */,
 				2AB7577D1902E030003BCEB3 /* script */,
 				2A5A9C5A18F7828D00484816 /* makefile */,
 				2A5A9C5B18F7828D00484816 /* bin */,

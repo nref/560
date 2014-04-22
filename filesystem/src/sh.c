@@ -6,6 +6,67 @@
 dentv* cur_dv = NULL;
 char* current_path;
 
+static fs_args* newArgs() {
+	uint i = 0;
+	fs_args* args = (fs_args*)malloc(sizeof(fs_args));
+	args->fieldSize = SH_MAXFIELDSIZE;
+
+	for (i = 0; i < SH_MAXFIELDS; i++) {
+		args->fields[i] = (char*)malloc(SH_MAXFIELDSIZE);
+		memset(args->fields[i], 0, SH_MAXFIELDSIZE);
+	}
+
+	args->nfields = 0;
+	args->firstField = 0;
+
+	return args;
+}
+
+static void argsFree(fs_args* p) {
+	uint i;
+	if (NULL == p) return;
+
+	for (i = 0; i < SH_MAXFIELDS; i++)
+		free(p->fields[i]);
+	free(p);
+}
+
+/* Split a string on delimiter(s) */
+void sh_tokenize(const char* str, const char* delim, fs_args* args) {
+	size_t i = 0;
+	char* next_field	= NULL;
+	size_t len;
+	char* str_cpy;
+
+	if (NULL == str || '\0' == str[0]) return;
+
+	len = strlen(str);
+	str_cpy = (char*)malloc(sizeof(char) * len + 1);
+	
+	// Copy the input because strtok replaces delimieter with '\0'
+	strncpy(str_cpy, str, min(SH_MAXFIELDSIZE-1, len+1));	
+	str_cpy[len] = '\0';
+
+	// Split the path on delim
+	next_field = strtok(str_cpy, delim);
+	while (NULL != next_field) {
+
+		i = args->nfields;
+		len = strlen(next_field);
+
+		strncpy(args->fields[i], next_field, min(SH_MAXFIELDSIZE-1, len+1));	
+		args->fields[i][len] = '\0';
+
+		if (args->nfields + 1 == SH_MAXFIELDS)
+			break;
+
+		next_field = strtok(NULL, delim);
+		args->nfields++;
+	}
+
+	free(str_cpy);
+}
+
 char* sh_get_dv_path(dentv* dv) {
 	char* path = NULL;
 	fs_path* p = fs.newPath();
@@ -121,7 +182,7 @@ void sh_tree(char* name) {
 	//fs.closedir(dv);
 }
 
-int sh_write(fs_path* cmd, fs_path* cmd_quotes) {
+int sh_write(fs_args* cmd, fs_args* cmd_quotes) {
 	
 	size_t write_byte_count;
 	size_t write_expected_byte_count;
@@ -129,8 +190,8 @@ int sh_write(fs_path* cmd, fs_path* cmd_quotes) {
 	uint i;
 	uint retv;
 
-	char* write_buf = (char*)malloc(1024);
-	memset(write_buf, 0, 1024);
+	char* write_buf = NULL;
+
 
 	if (cmd->nfields < 2) return FS_ERR;
 
@@ -140,6 +201,10 @@ int sh_write(fs_path* cmd, fs_path* cmd_quotes) {
 		fd = atoi(cmd->fields[1]);
 
 		if (NULL != cmd_quotes) {
+			write_expected_byte_count = strlen(cmd_quotes->fields[1]);
+			write_buf = (char*)malloc(write_expected_byte_count);
+			memset(write_buf, 0, write_expected_byte_count);
+
 			strcat(write_buf, cmd_quotes->fields[1]);
 		}
 		else {
@@ -148,8 +213,8 @@ int sh_write(fs_path* cmd, fs_path* cmd_quotes) {
 				strcat(write_buf, cmd->fields[i]);
 				strcat(write_buf, " ");
 			}
+			write_expected_byte_count = strlen(write_buf);
 		}
-		write_expected_byte_count = strlen(write_buf);
 
 		write_byte_count = fs.write(fd, write_buf);
 
@@ -262,8 +327,8 @@ int main() {
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
 	char* delimiter = "\t ";
 
-	fs_path* cmd;
-	fs_path* cmd_quotes;
+	fs_args* cmd;
+	fs_args* cmd_quotes;
 	current_path = NULL;
 
 	_fs._debug_print();
@@ -281,7 +346,8 @@ int main() {
 		buf[strlen(buf)-1] = '\0';	// Remove trailing newline
 
 		// Split input on whitespace. 
-		cmd = fs.tokenize(buf, delimiter);
+		cmd = newArgs();
+		sh_tokenize(buf, delimiter, cmd);
 		
 		/* Split input on quoted strings.
 		 * First element will be the unquoted leading input,
@@ -289,7 +355,8 @@ int main() {
 		 * Element will be the trailing unquoted input
 		 * e.g. write 0 "this is a long string   " works
 		 *as well as "open "long file name" w */
-		cmd_quotes = fs.tokenize(buf, "\"");
+		cmd_quotes = newArgs();
+		sh_tokenize(buf, "\"", cmd_quotes);
 
 		input_is_quoted = false;
 		if (cmd_quotes->nfields > 1)
@@ -476,7 +543,8 @@ int main() {
 		else if (FS_ERR == retv)	printf("ERROR");
 		printf("\n");
 
-		fs.pathFree(cmd);
+		argsFree(cmd);
+		argsFree(cmd_quotes);
 		memset(buf, 0, SH_BUFLEN);
 		prompt();
 	}

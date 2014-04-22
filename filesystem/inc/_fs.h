@@ -217,7 +217,7 @@ typedef struct filesystem {
 						 * Superblock. Contains filesystem topology */
 } filesystem;
 
-typedef struct fs_path {
+typedef struct fs_path {			/* A struct for storing the fields of a path */
 	char* fields[FS_MAXPATHFIELDS];
 	size_t nfields;
 	size_t firstField;
@@ -273,19 +273,19 @@ typedef struct {
 	filesystem*		(* _init)		(int);
 
 	int			(* __balloc)		(filesystem* );
-	int			(* _balloc)		(filesystem* , const size_t, block_t*);
+	int			(* _balloc)		(filesystem*, inode*, const size_t, block_t*);
 	int			(* _bfree)		(filesystem* , block*);
 	block*			(* _newBlock)		();
 
 	inode_t			(* _ialloc)		(filesystem *);
 	int			(* _ifree)		(filesystem* , inode_t);
 
-	int			(* _inode_fill_blocks_from_data) (inode*, size_t, char*);
+	int			(* _inode_fill_blocks_from_data) (filesystem*, inode*, size_t, char*);
 	int			(* _inode_fill_blocks_from_disk) (inode*);
 
-	char*			(* _read_direct_blocks)	(block**, size_t, size_t);
+	size_t			(* _read_direct_blocks)	(char*, block**, size_t, size_t);
 	char*			(* _read_inode_data)	(inode*, size_t, size_t);
-	int			(* _write_inode_data) (inode*);
+	int			(* _write_inode_data)	(inode*);
 
 	inode*			(* _inode_load)		(filesystem* , inode_t);
 	int			(* _inode_unload)	(filesystem*, inode*);
