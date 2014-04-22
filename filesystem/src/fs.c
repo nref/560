@@ -167,6 +167,14 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 	}
 
 	f_path = fs.getAbsolutePath(parent_dir, name);
+	/*
+	 BUG:
+	 Say I make file in directory a => "open /a/file w"
+	 Close the file.
+	 Then I want to read this file => "read /a/file r"
+	 The line above will return the absolute path "/a/file/"
+	 Which will cause the stat to return an incorrect inode
+	 */
 	f_ino = stat(f_path);
 
 	if (NULL == f_ino) {
