@@ -366,8 +366,49 @@ static size_t write (fd_t fd, char* str) {
 	return slen;
 }
 
-static void	seek		(fd_t fd, size_t offset) { printf("fs_seek: %d %zu\n", fd, offset); }
-static void	link		(inode_t from, inode_t to) { printf("fs_link: %d %d\n", from, to); }
+/* Sets the offset of the corresponding file
+ *  @param fd file descriptor
+ *  @param offset the offest of the file */
+static void seek	(fd_t fd, size_t offset) {
+	filev* fv = NULL;
+	printf("fs_seek: %d %zu\n", fd, offset); //checking
+	
+	//Check if the file is open (fd is in the allocated
+	if (NULL == shfs) {
+		printf("No filesystem.\n");
+		return;
+	}
+	
+	if (fd > FS_MAXOPENFILES) {
+		printf("Invalid file descriptor.\n");
+		return;
+	}
+	
+	if (false == shfs->allocated_fds[fd]) {
+		printf("File descriptor \"%d\" is not open\n", fd);
+		return; /* fd not allocated, file not open */
+	}
+	
+	//No need to check the mode
+	
+	//Open the file
+	fv = shfs->fds[fd];
+	//if (shfs->fds[fd]->ino->dblocks[find_last_data_block] < seek)
+	fv->seek_pos = offset;
+	
+	return;
+}
+
+/* Creats a hardlink from a src file to a destination
+ * *param from inode pointing to the source
+ * @param to inode of the new file*/
+//TODO: This could actually get done before read is complete
+static void link (inode_t from, inode_t to) {
+    printf("fs_link: %d %d\n", from, to);
+    //Check from inode (if not file -> err)
+    //Pass off to fs.link()
+    //Check return errora
+}
 static void	ulink		(inode_t ino) { printf("fs_unlink: %d\n", ino); }
 
 fs_public_interface const fs = 

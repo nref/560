@@ -335,7 +335,8 @@ int main() {
 	fs.openfs();
 	sh_getfsroot();
 
-	prompt();							
+	prompt();
+        memset(buf, 0, SH_BUFLEN); // Clean buffer before printing
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {	// Get user input
 
 		if (strlen(buf) == 0 || '\n' == buf[0]) { 
@@ -456,9 +457,10 @@ int main() {
 				prompt();
 				continue;
 			}
-
-			printf("Not Implemented\n");
-
+			if(cmd->nfields == 3) {
+				fs.seek((fd_t)atoi(cmd->fields[1]), (size_t)atoi(cmd->fields[2]));
+			}
+			
 		} else if (!strcmp(cmd->fields[0], "open")) {
 			if (NULL == current_path || current_path[0] == '\0') {
 				printf("No filesystem.\n");
@@ -546,7 +548,8 @@ int main() {
 		argsFree(cmd);
 		argsFree(cmd_quotes);
 		memset(buf, 0, SH_BUFLEN);
-		prompt();
+		retv = 0;
+ 		prompt();
 	}
 	printf("exit()\n");
 }
