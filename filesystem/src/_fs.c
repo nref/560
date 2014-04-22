@@ -116,6 +116,8 @@ static fs_path* _tokenize(const char* str, const char* delim) {
 		strncpy(path->fields[i], next_field, min(FS_NAMEMAXLEN-1, len+1));	
 		path->fields[i][len] = '\0';
 
+		path->fields[i] = _fs._trim(path->fields[i]);
+
 		if (path->nfields + 1 == FS_MAXPATHFIELDS)
 			break;
 
