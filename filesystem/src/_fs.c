@@ -1102,6 +1102,9 @@ static char* _pathTrimSlashes(char* path) {
 		path = _strSkipFirst(path);	/* Remove leading forward slash */
 	
 	len = strlen(path);
+	
+	if (0 == len) return path;
+	
 	if ('/' == path[len - 1])	
 		path = _strSkipLast(path);	/* Remove trailing forward slash */
 
@@ -1130,7 +1133,6 @@ static char* _stringFromPath(fs_path* p) {
 		strcat(path, p->fields[i]);
 		strcat(path, "/");
 	}
-	path = _fs._strSkipFirst(path);
 
 	path[FS_NAMEMAXLEN] = '\0';
 	return path;
