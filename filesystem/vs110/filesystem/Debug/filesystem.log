@@ -1,15 +1,69 @@
-﻿Build started 4/23/2014 12:20:50 AM.
+﻿Build started 4/23/2014 12:28:58 AM.
      1>Project "\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\filesystem\filesystem.vcxproj" on node 2 (Build target(s)).
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /I..\..\inc /ZI /nologo /W4 /WX- /Od /Oy- /D _CRT_SECURE_NO_WARNINGS /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TC /analyze- /errorReport:prompt /F 10485760 ..\..\src\_fs.c
-         _fs.c
+         C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\CL.exe /c /I..\..\inc /ZI /nologo /W4 /WX- /Od /Oy- /D CODE_ANALYSIS /D _CRT_SECURE_NO_WARNINGS /D _MBCS /Gm /EHsc /RTC1 /MDd /GS /fp:precise /Zc:wchar_t /Zc:forScope /Fo"Debug\\" /Fd"Debug\vc110.pdb" /Gd /TC /analyze /analyze:log "Debug\fs.c.nativecodeanalysis.xml" /analyze:pluginlocalespc.dll /errorReport:prompt /F 10485760   /analyze:quiet ..\..\src\fs.c
+         fs.c
        Link:
          C:\Program Files (x86)\Microsoft Visual Studio 11.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.exe" /INCREMENTAL /NOLOGO kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.lib" /MACHINE:X86 /STACK:10485760 Debug\fs.obj
          Debug\sh.obj
          Debug\_fs.obj
          filesystem.vcxproj -> \\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\Debug\filesystem.exe
+     1>fs.c(123): warning : C6001: Using uninitialized memory 'dPath->fields[i]'.
+     1>fs.c(226): warning : C6385: Reading invalid data from 'shfs->allocated_fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>fs.c(231): warning : C6385: Reading invalid data from 'shfs->fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>fs.c(316): warning : C6385: Reading invalid data from 'shfs->allocated_fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>fs.c(322): warning : C6385: Reading invalid data from 'shfs->fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>fs.c(356): warning : C6385: Reading invalid data from 'shfs->allocated_fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>fs.c(361): warning : C6385: Reading invalid data from 'shfs->fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>fs.c(383): warning : C6271: Extra argument passed to 'printf':  _Param_(3) is not used by the format string.
+     1>fs.c(396): warning : C6385: Reading invalid data from 'shfs->allocated_fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>fs.c(404): warning : C6385: Reading invalid data from 'shfs->fds':  the readable size is '64' bytes, but 'fd' bytes may be read.
+     1>sh.c(16): warning : C6387: 'args->fields[i]' could be '0':  this does not adhere to the specification for the function 'memset'. 
+     1>sh.c(12): warning : C6011: Dereferencing NULL pointer 'args'. 
+     1>sh.c(30): warning : C6001: Using uninitialized memory '*p[BYTE:4]'.
+     1>sh.c(48): warning : C6011: Dereferencing NULL pointer 'str_cpy'. See line 47 for an earlier location where this can occur
+     1>sh.c(47): warning : C6387: 'str_cpy' could be '0':  this does not adhere to the specification for the function 'strncpy'. 
+     1>sh.c(215): warning : C6387: 'write_buf' could be '0':  this does not adhere to the specification for the function 'strcat'. 
+     1>sh.c(217): warning : C6387: 'write_buf' could be '0':  this does not adhere to the specification for the function 'strlen'. 
+     1>sh.c(206): warning : C6387: 'write_buf' could be '0':  this does not adhere to the specification for the function 'memset'. 
+     1>sh.c(325): warning : C6262: Function uses '1048620' bytes of stack:  exceeds /analyze:stacksize '16384'.  Consider moving some data to heap.
+     1>_fs.c(72): warning : C6011: Dereferencing NULL pointer 'path'. 
+     1>_fs.c(73): warning : C6387: 'path->fields[i]' could be '0':  this does not adhere to the specification for the function 'memset'. 
+     1>_fs.c(87): warning : C6001: Using uninitialized memory '*p[BYTE:4]'.
+     1>_fs.c(106): warning : C6387: 'str_cpy' could be '0':  this does not adhere to the specification for the function 'strncpy'. 
+     1>_fs.c(107): warning : C6011: Dereferencing NULL pointer 'str_cpy'. See line 106 for an earlier location where this can occur
+     1>_fs.c(302): warning : C6011: Dereferencing NULL pointer 'd'. 
+     1>_fs.c(333): warning : C6011: Dereferencing NULL pointer 'dv'. 
+     1>_fs.c(338): warning : C6387: 'dv->files' could be '0':  this does not adhere to the specification for the function 'memset'. 
+     1>_fs.c(339): warning : C6387: 'dv->links' could be '0':  this does not adhere to the specification for the function 'memset'. 
+     1>_fs.c(341): warning : C6011: Dereferencing NULL pointer 'dv->ino'. 
+     1>_fs.c(452): warning : C28182: Dereferencing NULL pointer. 'dv->prev->datav.dir' contains the same NULL value as 'tail->datav.dir' did. 
+     1>_fs.c(430): warning : C6011: Dereferencing NULL pointer 'tail'. 
+     1>_fs.c(406): warning : C6011: Dereferencing NULL pointer 'parent'. 
+     1>_fs.c(479): warning : C6011: Dereferencing NULL pointer 'f'. 
+     1>_fs.c(495): warning : C6011: Dereferencing NULL pointer 'fv'. 
+     1>_fs.c(553): warning : C6011: Dereferencing NULL pointer 'ino'. 
+     1>_fs.c(557): warning : C6011: Dereferencing NULL pointer 'ino->ib2'. 
+     1>_fs.c(562): warning : C6011: Dereferencing NULL pointer 'ino->ib3'. 
+     1>_fs.c(565): warning : C6011: Dereferencing NULL pointer 'ino->ib3->iblocks[i]'. 
+     1>_fs.c(598): warning : C6001: Using uninitialized memory '*ino->ib1[BYTE:4]'.
+     1>_fs.c(621): warning : C6001: Using uninitialized memory '**ino->ib2[BYTE:0][BYTE:4]'.
+     1>_fs.c(625): warning : C6001: Using uninitialized memory '*ino->ib2[BYTE:4]'.
+     1>_fs.c(658): warning : C6001: Using uninitialized memory '**ino->ib3[BYTE:0][BYTE:4]'.
+     1>_fs.c(585): warning : C6001: Using uninitialized memory '*ino[BYTE:2524]'.
+     1>_fs.c(654): warning : C6001: Using uninitialized memory '***ino->ib3[BYTE:0][BYTE:0][BYTE:4]'.
+     1>_fs.c(1124): warning : C6387: 'path' could be '0':  this does not adhere to the specification for the function 'memset'. 
+     1>_fs.c(1126): warning : C6387: 'path' could be '0':  this does not adhere to the specification for the function 'strcat'. See line 1124 for an earlier location where this can occur
+     1>_fs.c(1133): warning : C6011: Dereferencing NULL pointer 'path'. See line 1124 for an earlier location where this can occur
+     1>_fs.c(1184): warning : C6011: Dereferencing NULL pointer 'cpy'. See line 1183 for an earlier location where this can occur
+     1>_fs.c(1183): warning : C6387: 'cpy' could be '0':  this does not adhere to the specification for the function 'strncpy'. 
+     1>_fs.c(1271): warning : C6011: Dereferencing NULL pointer 'b'. 
+     1>_fs.c(1362): warning : C6011: Dereferencing NULL pointer 'fs'. 
+     1>_fs.c(1553): warning : C6387: 'directblocks[i]' could be '0':  this does not adhere to the specification for the function 'memset'. 
+     1>_fs.c(1558): warning : C6011: Dereferencing NULL pointer 'directblocks[i]'. See line 1553 for an earlier location where this can occur
+     1>_fs.c(1704): warning : C6011: Dereferencing NULL pointer 'buf'. 
      1>Done Building Project "\\vmware-host\Shared Folders\cds\Documents\idx\560\labs\560\filesystem\vs110\filesystem\filesystem.vcxproj" (Build target(s)).
 
 Build succeeded.
 
-Time Elapsed 00:00:01.79
+Time Elapsed 00:00:00.89

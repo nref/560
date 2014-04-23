@@ -167,12 +167,21 @@ static int open(char* parent_dir, char* name, char* mode) {
 
 	f_path = fs.getAbsolutePath(parent_dir, name);
 	/*
+	 *
 	 BUG:
 	 Say I make file in directory a => "open /a/file w"
 	 Close the file.
 	 Then I want to read this file => "read /a/file r"
 	 The line above will return the absolute path "/a/file/"
 	 Which will cause the stat to return an incorrect inode
+
+	 Doug: read() takes a file descriptor, not a path 
+		e.g. "read 0 5"
+		Also don't forget to reopen before read
+
+		TODO I did observe calling "read a/file" 
+		did not produce an error message and printed garbage.
+		TODO check for decimal input (easy)
 	 */
 	f_ino = stat(f_path);
 
