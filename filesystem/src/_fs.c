@@ -1110,6 +1110,7 @@ static char* _pathTrimSlashes(char* path) {
 
 /* Split a string on "/" */
 static fs_path* _pathFromString(const char* str) {
+	if (NULL == str) return NULL;
 	return _tokenize(str, "/");
 }
 
@@ -1127,9 +1128,10 @@ static char* _stringFromPath(fs_path* p) {
 
 	for (i = p->firstField; i < min(p->nfields, FS_MAXPATHFIELDS); i++) {
 		strcat(path, p->fields[i]);
-		//BUG: If a file or (last entry) DO NOT perform this step
 		strcat(path, "/");
 	}
+	path = _fs._strSkipFirst(path);
+
 	path[FS_NAMEMAXLEN] = '\0';
 	return path;
 }
@@ -1139,6 +1141,14 @@ static char* _pathSkipLast(fs_path* p) {
 	char* path;
 
 	if (NULL == p) return NULL;
+	if (0 == p->nfields) {
+		char* ret = (char*)malloc(1);
+		ret[0] = '\0';
+		return ret;
+	}
+
+	if (!strcmp(p->fields[0], "/"))
+		return p->fields[0];
 
 	p->nfields--;
 	path = _stringFromPath(p);
