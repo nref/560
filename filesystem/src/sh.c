@@ -69,8 +69,12 @@ void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 
 char* sh_get_dv_path(dentv* dv) {
 	char* path = NULL;
-	fs_path* p = fs.newPath();
+	fs_path* p;
+	
+	if (!strcmp(dv->name, "/"))
+		return dv->name;
 
+	p = fs.newPath();
 	fs.getAbsolutePathDV(dv, p);
 	path = fs.stringFromPath(p);
 
