@@ -145,11 +145,14 @@ typedef struct dentv {				// In-memory directory entry
 /* By intention the block, inode, and superblock have identical in-memory and disk structure */
 typedef struct inode {
 	inode_t num;				/* Inode number */
-	size_t nblocks;				/* File size in blocks */
+
+	size_t nblocks;				/* Size in blocks == ndatablocks + ninoblocks */
+	size_t ndatablocks;			/* Number of data blocks */
+
 	size_t size;				/* File size in bytes */
 	size_t nlinks;				/* Number of hard links to the inode */
 
-	uint16_t inode_nblks;			/* Of the allocated blocks, how many are for the inode itself */
+	uint16_t ninoblocks;			/* Of the allocated blocks, how many are for the inode itself */
 	uint16_t mode;				/* 0 file, 1 directory, 2 link */
 	uint16_t v_attached;			/* Did we load the volatile version already ? true : false */
 
@@ -167,7 +170,7 @@ typedef struct inode {
 	
 	block_t blocks[MAXFILEBLOCKS];		/* Indices to all blocks */
 
-	block* dblocks[NBLOCKS];		/* Direct block pointers */
+	block* directblocks[NBLOCKS];		/* Direct block pointers */
 		
 	struct iblock1* ib1;			/* Indices to singly indirected blocks. 
 						 * NBLOCKS_IBLOCK addressable blocks 
@@ -263,8 +266,8 @@ typedef struct {
 	int			(* _v_attach)		(filesystem* , inode*); 
 	int			(* _v_detach)		(filesystem* , inode*); 
 	
-	fd_t			(* _get_fd)		(filesystem*);
-	fd_t			(* _free_fd)		(filesystem*, int);
+	int			(* _get_fd)		(filesystem*);
+	int			(* _free_fd)		(filesystem*, int);
 
 	int			(* _prealloc)		();
 	int			(* _zero)		();
@@ -273,19 +276,22 @@ typedef struct {
 	filesystem*		(* _init)		(int);
 
 	int			(* __balloc)		(filesystem* );
-	int			(* _balloc)		(filesystem*, inode*, const size_t, block_t*);
+	int			(* _balloc)		(filesystem*, const size_t, block_t*);
 	int			(* _bfree)		(filesystem* , block*);
 	block*			(* _newBlock)		();
+	inode*			(* _new_inode)		();
+	void			(* _free_inode)		(inode*);
 
-	inode_t			(* _ialloc)		(filesystem *);
+	int			(* _ialloc)		(filesystem *);
 	int			(* _ifree)		(filesystem* , inode_t);
 
 	int			(* _inode_fill_blocks_from_data) (filesystem*, inode*, size_t, char*);
 	int			(* _inode_fill_blocks_from_disk) (inode*);
 
-	size_t			(* _read_direct_blocks)	(char*, block**, size_t, size_t);
-	char*			(* _read_inode_data)	(inode*, size_t, size_t);
-	int			(* _write_inode_data)	(inode*);
+	int			(* _inode_extend_datablocks)	(filesystem*, inode*, block**);
+	size_t			(* _inode_read_direct_blocks)	(char*, block**, size_t, size_t);
+	char*			(* _inode_read_data)		(inode*, size_t, size_t);
+	int			(* _inode_commit_data)		(inode*);
 
 	inode*			(* _inode_load)		(filesystem* , inode_t);
 	int			(* _inode_unload)	(filesystem*, inode*);
@@ -293,7 +299,7 @@ typedef struct {
 	int			(* readblock)		(void*, block_t);
 	int			(* writeblock)		(block_t, size_t, void*);
 
-	int			(* readblocks)		(void*, block_t*, size_t, size_t);
+	int			(* readirectblocks)		(void*, block_t*, size_t, size_t);
 	int			(* writeblocks)		(void*, block_t*, size_t, size_t);
 
 	int			(* write_commit)	(filesystem*, inode*);

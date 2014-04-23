@@ -27,7 +27,7 @@ typedef struct {
 	void		(* mkfs)		();
 	int		(* mkdir)		(char*, char*);
 	inode*		(* stat)		(char*);
-	fd_t		(* open)		(char*, char*, char*);
+	int		(* open)		(char*, char*, char*);
 	void		(* close)		(fd_t);
 	dentv*		(* opendir)		(char*);
 	void		(* closedir)		(dentv*);

@@ -188,7 +188,7 @@ int sh_write(fs_args* cmd, fs_args* cmd_quotes) {
 	size_t write_expected_byte_count;
 	fd_t fd;
 	uint i;
-	uint retv;
+	int retv;
 
 	char* write_buf = NULL;
 
@@ -208,6 +208,7 @@ int sh_write(fs_args* cmd, fs_args* cmd_quotes) {
 			strcat(write_buf, cmd_quotes->fields[1]);
 		}
 		else {
+			write_buf = (char*)malloc(SH_MAXFIELDSIZE);
 			for (i = 2; i < cmd->nfields; i++)
 			{
 				strcat(write_buf, cmd->fields[i]);
@@ -442,7 +443,7 @@ int main() {
 				else			sh_stat(cmd->fields[1]); 
 				retv = FS_NORMAL;
 			}
-			retv = FS_ERR;
+			else retv = FS_ERR;
 		}
 
 		else if (!strcmp(cmd->fields[0], "mkfs")) {

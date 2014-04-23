@@ -123,7 +123,6 @@ static inode* stat(char* name) {
 			free(dPath->fields[i]);
 		return ino;
 	}
-	return NULL;
 }
 
 static void	pathFree(fs_path* p)				{ _fs._pathFree(p); }
@@ -143,9 +142,9 @@ static char*	trim(char* cpy)					{ return _fs._trim(cpy); }
 static int	isNumeric(char* str)				{ return _fs._isNumeric(str); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
-static fd_t open(char* parent_dir, char* name, char* mode) { 
-	int mode_i = -1;
-	int fd = -1;
+static int open(char* parent_dir, char* name, char* mode) { 
+	fs_mode_t mode_i = FS_READ;
+	fd_t fd = 0;
 	inode* p_ino = NULL;	/* Path inode */
 	inode* f_ino = NULL;	/* File inode */
 	char* f_path;		/* Fully-qualified path to the file */
@@ -189,9 +188,11 @@ static fd_t open(char* parent_dir, char* name, char* mode) {
 		}
 	}
 	else {
-		_fs._read_inode_data(f_ino, f_ino->nblocks - f_ino->inode_nblks, f_ino->size);
+		_fs._inode_read_data(f_ino, f_ino->nblocks - f_ino->ninoblocks, f_ino->size);
 	}
 
+	if (NULL == f_ino) return FS_ERR;
+	
 	f_ino->datav.file->mode = mode_i;
 
 	/* Return a file descriptor which indexes to the filev */
@@ -317,9 +318,9 @@ static char* read(fd_t fd, size_t size) {
 		return NULL;
 	}
 	
-	/* No need to check file size; _read_inode_data
+	/* No need to check file size; _inode_read_data
 	 * will read as many are are allocated */
-	buf = _fs._read_inode_data(fv->ino, fv->seek_pos, size);
+	buf = _fs._inode_read_data(fv->ino, fv->seek_pos, size);
 	fv->seek_pos += strlen(buf);
 
 	return buf;
@@ -360,7 +361,6 @@ static size_t write (fd_t fd, char* str) {
 	slen = strlen(str);
 
 	_fs._inode_fill_blocks_from_data(shfs, fv->ino, fv->seek_pos, str);
-	_fs.write_commit(shfs, fv->ino);
 	fv->seek_pos += slen;
 
 	return slen;
@@ -393,7 +393,7 @@ static void seek	(fd_t fd, size_t offset) {
 	
 	//Open the file
 	fv = shfs->fds[fd];
-	//if (shfs->fds[fd]->ino->dblocks[find_last_data_block] < seek)
+	//if (shfs->fds[fd]->ino->directblocks[find_last_data_block] < seek)
 	fv->seek_pos = offset;
 	
 	return;

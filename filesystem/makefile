@@ -10,7 +10,7 @@ BDIR = ./bin
 ODIR = $(BDIR)/obj
 
 INCLUDES = -I$(IDIR)
-CFLAGS = $(INCLUDES) -g -std=c99 -Wall -Wextra -pedantic -Wformat=2
+CFLAGS = $(INCLUDES) -std=c99 -Wall -Wextra -pedantic -Wformat=2
 CC = cc
 
 # Output binaries
@@ -18,6 +18,13 @@ BIN = sh
 
 # Build targets: all with a name from BIN in ./bin/
 all: $(BIN)
+
+release: CFLAGS += -O3
+release: sh
+debug: CFLAGS += -DDEBUG -g3
+debug: sh
+analyze: CFLAGS += --analyze
+analyze: sh
 
 DEPS = $(ODIR)/sh.o $(ODIR)/fs.o $(ODIR)/_fs.o
 

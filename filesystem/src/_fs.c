@@ -148,7 +148,6 @@ static int _sync(filesystem* fs) {
 static inode* _inode_load(filesystem* fs, inode_t num) {
 	inode* ino = NULL;
 	block_t first_block_num;
-	uint i;
 
 	if (NULL == fs) return NULL;
 	if (MAXBLOCKS <= num) return NULL;	/* Sanity check */
@@ -158,11 +157,11 @@ static inode* _inode_load(filesystem* fs, inode_t num) {
 	if (0 == first_block_num)
 		return NULL;			/* An inode of 0 does not exist on disk */
 
-	ino = (inode*)malloc(sizeof(inode));
+	ino = _fs._new_inode();
 
 	/* Load the block(s) for the inode itlsef */
 	if (FS_ERR == 
-		_fs.readblocks(	ino, &first_block_num, 
+		_fs.readirectblocks(	ino, &first_block_num, 
 					sizeof(inode)/stride + 1,
 					sizeof(inode))	) 
 	{
@@ -172,27 +171,16 @@ static inode* _inode_load(filesystem* fs, inode_t num) {
 		return NULL;
 	}
 
-	/* Allocate memory for the direct blocks */
-	for (i = 0; i < ino->nblocks - ino->inode_nblks; i++)
-		ino->dblocks[i] = (block*)malloc(sizeof(block));
-
 	ino->v_attached = 0;
 	return ino;
 }
 
 /* Write an inode to disk and free its associated memory */
 static int _inode_unload(filesystem* fs, inode* ino) {
-	uint i;
-	
 	if (FS_ERR == _fs.write_commit(fs, ino))
 		return FS_ERR;
 
-	/* Free memory for the direct blocks */
-	for (i = 0; i < ino->nblocks - ino->inode_nblks; i++) {
-		free(ino->dblocks[i]);
-		ino->dblocks[i] = NULL;
-	}
-	free(ino);
+	_fs._free_inode(ino);
 	ino = NULL;
 
 	return FS_OK;
@@ -217,7 +205,7 @@ static int _ifree(filesystem* fs, inode_t num) {
 }
 
 /* Find an unused inode number and return it */
-static inode_t _ialloc(filesystem *fs) {
+static int _ialloc(filesystem *fs) {
 	uint i, blockidx, blockval;
 
 	for (i = fs->sb.free_inodes_base; i < MAXINODES; i++)
@@ -284,41 +272,19 @@ static int __balloc(filesystem* fs) {
 }
 
 /* Allocate @param count blocks if possible. Store indices in @param blocks */
-static int _balloc(filesystem* fs, inode* ino, const size_t count, block_t* bindices) {
-	int i, k;
-	size_t j;
-	size_t n_dblocks = 0;
+static int _balloc(filesystem* fs, const size_t count, block_t* bindices) {
+	size_t i;
+	int j;
 
 	//if (NULL != ino) 
 	//	bindices = ino->blocks;
 
-	for (i = 0; i < (int)count; i++) {	// Allocate free blocks
+	for (i = 0; i < count; i++) {	// Allocate free blocks
 		j = __balloc(fs);
-		if (FS_ERR == (int)j) return FS_ERR;
-		bindices[i] = j;
+		if (FS_ERR == j) return FS_ERR;
+		bindices[i] = (block_t)j;
 	}
 
-	if (NULL != ino) {
-
-		ino->nblocks += count;
-		n_dblocks = ino->nblocks - ino->inode_nblks;
-		k = n_dblocks - count;
-		for (i = 0; i < k; i++)
-		{
-			ino->dblocks[i]->num = ino->blocks[i + ino->inode_nblks];
-
-			if (i+1 < k)
-				ino->dblocks[i]->next = ino->blocks[i+1 + ino->inode_nblks];
-		}
-
-		_fs.writeblocks(ino, ino->blocks, ino->inode_nblks, sizeof(inode));
-
-		fs->sb.inode_first_blocks[ino->num] = ino->blocks[0];
-		fs->sb.inode_block_counts[ino->num] = ino->nblocks;
-
-		if (FS_ERR == _fs._sync(fs))
-			return FS_ERR;
-	}
 	return FS_OK;
 }
 
@@ -332,7 +298,7 @@ static dent* _newd(filesystem* fs, const int alloc_inode, const char* name) {
 	d = (dent*)malloc(sizeof(dent));
 
 	if (alloc_inode)
-		d->ino = _ialloc(fs);
+		d->ino = (inode_t)_ialloc(fs);
 	else d->ino = 0;
 
 	d->parent	= d->ino;
@@ -373,7 +339,7 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	memset(	dv->links, 0, FS_MAXLINKS*sizeof(inode*));
 
 	memset(	dv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
-	memset(	dv->ino->dblocks, 0, sizeof(block_t)*NBLOCKS);
+	memset(	dv->ino->directblocks, 0, sizeof(block_t)*NBLOCKS);
 
 	dv->tail	= NULL;
 	dv->head	= NULL;
@@ -385,9 +351,10 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	dv->ndirs	= 0;
 	dv->nlinks	= 0;
 	dv->ino->nlinks	= 0;
-	dv->ino->nblocks= 0;   /* How many blocks the inode data consumes */
-	dv->ino->inode_nblks = sizeof(inode)/stride+1; /* How many blocks the inode consumes */
-	dv->ino->size	= BLKSIZE;
+	dv->ino->ninoblocks = (uint16_t) (sizeof(inode)/stride+1);	/* How many blocks the inode consumes */
+	dv->ino->ndatablocks=0;
+	dv->ino->nblocks= dv->ino->ninoblocks + dv->ino->ndatablocks;	/* How many blocks the inode data consumes */
+	dv->ino->size	= dv->ino->ninoblocks*BLKSIZE;
 	dv->ino->mode	= FS_DIR;
 	dv->ino->v_attached = 1;
 
@@ -423,7 +390,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 
 	/* Allocate n blocks, tell us which we got */
 	if (FS_ERR == 
-		_balloc(	fs, dv->ino, sizeof(inode)/stride + 1, 
+		_balloc(	fs, dv->ino->ninoblocks, 
 				dv->ino->blocks) ) 
 	{
 		free(dv);
@@ -488,14 +455,14 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 		}
 
 		/* Update change to parent */
-		_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->inode_nblks, sizeof(inode));
+		_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->ninoblocks, sizeof(inode));
 
 	} else {
 		/* Making root */
 	}
 
 	/* Write changes to disk */
-	_fs.writeblocks(dv->ino, dv->ino->blocks, dv->ino->inode_nblks, sizeof(inode));
+	_fs.writeblocks(dv->ino, dv->ino->blocks, dv->ino->ninoblocks, sizeof(inode));
 	if (FS_ERR == _sync(fs))
 		return NULL;
 
@@ -508,7 +475,7 @@ static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	f = (file*)malloc(sizeof(file));
 
 	if (alloc_inode)
-		f->ino = _ialloc(fs);
+		f->ino = (inode_t)_ialloc(fs);
 	else f->ino = 0;
 	f->seek_pos = 0;
 
@@ -521,26 +488,20 @@ static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 
 /* Create an in-memory file */
 static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
-	uint i;
 	file*	f	= NULL;
 	filev*	fv	= NULL;
 
 	fv = (filev*)malloc(sizeof(filev));
-	fv->ino = (inode*)malloc(sizeof(inode));
-
-	for (i = 0; i < NBLOCKS; i++)
-	{
-		fv->ino->dblocks[i] = (block*)malloc(sizeof(block));
-		memset(	fv->ino->dblocks[i], 0, BLKSIZE);
-	}
+	fv->ino = _fs._new_inode();
 
 	memset(	fv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
 
 	fv->ino->nlinks	= 0;
-	fv->ino->inode_nblks = sizeof(inode)/stride+1;
-	fv->ino->nblocks = 0;   /* Just allocate direct blocks for now */
+	fv->ino->ninoblocks = (uint16_t) (sizeof(inode)/stride+1);	/* How many blocks the inode consumes */
+	fv->ino->ndatablocks=0;
+	fv->ino->nblocks= fv->ino->ninoblocks + fv->ino->ndatablocks;	/* How many blocks the inode data consumes */
+	fv->ino->size	= fv->ino->ninoblocks*BLKSIZE;
 	fv->ino->mode = FS_FILE;
-	fv->ino->size	= BLKSIZE;
 	fv->ino->v_attached = true;
 	fv->ino->datav.file = fv;
 
@@ -553,7 +514,7 @@ static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
 	fv->ino->num = f->ino;
 	free(f);
 
-	if (FS_ERR == _balloc(fs, fv->ino, fv->ino->inode_nblks, fv->ino->blocks))
+	if (FS_ERR == _balloc(fs, fv->ino->ninoblocks, fv->ino->blocks))
 		return NULL;
 
 	return fv;
@@ -567,26 +528,144 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 	fv = _newfv(fs, true, name);
 	if (NULL == fv) return NULL;
 
-	/* Allocate n blocks, tell us which we got */
-	if (FS_ERR == _balloc(fs, fv->ino, MAXBLOCKS_DIRECT, fv->ino->blocks)) {
-		free(fv);
-		return NULL;
-	}
-
 	parent->files[parent->nfiles] = fv->ino;
 	parent->ino->data.dir.files[parent->ino->data.dir.nfiles] = fv->ino->num;
 
 	parent->nfiles++;
 	parent->ino->data.dir.nfiles++;
 
-	_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->nblocks, sizeof(inode));
-
+	_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->ninoblocks, sizeof(inode));
+	fs->sb.inode_first_blocks[fv->ino->num] = fv->ino->blocks[0];
+	
+	if (FS_ERR == _fs._sync(fs)) {
+		return NULL;
+	}
 
 	return fv;
 }
 
+static inode* _new_inode() {
+	uint i, j;
+	inode* ino = NULL;
+
+	ino = (inode*)malloc(sizeof(inode));
+
+	ino->ib1 = (iblock1*)malloc(sizeof(iblock1));
+
+	ino->ib2 = (iblock2*)malloc(sizeof(iblock2));
+	for (i = 0; i < NIBLOCKS; i++) {
+		ino->ib2->iblocks[i] = (iblock1*)malloc(sizeof(iblock1));
+	}
+
+	ino->ib3 = (iblock3*)malloc(sizeof(iblock3));
+	for (i = 0; i < NIBLOCKS; i++) {
+		ino->ib3->iblocks[i] = (iblock2*)malloc(sizeof(iblock2));
+
+		for (j = 0; j < NIBLOCKS; j++)
+			ino->ib3->iblocks[i]->iblocks[j] = (iblock1*)malloc(sizeof(iblock1));
+	}
+
+	return ino;
+}
+
+static void _free_inode(inode* ino) {
+	uint i, j, k;
+	uint blks_freed = 0;
+
+	if (NULL == ino) return;
+
+	if (ino->directblocks) {
+		for (i = 0; i < MAXBLOCKS_DIRECT; i++) {
+			if (blks_freed >= ino->ndatablocks)
+				break;
+
+			if (!ino->directblocks[i])
+				continue;
+
+			free(ino->directblocks[i]);
+			++blks_freed;
+		}
+	}
+
+	if (ino->ib1) {
+		for (i = 0; i < NBLOCKS_IBLOCK; i++) {
+			if (blks_freed >= ino->ndatablocks)
+				break;
+
+			if (!ino->ib1->blocks[i])
+				continue;
+
+			free(ino->ib1->blocks[i]);
+			++blks_freed;
+		}
+		free(ino->ib1);
+	}
+
+	if (ino->ib2) {
+		uint stop = false;
+
+		for (i = 0; i < NIBLOCKS; i++) {
+			if (stop) break;
+
+			if (!ino->ib2->iblocks[i]) 
+				continue;
+
+			for (j = 0; j < NBLOCKS_IBLOCK; j++) {	
+				if (blks_freed >= ino->ndatablocks) {
+					stop = true;
+					break;
+				}
+				if (!ino->ib2->iblocks[i])
+					continue;
+
+				free(ino->ib2->iblocks[i]->blocks[j]);
+				++blks_freed;
+			}
+
+			free(ino->ib2->iblocks[i]);
+		}
+		free(ino->ib2);
+	}
+
+	if (ino->ib3)
+	{
+		uint stop = false;
+		for (i = 0; i < NIBLOCKS; i++) {
+			if (stop) break;
+
+			if(!ino->ib3->iblocks[i])
+				continue;
+
+			for (j = 0; j < NIBLOCKS; j++) {
+				if (stop) break;
+
+				if (!ino->ib3->iblocks[i]->iblocks[j])
+					continue;
+
+				for (k = 0; k < NBLOCKS_IBLOCK; k++) {
+					if (blks_freed >= ino->ndatablocks) {
+						stop = true;
+						break;
+					}
+
+					if (!ino->ib3->iblocks[i]->iblocks[j]->blocks[k])
+						continue;
+					
+					free(ino->ib3->iblocks[i]->iblocks[j]->blocks[k]);
+					++blks_freed;
+				}
+
+				free(ino->ib3->iblocks[i]->iblocks[j]);
+			}
+			free(ino->ib3->iblocks[i]);
+		}
+		free(ino->ib3);
+	}
+
+}
+
 /* Get an unallocated file descriptor */
-static fd_t _get_fd(filesystem* fs) {
+static int _get_fd(filesystem* fs) {
 	uint i;
 
 	for (i = fs->first_free_fd; i < FS_MAXOPENFILES; i++){
@@ -601,7 +680,7 @@ static fd_t _get_fd(filesystem* fs) {
 }
 
 /* Free an allocated file descriptor */
-static fd_t _free_fd(filesystem* fs, int fd) {
+static int _free_fd(filesystem* fs, int fd) {
 	if (false == fs->allocated_fds[fd])	/* fd was already free */
 		return FS_ERR;
 
@@ -683,8 +762,8 @@ static filev* _load_file(filesystem* fs, inode_t num) {
 	inode* ino = _inode_load(fs, num);
 	ino->datav.file = _ino_to_fv(fs, ino);
 
-	for (i = 0; i < ino->nblocks - ino->inode_nblks; i++)
-		_fs.readblock(ino->dblocks[i], ino->blocks[i + ino->inode_nblks]);
+	for (i = 0; i < ino->ndatablocks; i++)
+		_fs.readblock(ino->directblocks[i], ino->blocks[i + ino->ninoblocks]);
 
 	return ino->datav.file;
 }
@@ -699,7 +778,7 @@ static int _unload_file(filesystem* fs, inode* ino) {
 	ino->datav.file = NULL;
 	ino->v_attached = false;
 
-	status2 = _fs.writeblocks(ino, ino->blocks, ino->inode_nblks, sizeof(inode));
+	status2 = _fs.writeblocks(ino, ino->blocks, ino->ninoblocks, sizeof(inode));
 	_inode_unload(fs, ino);
 
 	if (FS_ERR == status1 || FS_ERR == status2)
@@ -753,9 +832,9 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 		}
 	}
 
-	if (	NULL == dv->parent->datav.dir	|| 
-		NULL == dv->next->datav.dir	|| 
-		NULL == dv->prev->datav.dir	) {
+	if (	(NULL != dv->parent && NULL == dv->parent->datav.dir)	||
+		(NULL != dv->next && NULL == dv->next->datav.dir)	||
+		(NULL != dv->prev && NULL == dv->prev->datav.dir)	) {
 
 		free(dv);
 		return NULL;
@@ -1086,7 +1165,8 @@ static char* _pathGetLast(fs_path* p) {
 static int _pathAppend(fs_path* p, const char* appendage) {
 	size_t len;
 	char* cpy;
-
+	char* cpy_free_ptr;
+	
 	if (	NULL == p || 
 		NULL == appendage || 
 		'\0' == appendage[0]	) 
@@ -1096,19 +1176,24 @@ static int _pathAppend(fs_path* p, const char* appendage) {
 		return FS_ERR;
 
 	len = strlen(appendage);
-	cpy = (char*)malloc(len);
+	cpy_free_ptr = (char*)malloc(len+1);
+	cpy = cpy_free_ptr;
+
 	strncpy(cpy, appendage, min(len, FS_MAXPATHLEN));
 	cpy[len] = '\0';
 
 	cpy = _pathTrimSlashes(cpy);
 
-	if (NULL == cpy || 0 == strlen(cpy) || !strcmp("/", cpy))	/* Skip empty string and "/" */
+	if (0 == strlen(cpy) || !strcmp("/", cpy)){ 	/* Skip empty string and "/" */
+		free(cpy_free_ptr);
 		return FS_ERR;
+	}
 
 	strncpy(	p->fields[p->nfields], 
 			cpy, 
 			min(FS_MAXPATHLEN, strlen(cpy))	);
 
+	free(cpy_free_ptr);
 	p->nfields++;
 	return FS_OK;
 }
@@ -1288,7 +1373,7 @@ static filesystem* _init(int newfs) {
 	fs->first_free_fd = 0;
 
 	if (newfs) {
-		_balloc(fs, NULL, fs->sb_i.nblocks, fs->sb_i.blocks);	/* Allocate n blocks, tell us which we got */
+		_balloc(fs, fs->sb_i.nblocks, fs->sb_i.blocks);		/* Allocate n blocks, tell us which we got */
 		fs->root = _mkroot(fs, newfs);				/* Setup root dir */
 
 		if (NULL == fs->root) {
@@ -1316,23 +1401,17 @@ static int _inode_fill_blocks_from_data(filesystem* fs, inode* ino, size_t seek_
 	size_t ib1 = 0;
 	size_t ib2 = 0;
 	size_t db = 0;
-	size_t i = 0, j = 0, k = 0;
+	size_t i = 0;
 
 	if (NULL == data) return FS_ERR;
 
 	slen = strlen(data);
 	offset = seek_pos % stride;
-	blk = seek_pos / stride;
+	blk = (block_t) (seek_pos / stride);
 
 	while (write_cnt < slen) {
 
 		size_t write_increment = min(stride - offset, slen - write_cnt);
-
-		if (blocks_written >= ino->nblocks - ino->inode_nblks) {
-			/* Try to allocate more blocks */
-			if (FS_ERR == _balloc(fs, ino, MAXBLOCKS_DIRECT, &ino->blocks[ino->nblocks]))
-				break; /* Failed */
-		}
 
 		if	(blk < MAXBLOCKS_DIRECT)					indirection = DIRECT;
 		else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1)			indirection = INDIRECT1;
@@ -1342,47 +1421,38 @@ static int _inode_fill_blocks_from_data(filesystem* fs, inode* ino, size_t seek_
 
 		switch (indirection)
 		{
-			case DIRECT: 
+			case DIRECT:		// Start filling in direct blocks
 			{
 				db = blk;
-				memcpy(&ino->dblocks[blk]->data[offset], &data[write_cnt], write_increment);
+				if (blocks_written >= ino->ndatablocks) _fs._inode_extend_datablocks(fs, ino, ino->directblocks);
+				memcpy(&ino->directblocks[db]->data[offset], &data[write_cnt], write_increment);
 				break;
 			}
 			case INDIRECT1:		// If we used up all the direct blocks, start using singly indirected blocks
 			{
-				ino->ib1 = (iblock1*)malloc(sizeof(iblock1));
-				for (i = 0; i < NBLOCKS_IBLOCK; i++)
-					ino->ib1->blocks[i] = (block*)malloc(sizeof(block));
-
 				db = blk - MAXBLOCKS_DIRECT;
-				memcpy(&ino->ib1->blocks[blk]->data[offset], &data[write_cnt], write_increment);
+				if (blocks_written >= ino->ndatablocks) _fs._inode_extend_datablocks(fs, ino, ino->ib1->blocks);
+				memcpy(&ino->ib1->blocks[db]->data[offset], &data[write_cnt], write_increment);
 				break;
 			}
 			case INDIRECT2:		// If we used up all the singly indirected blocks, start using doubly indirected blocks
 			{
-				ino->ib2 = (iblock2*)malloc(sizeof(iblock2));
-				for (i = 0; i < NIBLOCKS; i++)
-					for (j = 0; j < NBLOCKS_IBLOCK; j++)
-						ino->ib2->iblocks[i]->blocks[j] = (block*)malloc(sizeof(block));
-
 				i = blk - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1;
 				ib1 = i / MAXBLOCKS_IB1;
 				db = i - MAXBLOCKS_IB1*ib1;
+
+				if (blocks_written >= ino->ndatablocks) _fs._inode_extend_datablocks(fs, ino, ino->ib2->iblocks[ib1]->blocks);
 				memcpy(&ino->ib2->iblocks[ib1]->blocks[db]->data[offset], &data[write_cnt], write_increment); 
 				break;
 			}
 			case INDIRECT3: // If we used up all the doubly indirected blocks, start using triply indirected blocks
 			{
-				ino->ib2 = (iblock2*)malloc(sizeof(iblock2));
-				for (i = 0; i < NIBLOCKS; i++)
-					for (j = 0; j < NIBLOCKS; j++)
-						for (k = 0; k < NBLOCKS_IBLOCK; k++)
-							ino->ib3->iblocks[i]->iblocks[j]->blocks[k] = (block*)malloc(sizeof(block));
-
 				i = blk - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1 - MAXBLOCKS_IB2;
 				ib2 = i / MAXBLOCKS_IB2;
 				ib1 = i / MAXBLOCKS_IB1;
 				db = i - MAXBLOCKS_IB1*ib1 - MAXBLOCKS_IB2*ib2;
+
+				if (blocks_written >= ino->ndatablocks) _fs._inode_extend_datablocks(fs, ino, ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks);
 				memcpy(&ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks[db]->data[offset], &data[write_cnt], write_increment); 
 				break;
 			}
@@ -1390,13 +1460,13 @@ static int _inode_fill_blocks_from_data(filesystem* fs, inode* ino, size_t seek_
 		}
 
 		/* Going to the next block. Reset byte offset to 0. */
-		if (blk < seek_pos + write_cnt / stride) {
+		offset++;
+		write_cnt++;
+		if (blk < (seek_pos + write_cnt) / stride) {
 			offset = 0;
 			blocks_written++;
 			blk++;
 		}
-		offset++;
-		write_cnt++;
 	}
 
 	return FS_OK;
@@ -1411,7 +1481,7 @@ static int _inode_fill_blocks_from_disk(inode* ino) {
 	size_t i = 0;
 
 	size_t nblocks_read = 0;
-	size_t nblocks_to_read = ino->nblocks - ino->inode_nblks;
+	size_t nblocks_to_read = ino->ndatablocks;
 
 	uint indirection = DIRECT;
 
@@ -1419,7 +1489,7 @@ static int _inode_fill_blocks_from_disk(inode* ino) {
 	if (NULL == ino) return FS_ERR;
 
 	while (nblocks_read < nblocks_to_read) {
-		blk = ino->inode_nblks + nblocks_read;
+		blk = (block_t)(ino->ninoblocks + nblocks_read);
 
 		if	(blk < MAXBLOCKS_DIRECT)					indirection = DIRECT;
 		else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1)			indirection = INDIRECT1;
@@ -1432,7 +1502,7 @@ static int _inode_fill_blocks_from_disk(inode* ino) {
 			case DIRECT:
 			{
 				db = blk;
-				_fs.readblock(&ino->dblocks[db], ino->blocks[blk]);
+				_fs.readblock(&ino->directblocks[db], ino->blocks[blk]);
 				break;
 			}
 			case INDIRECT1:
@@ -1468,8 +1538,42 @@ static int _inode_fill_blocks_from_disk(inode* ino) {
 	return FS_OK;
 }
 
+static int _inode_extend_datablocks(filesystem* fs, inode* ino, block** directblocks) {
+	size_t i;
+
+	if (FS_ERR == _balloc(fs, MAXBLOCKS_DIRECT, &ino->blocks[ino->nblocks]))
+		return FS_ERR; /* Failed */
+
+	if (NULL != ino) {
+
+		/* Allocate memory for the direct blocks */
+		for (i = 0; i < MAXBLOCKS_DIRECT; i++) {
+			directblocks[i] = (block*)malloc(sizeof(block));
+			memset(directblocks[i], 0, BLKSIZE);
+		}
+
+		for (i = 0; i < MAXBLOCKS_DIRECT; i++)
+		{
+			directblocks[i]->num = ino->blocks[i + ino->nblocks];
+
+			if (i+1 < MAXBLOCKS_DIRECT)
+				directblocks[i]->next = ino->blocks[i+1 + ino->nblocks];
+		}
+		ino->nblocks += MAXBLOCKS_DIRECT;
+		ino->ndatablocks += MAXBLOCKS_DIRECT;
+
+		_fs.writeblocks(ino, ino->blocks, ino->ninoblocks, sizeof(inode));
+
+		fs->sb.inode_block_counts[ino->num] = ino->nblocks;
+
+		if (FS_ERR == _fs._sync(fs))
+			return FS_ERR;
+	}
+	return FS_OK;
+}
+
 /* Read the string data from an array of direct blocks */
-static size_t _read_direct_blocks(char* buf, block** blocks, size_t offset, size_t count) {
+static size_t _inode_read_direct_blocks(char* buf, block** blocks, size_t offset, size_t count) {
 	uint i;
 	size_t read_cnt = 0;
 	size_t remainder = count;
@@ -1493,7 +1597,7 @@ static size_t _read_direct_blocks(char* buf, block** blocks, size_t offset, size
 }
 
 /* Read the string data from the direct and indirect blocks of an inode */
-static char* _read_inode_data(inode* ino, size_t seek_pos, size_t len) {
+static char* _inode_read_data(inode* ino, size_t seek_pos, size_t len) {
 	size_t max_seek = 0;
 	size_t read_cnt = 0;
 
@@ -1508,12 +1612,12 @@ static char* _read_inode_data(inode* ino, size_t seek_pos, size_t len) {
 	char* buf = NULL;
 	if (NULL == ino) return NULL;
 
-	max_seek = (ino->nblocks - ino->inode_nblks)*BLKSIZE;
+	max_seek = (ino->ndatablocks)*BLKSIZE;
 
 	buf = (char*)malloc(len);
 
 	offset = seek_pos % stride;
-	blk = seek_pos / stride;
+	blk = (block_t)(seek_pos / stride);
 
 	while (read_cnt < len) {
 		if (seek_pos >= max_seek || seek_pos + len >= max_seek)
@@ -1529,19 +1633,19 @@ static char* _read_inode_data(inode* ino, size_t seek_pos, size_t len) {
 
 			case DIRECT:
 			{
-				read_cnt += _read_direct_blocks(&buf[read_cnt], ino->dblocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
+				read_cnt += _inode_read_direct_blocks(&buf[read_cnt], ino->directblocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
 				break;
 			}
 			case INDIRECT1:
 			{
-				read_cnt += _read_direct_blocks(&buf[read_cnt], ino->ib1->blocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
+				read_cnt += _inode_read_direct_blocks(&buf[read_cnt], ino->ib1->blocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
 				break;
 			}
 			case INDIRECT2:
 			{
 				i = blk - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1;
 				ib1 = i / MAXBLOCKS_IB1;
-				read_cnt += _read_direct_blocks(&buf[read_cnt], ino->ib2->iblocks[ib1]->blocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
+				read_cnt += _inode_read_direct_blocks(&buf[read_cnt], ino->ib2->iblocks[ib1]->blocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
 				break;
 			}
 			case INDIRECT3:
@@ -1549,7 +1653,7 @@ static char* _read_inode_data(inode* ino, size_t seek_pos, size_t len) {
 				i = blk - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1 - MAXBLOCKS_IB2;
 				ib2 = i / MAXBLOCKS_IB2;
 				ib1 = i / MAXBLOCKS_IB1;
-				read_cnt += _read_direct_blocks(&buf[read_cnt], ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
+				read_cnt += _inode_read_direct_blocks(&buf[read_cnt], ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks, offset, min(len - read_cnt, MAXBLOCKS_DIRECT));
 				break;
 			}
 			default: break;
@@ -1567,8 +1671,7 @@ static char* _read_inode_data(inode* ino, size_t seek_pos, size_t len) {
 }
 
 /* Write the data blocks pointed to by an inode to disk */
-static int _write_inode_data(inode* ino) {
-	size_t dblocks = 0;	/* Num data blocks from the inode */
+static int _inode_commit_data(inode* ino) {
 	size_t ib1 = 0;
 	size_t ib2 = 0;
 	size_t i = 0;
@@ -1580,8 +1683,7 @@ static int _write_inode_data(inode* ino) {
 	char* buf = NULL;
 	buf = (char*)malloc(MAXBLOCKS_DIRECT*BLKSIZE);
 
-	dblocks = ino->nblocks - ino->inode_nblks;
-	while (blk < dblocks) {
+	while (blk < ino->ndatablocks) {
 
 		if	(blk < MAXBLOCKS_DIRECT)					indirection = DIRECT;
 		else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1)			indirection = INDIRECT1;
@@ -1593,19 +1695,19 @@ static int _write_inode_data(inode* ino) {
 
 			case DIRECT:
 			{
-				read_cnt += _read_direct_blocks(buf, ino->dblocks, 0, MAXBLOCKS_DIRECT);
+				read_cnt += _inode_read_direct_blocks(buf, ino->directblocks, 0, MAXBLOCKS_DIRECT);
 				break;
 			}
 			case INDIRECT1:
 			{
-				read_cnt += _read_direct_blocks(&buf[read_cnt], ino->ib1->blocks, 0, MAXBLOCKS_DIRECT);
+				read_cnt += _inode_read_direct_blocks(&buf[read_cnt], ino->ib1->blocks, 0, MAXBLOCKS_DIRECT);
 				break;
 			}
 			case INDIRECT2:
 			{
 				i = blk - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1;
 				ib1 = i / MAXBLOCKS_IB1;
-				read_cnt += _read_direct_blocks(&buf[read_cnt], ino->ib2->iblocks[ib1]->blocks, 0, MAXBLOCKS_DIRECT);
+				read_cnt += _inode_read_direct_blocks(&buf[read_cnt], ino->ib2->iblocks[ib1]->blocks, 0, MAXBLOCKS_DIRECT);
 				break;
 			}
 			case INDIRECT3:
@@ -1613,21 +1715,19 @@ static int _write_inode_data(inode* ino) {
 				i = blk - MAXBLOCKS_DIRECT - MAXBLOCKS_IB1 - MAXBLOCKS_IB2;
 				ib2 = i / MAXBLOCKS_IB2;
 				ib1 = i / MAXBLOCKS_IB1;
-				read_cnt += _read_direct_blocks(&buf[read_cnt], ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks, 0, MAXBLOCKS_DIRECT);
+				read_cnt += _inode_read_direct_blocks(&buf[read_cnt], ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks, 0, MAXBLOCKS_DIRECT);
 				break;
 			}
 			default: break;
 		}
 
-		if (FS_ERR == _fs.writeblocks(buf, &ino->blocks[ino->inode_nblks + blk], MAXBLOCKS_DIRECT, MAXBLOCKS_DIRECT*BLKSIZE))
+		if (FS_ERR == _fs.writeblocks(buf, &ino->blocks[ino->ninoblocks + blk], MAXBLOCKS_DIRECT, MAXBLOCKS_DIRECT*BLKSIZE))
 			return FS_ERR;
 
-		/* Going to the next chunk of direct blocks */
-		if (blk < read_cnt / stride) {
-			blk += MAXBLOCKS_DIRECT;
-		}
+		blk += MAXBLOCKS_DIRECT;
 	}
 
+	free(buf);
 	return FS_OK;
 }
 
@@ -1655,12 +1755,13 @@ static int writeblock(block_t b, size_t size, void* data) {
 }
 
 /* Read an arbitary number of blocks from disk. */
-static int readblocks(void* dest, block_t* blocks, size_t numblocks, size_t type_size) {
+static int readirectblocks(void* dest, block_t* blocks, size_t numblocks, size_t type_size) {
 	block_t j = blocks[0];
 
 	/* Get strided blocks (more than one block or less than a whole block) */
 	if (BLKSIZE != type_size) {
-		uint i, k;
+		size_t i;
+		block_t k;
 		size_t copysize;
 
 		for (i = 0; i < numblocks; i++) {					/* Get root blocks from disk */
@@ -1690,7 +1791,7 @@ static int writeblocks(void* source, block_t* blocks, size_t numblocks, size_t t
 
 	// Split @param source into strides if it will not fit in one block
 	if (BLKSIZE != type_size) {
-		uint i; 
+		size_t i; 
 		size_t copysize;
 		
 		for (i = 0; i < numblocks; i++) {					// For all blocks
@@ -1726,10 +1827,10 @@ static int writeblocks(void* source, block_t* blocks, size_t numblocks, size_t t
 static int write_commit(filesystem* fs, inode* ino) {
 
 	/* Write the inode metadata. */
-	writeblocks( ino, ino->blocks, ino->inode_nblks, sizeof(inode)); 
+	writeblocks( ino, ino->blocks, ino->ninoblocks, sizeof(inode)); 
 
 	/* Write the data the inode points to. TODO: write iblocks */
-	_write_inode_data(ino);
+	_inode_commit_data(ino);
 
 	return _fs._sync(fs);
 }
@@ -1744,8 +1845,8 @@ static filesystem* _open() {
 
 	_fs.readblock(&fs->fb_map, 0);
 	_fs.readblock(&fs->ino_map, 1);
-	_fs.readblocks(&fs->sb_i, &sb_i_location, 1, sizeof(superblock_i));
-	_fs.readblocks(&fs->sb, fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
+	_fs.readirectblocks(&fs->sb_i, &sb_i_location, 1, sizeof(superblock_i));
+	_fs.readirectblocks(&fs->sb, fs->sb_i.blocks, fs->sb_i.nblocks, sizeof(superblock));
 
 	fs->root = _mkroot(fs, false);
 
@@ -1781,8 +1882,6 @@ static filesystem* _mkfs() {
 static void _print_mem(void const *vp, size_t n)
 {
 	size_t i;
-	char* red = "\x1b[31m";
-	char* reset = "\x1b[0m";
 	unsigned char const* p = (unsigned char const*)vp;
 
 #if defined(_WIN64) || defined(_WIN32)
@@ -1791,6 +1890,9 @@ static void _print_mem(void const *vp, size_t n)
 	WORD saved_attributes;
 	GetConsoleScreenBufferInfo(console, &info);
 	saved_attributes = info.wAttributes;
+#else
+	char* red = "\x1b[31m";
+	char* reset = "\x1b[0m";
 #endif
 
 	for (i = 0; i < n; i++) {
@@ -1864,18 +1966,20 @@ fs_private_interface const _fs =
 	_prealloc, _zero,			/* Native filsystem file allocation */
 	_open, _mkfs, _init,			/* Filesystem, opening, creation */
 	__balloc, _balloc, _bfree, _newBlock,	/* Block allocation */
-
+	
 	/* Inode allocation */
+	_new_inode, _free_inode,
 	_ialloc, _ifree,
 
 	_inode_fill_blocks_from_data, _inode_fill_blocks_from_disk,
 	
-	_read_direct_blocks, _read_inode_data, _write_inode_data,
+	_inode_extend_datablocks, _inode_read_direct_blocks, 
+	_inode_read_data, _inode_commit_data,
 	_inode_load, _inode_unload,
 
 	/* Reading and writing disk blocks */
 	readblock, writeblock,
-	readblocks, writeblocks,
+	readirectblocks, writeblocks,
 
 	/* Write commits, superblock synchronization, tree traversal */
 	write_commit, 
