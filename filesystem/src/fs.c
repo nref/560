@@ -120,7 +120,7 @@ static inode* stat(char* name) {
 
 	if (depth == 0) return shfs->root->ino;	// Return if we are at the root
 	else {					// Else traverse the path, get matching inode
-		ino = _fs._recurse(shfs, shfs->root, 0, depth-1, dPath->fields);	
+		ino = _fs._recurse(shfs, shfs->root, 0, depth-1, dPath);	
 		for (i = 0; i < depth; i++) 
 			free(dPath->fields[i]);
 		return ino;

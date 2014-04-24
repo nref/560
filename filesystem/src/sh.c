@@ -101,7 +101,10 @@ char* sh_path_cat(char* path, char* suffix) {
 void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 	uint i;
 	dentv* iterator = NULL;
-	char *next, *dv_path;
+	char next[FS_NAMEMAXLEN];
+	char *dv_path;
+
+	memset(next, 0, FS_NAMEMAXLEN);
 
 	if (NULL == dv) return;
 	dv_path = sh_get_dv_path(dv);
@@ -112,11 +115,12 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 		dv->nlinks == 0) 
 	{
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
+		free(dv_path);
 		return;
 	}
 
 	if (NULL != dv->head) {
-		next = sh_path_cat(dv_path, dv->head->data.dir.name);
+		strcat(next, sh_path_cat(dv_path, dv->head->data.dir.name));
 
 		for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
 		{
@@ -130,8 +134,6 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 			if (depth < maxdepth) {
 
 				sh_tree_recurse(depth+1, maxdepth, iterator);
-				free(next);
-
 			}
 
 			if (	NULL == iterator->next ||
@@ -143,7 +145,7 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 				break;
 			}
 			
-			next = sh_path_cat(dv_path, iterator->next->data.dir.name);
+			strcat(next, sh_path_cat(dv_path, iterator->next->data.dir.name));
 			//fs.closedir(iterator);
 			//iterator = NULL;
 		}
@@ -157,7 +159,7 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 	for (i = 0; i < dv->ino->nlinks; i++)	// For each link at this level
 		printf("%*s" "%s [link]\n", depth*2, " ", dv->links[i]->data.file.name);
 
-	free(dv_path);
+	//free(dv_path);
 }
 
 void sh_tree(char* name) {

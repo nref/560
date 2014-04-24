@@ -544,6 +544,36 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 	return fv;
 }
 
+static hlink* _newl(filesystem* fs, const int alloc_inode, const char* name) {
+	hlink* h = NULL;
+
+	// TODO LINK
+	return h;
+}
+
+static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
+	hlinkv* hv = NULL;
+
+	hv = (hlinkv*)malloc(sizeof(hlinkv));
+	hv->ino = _fs._new_inode();
+
+	// TODO LINK
+	return NULL;
+}
+
+static hlinkv* _new_link(filesystem* fs, dentv* parent, const char* name) {
+	hlinkv* lv = NULL;
+	hlink* l = NULL;
+
+	lv = _fs._newhl(fs, true, name);
+	parent->nlinks++;
+	parent->ino->data.dir.nlinks++;
+
+	// TODO LINK
+	return lv;
+}
+
+/* TODO Fix allocation */
 static inode* _new_inode() {
 	uint i, j;
 	inode* ino = NULL;
@@ -756,11 +786,15 @@ static filev* _ino_to_fv(filesystem* fs, inode* ino) {
 }
 
 /* Given an inode number, load the corresponding file structure. 
- * Wrap it in an inode which contains the in-memory version of the file */
+ * Wrap it in an inode which contains the in-memory version of the file 
+ * TODO: Also read into indirect blocks */
 static filev* _load_file(filesystem* fs, inode_t num) {
 	uint i;
 	inode* ino = _inode_load(fs, num);
 	ino->datav.file = _ino_to_fv(fs, ino);
+
+	for (i = 0; i < NBLOCKS; i++)
+		ino->directblocks[i] = (block*)malloc(sizeof(block));
 
 	for (i = 0; i < ino->ndatablocks; i++)
 		_fs.readblock(ino->directblocks[i], ino->blocks[i + ino->ninoblocks]);
@@ -844,7 +878,7 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 		filev* fv = _load_file(fs, dv->ino->data.dir.files[i]);
 		dv->files[i] = fv->ino;
 	}
-	//for (i = 0; i < dv->nlinks; i++)	// TODO
+	//for (i = 0; i < dv->nlinks; i++)	// TODO LINK
 	//	dv->files[i] = _load_link(fs, dv->ino->data.dir.links[i]);
 	return dv;
 }
@@ -879,7 +913,7 @@ static int _unload_dir(filesystem* fs, inode* ino) {
 
 	for (i = 0; i < dv->nfiles; i++)
 		_unload_file(fs, dv->files[i]);
-	//for (int i = 0; i < dv->nlinks; i++) /* TODO */
+	//for (int i = 0; i < dv->nlinks; i++) /* TODO LINK */
 	//	_unload_link(fs, dv->files[i]);
 
 	free(ino->datav.dir);
@@ -905,7 +939,7 @@ static int _v_attach(filesystem* fs, inode* ino) {
 			ino->datav.file = _load_file(fs, ino->num);
 			break;
 		case FS_LINK:
-			break; /* TODO */
+			break; /* TODO LINK */
 		}
 
 		if (NULL == ino->datav.dir) return FS_ERR;
@@ -930,7 +964,7 @@ static int _v_detach(filesystem* fs, inode* ino) {
 			_unload_file(fs, ino);
 			break;
 		case FS_LINK:
-			break; /* TODO */
+			break; /* TODO LINK */
 		}
 	}
 
@@ -946,7 +980,7 @@ static int _v_detach(filesystem* fs, inode* ino) {
  * @param path The fields of the path
  * Return the inode at the end of this path or NULL if not found.
  */ 
-static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t max_depth, char* path[]) {
+static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t max_depth, fs_path* p) {
 	uint i;									// Declarations go here to satisfy Visual C compiler
 	dentv* iterator;
 
@@ -979,12 +1013,12 @@ static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t m
 		{
 			if (NULL == iterator) return NULL;				// This happens if there are no subdirs
 
-			if (!strcmp(iterator->name, path[current_depth])) {		// If we have a matching directory name
+			if (!strcmp(iterator->name, p->fields[current_depth])) {	// If we have a matching directory name
 				if (max_depth == current_depth)				// If we can't go any deeper
 					return iterator->ino;				// Return the inode of the matching dir
 
 				else return _recurse(fs, iterator,			// Else recurse into subdir
-					current_depth + 1, max_depth, path); 
+					current_depth + 1, max_depth, p); 
 			}
 
 			if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
@@ -1003,7 +1037,7 @@ static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t m
 		
 		filev* fv = _load_file(fs, dv->ino->data.dir.files[i]);
 
-		if (!strcmp(fv->name, path[current_depth])) {
+		if (!strcmp(fv->name, p->fields[current_depth])) {
 			dv->files[i] = fv->ino;
 
 			if (!dv->files[i]->v_attached) {				// Load the file from disk if not already in memory
@@ -1017,7 +1051,7 @@ static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t m
 
 	/* Iterate over links */
 	for (i = 0; i < dv->ino->nlinks; i++) {						// For each link at this level
-		if (!strcmp(dv->links[i]->data.link.name, path[current_depth])) {
+		if (!strcmp(dv->links[i]->data.link.name, p->fields[current_depth])) {
 
 			if (!dv->links[i]->v_attached) {				// Load the file from disk if not already in memory
 				if (FS_ERR == _v_attach(fs, dv->links[i]))
@@ -1969,10 +2003,12 @@ fs_private_interface const _fs =
 	/* Directory management */
 	_newd, _newdv,
 	_newf, _newfv, 
+	_newl, _newlv,
+
 	_ino_to_dv, _ino_to_fv, _mkroot, 
 	_load_file, _unload_file,
 	_load_dir, _unload_dir,	
-	_new_dir, _new_file,
+	_new_dir, _new_file, _new_link,
 	_v_attach, _v_detach,
 
 	_get_fd, _free_fd,			/* File descriptors */

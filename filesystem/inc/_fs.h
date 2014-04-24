@@ -249,6 +249,9 @@ typedef struct {
 	
 	file*			(* _newf)		(filesystem*, const int, const char*);
 	filev*			(* _newfv)		(filesystem*, const int, const char*);
+	
+	hlink*			(* _newh)		(filesystem*, const int, const char*);
+	hlinkv*			(* _newhl)		(filesystem*, const int, const char*);
 
 	dentv*			(* _ino_to_dv)		(filesystem* , inode*);
 	filev*			(* _ino_to_fv)		(filesystem* , inode*);
@@ -262,6 +265,7 @@ typedef struct {
 	
 	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
 	filev*			(* _new_file)		(filesystem *, dentv*, const char*);
+	hlinkv*			(* _new_link)		(filesystem *, dentv*, const char*);
 	
 	int			(* _v_attach)		(filesystem* , inode*); 
 	int			(* _v_detach)		(filesystem* , inode*); 
@@ -303,7 +307,7 @@ typedef struct {
 	int			(* writeblocks)		(void*, block_t*, size_t, size_t);
 
 	int			(* write_commit)	(filesystem*, inode*);
-	inode*			(* _recurse)		(filesystem* , dentv*, size_t, size_t, char*[]);
+	inode*			(* _recurse)		(filesystem* , dentv*, size_t, size_t, fs_path*);
 	int			(* _sync)		(filesystem* );
 
 	void			(* _safeopen)		(char*, char*);
