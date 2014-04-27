@@ -543,14 +543,17 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 
 	return fv;
 }
-
+/*create an on-disk link file*/
 static hlink* _newl(filesystem* fs, const int alloc_inode, const char* name) {
 	hlink* h = NULL;
 
-	// TODO LINK
+	if(alloc_inode){
+		h = (hlink*)malloc(sizeof(hlink));
+	}
+	//Fill in contents of
 	return h;
 }
-
+/*Create an in-memory link file*/
 static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 	hlinkv* hv = NULL;
 
@@ -560,15 +563,34 @@ static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 	// TODO LINK
 	return NULL;
 }
-
-static hlinkv* _new_link(filesystem* fs, dentv* parent, const char* name) {
+/*Allocates a new link file*/
+static hlinkv* _new_link(filesystem* fs, dentv* parent, const inode* src_ino) {
 	hlinkv* lv = NULL;
 	hlink* l = NULL;
 
-	lv = _fs._newhl(fs, true, name);
-	parent->nlinks++;
-	parent->ino->data.dir.nlinks++;
+	lv = _newlv(fs, true, src_ino->datav.file->name);
+	//parent->nlinks++;
+	//parent->ino->data.dir.nlinks++;
 
+	/* Allocate a new inode number */
+	if (NULL == lv) return NULL;
+	
+	
+	//parent->files[parent->nfiles] = fv->ino;
+	//parent->ino->data.dir.files[parent->ino->data.dir.nfiles] = fv->ino->num;
+	
+	//parent->nfiles++;
+	//parent->ino->data.dir.nfiles++;
+	
+	//_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->ninoblocks, sizeof(inode));
+	//fs->sb.inode_first_blocks[fv->ino->num] = fv->ino->blocks[0];
+	
+	//if (FS_ERR == _fs._sync(fs)) {
+	//	return NULL;
+	//}
+	
+	//return fv;
+	
 	// TODO LINK
 	return lv;
 }
