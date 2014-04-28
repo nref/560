@@ -335,7 +335,7 @@ static char* read(fd_t fd, size_t size) {
 /* Write text to a file
  * @param str the string to write
  * @param fd the file descriptor to write to */
-static size_t write (fd_t fd, char* str) { 
+static size_t write (fd_t fd, char* str) {
 	filev* fv = NULL;
 	size_t slen;
 	
@@ -405,16 +405,29 @@ static void seek(fd_t fd, size_t offset) {
 }
 
 /* Creats a hardlink from a src file to a destination
- * *param from inode pointing to the source
- * @param to inode of the new file*/
-//TODO: This could actually get done before read is complete
-static void link (inode_t from, inode_t to) {
-    printf("fs_link: %d %d\n", from, to);
-    //Check from inode (if not file -> err)
+ * @param path of src file
+ * @param path of dst link
+ */
+static void link (char* from, char* to) {
+	hlinkv* lfile;
+	fs_path* src_path = fs.pathFromString(from);
+	//fs_path* dst_path = fs.pathFromString(to);
+	char* parent = fs.pathSkipLast(src_path);
+	char* name = fs.pathGetLast(src_path);
+	//retrieve ino of source
+	inode* src_ino = stat(from);
+	inode* p_ino = stat(parent);
+	filev* src_fv = _fs._ino_to_fv(shfs,src_ino);
+	printf("src inode of file \"%s\" is: %d\n",from, src_ino->num);
+	lfile = _fs._new_link(shfs, p_ino->datav.dir, from);
+	strncpy(lfile->name,to,FS_NAMEMAXLEN);
+	inode* dst_ino;
+
+	//Check from inode (if not file -> err)
     //Pass off to fs.link()
     //Check return errora
 }
-static void	ulink		(inode_t ino) { printf("fs_unlink: %d\n", ino); }
+static void	ulink	(char* target) { printf("fs_unlink: %s\n", target); }
 
 fs_public_interface const fs = 
 { 

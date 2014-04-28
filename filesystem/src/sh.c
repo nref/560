@@ -555,6 +555,33 @@ int main() {
 				retv = FS_OK;
 			}
 
+		} else if (!strcmp(cmd->fields[0], "link")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+			if (cmd->nfields == 3) { // if proper argument number
+				if(!fs.stat(cmd->fields[3])){
+					//if the 2nd file doesn't exist
+					fs.link(cmd->fields[1], cmd->fields[2]);
+					retv = FS_OK;
+				} else {
+					printf("destination file exists\n");
+					prompt();
+					continue;
+				}
+				
+			}
+		} else if (!strcmp(cmd->fields[0], "unlink")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+			if (cmd->nfields == 2) {
+				fs.ulink(cmd->fields[1]);
+			}
 		} else {
 			printf("Bad command \"%s\"", buf); 
 			retv = FS_NORMAL; 

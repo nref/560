@@ -265,7 +265,7 @@ typedef struct {
 	
 	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
 	filev*			(* _new_file)		(filesystem *, dentv*, const char*);
-	hlinkv*			(* _new_link)		(filesystem *, dentv*, const char*);
+	hlinkv*			(* _new_link)		(filesystem *, dentv*, const inode*);
 	
 	int			(* _v_attach)		(filesystem* , inode*); 
 	int			(* _v_detach)		(filesystem* , inode*); 
