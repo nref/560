@@ -19,14 +19,14 @@
 // Maximum number of blocks that an inode can address
 #define MAXBLOCKS_DIRECT NBLOCKS
 #define MAXBLOCKS_IB1 NBLOCKS_IBLOCK
-#define MAXBLOCKS_IB2 NIBLOCKS * NBLOCKS_IBLOCK
-#define MAXBLOCKS_IB3 NIBLOCKS * NIBLOCKS * NBLOCKS_IBLOCK
-#define MAXFILEBLOCKS MAXBLOCKS_DIRECT + \
-		MAXBLOCKS_IB1 + MAXBLOCKS_IB2 + MAXBLOCKS_IB3
+#define MAXBLOCKS_IB2 (NIBLOCKS * NBLOCKS_IBLOCK)
+#define MAXBLOCKS_IB3 (NIBLOCKS * NIBLOCKS * NBLOCKS_IBLOCK)
+#define MAXFILEBLOCKS (MAXBLOCKS_DIRECT + \
+		MAXBLOCKS_IB1 + MAXBLOCKS_IB2 + MAXBLOCKS_IB3)
 
 #define FS_NAMEMAXLEN 256			// Max length of a directory or file name
 #define FS_MAXPATHFIELDS 32			// Max number of forward-slash "/"-separated fields in a path (i.e. max directory recursion)
-#define FS_MAXPATHLEN FS_NAMEMAXLEN*FS_MAXPATHFIELDS	// Maximum path length
+#define FS_MAXPATHLEN (FS_NAMEMAXLEN*FS_MAXPATHFIELDS)	// Maximum path length
 
 #define FS_MAXFILES 256				// Max number of files in a dir
 #define FS_MAXLINKS 256				// Max number of links in a dir
@@ -293,7 +293,7 @@ typedef struct {
 	int			(* _inode_fill_blocks_from_disk) (inode*);
 
 	int			(* _inode_extend_datablocks)	(filesystem*, inode*, block**);
-	size_t			(* _inode_read_direct_blocks)	(char*, block**, size_t, size_t);
+	size_t			(* _inode_read_direct_blocks)	(char*, block**, size_t);
 	char*			(* _inode_read_data)		(inode*, size_t, size_t);
 	int			(* _inode_commit_data)		(inode*);
 

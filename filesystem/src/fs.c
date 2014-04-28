@@ -190,7 +190,7 @@ static int open(char* parent_dir, char* name, char* mode) {
 		}
 	}
 	else {
-		_fs._inode_read_data(f_ino, f_ino->nblocks - f_ino->ninoblocks, f_ino->size);
+		//_fs._inode_read_data(f_ino, f_ino->nblocks - f_ino->ninoblocks, f_ino->size);
 	}
 
 	if (NULL == f_ino) return FS_ERR;
@@ -211,7 +211,7 @@ static void close(fd_t fd) {
 		return;
 	}
 
-	if (fd > FS_MAXOPENFILES) {
+	if (fd >= FS_MAXOPENFILES) {
 		printf("Invalid file descriptor.\n");
 		return;
 	}
@@ -303,7 +303,7 @@ static char* read(fd_t fd, size_t size) {
 		return NULL;
 	}
 
-	if (fd > FS_MAXOPENFILES) {
+	if (fd >= FS_MAXOPENFILES) {
 		printf("Invalid file descriptor.\n");
 		return NULL;
 	}
@@ -344,7 +344,7 @@ static size_t write (fd_t fd, char* str) {
 		return 0;
 	}
 
-	if (fd > FS_MAXOPENFILES) {
+	if (fd >= FS_MAXOPENFILES) {
 		printf("Invalid file descriptor.\n");
 		return 0;
 	}
@@ -374,7 +374,7 @@ static size_t write (fd_t fd, char* str) {
 /* Sets the offset of the corresponding file
  *  @param fd file descriptor
  *  @param offset the offest of the file */
-static void seek	(fd_t fd, size_t offset) {
+static void seek(fd_t fd, size_t offset) {
 	filev* fv = NULL;
 	printf("fs_seek: %d %zu\n", fd, offset); //checking
 	
@@ -384,7 +384,7 @@ static void seek	(fd_t fd, size_t offset) {
 		return;
 	}
 	
-	if (fd > FS_MAXOPENFILES) {
+	if (fd >= FS_MAXOPENFILES) {
 		printf("Invalid file descriptor.\n");
 		return;
 	}

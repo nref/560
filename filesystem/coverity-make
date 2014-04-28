@@ -1,0 +1,9 @@
+cov-build --dir cov-int make debug
+tar czvf 560fs.tgz cov-int
+curl --form project=slater1/560 \
+  --form token=U5rYEy7rdRNX11S3eieZqw \
+  --form email=cds@utk.edu \
+  --form file=560fs.tgz \
+  --form version=0.1 \
+  --form description=CS560 Filesystem \
+  http://scan5.coverity.com/cgi-bin/upload.py

@@ -16,7 +16,6 @@ CC = cc
 # Output binaries
 BIN = sh
 
-# Build targets: all with a name from BIN in ./bin/
 all: $(BIN)
 
 release: CFLAGS += -O3
@@ -50,4 +49,6 @@ clean:
 	rm -f fs
 	rm -f vs110/Debug/fs
 	rm -f $(ODIR)/*
+
+	# Remove files with a name from BIN in ./bin/
 	rm -f $(BIN:%=$(BDIR)/%)

@@ -5,7 +5,7 @@
 #define SH_MAXFIELDSIZE 1024*1024
 
 typedef struct fs_args {
-	char* fields[8];	/* A struct for storing command arguments */
+	char fields[8][SH_MAXFIELDSIZE]; /* A struct for storing command arguments */
 	size_t nfields;
 	size_t firstField;
 	size_t fieldSize;

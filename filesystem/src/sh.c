@@ -12,7 +12,6 @@ static fs_args* newArgs() {
 	args->fieldSize = SH_MAXFIELDSIZE;
 
 	for (i = 0; i < SH_MAXFIELDS; i++) {
-		args->fields[i] = (char*)malloc(SH_MAXFIELDSIZE);
 		memset(args->fields[i], 0, SH_MAXFIELDSIZE);
 	}
 
@@ -23,12 +22,10 @@ static fs_args* newArgs() {
 }
 
 static void argsFree(fs_args* p) {
-	uint i;
 	if (NULL == p) return;
 
-	for (i = 0; i < SH_MAXFIELDS; i++)
-		free(p->fields[i]);
 	free(p);
+	p = NULL;
 }
 
 /* Split a string on delimiter(s) */
@@ -41,7 +38,7 @@ void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 	if (NULL == str || '\0' == str[0]) return;
 
 	len = strlen(str);
-	str_cpy = (char*)malloc(sizeof(char) * len + 1);
+	str_cpy = (char*)malloc(len + 1);
 	
 	// Copy the input because strtok replaces delimieter with '\0'
 	strncpy(str_cpy, str, min(SH_MAXFIELDSIZE-1, len+1));	
@@ -99,10 +96,12 @@ char* sh_path_cat(char* path, char* suffix) {
 }
 
 void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
+	size_t copysize;
 	uint i;
 	dentv* iterator = NULL;
 	char next[FS_NAMEMAXLEN];
 	char *dv_path;
+	char* newpath;
 
 	memset(next, 0, FS_NAMEMAXLEN);
 
@@ -120,7 +119,10 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 	}
 
 	if (NULL != dv->head) {
-		strcat(next, sh_path_cat(dv_path, dv->head->data.dir.name));
+		newpath = sh_path_cat(dv_path, dv->head->data.dir.name);
+		copysize = min(FS_NAMEMAXLEN - 1, strlen(newpath));
+		strncat(next, newpath, copysize);
+		next[copysize] = '\0';
 
 		for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
 		{
@@ -145,7 +147,12 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 				break;
 			}
 			
-			strcat(next, sh_path_cat(dv_path, iterator->next->data.dir.name));
+			newpath = sh_path_cat(dv_path, iterator->next->data.dir.name);
+			copysize = min(FS_NAMEMAXLEN - 1, strlen(newpath));
+			next[0] = '\0';
+			strncat(next, newpath, copysize);
+			next[copysize] = '\0';
+
 			//fs.closedir(iterator);
 			//iterator = NULL;
 		}
@@ -208,13 +215,15 @@ int sh_write(fs_args* cmd, fs_args* cmd_quotes) {
 
 		if (NULL != cmd_quotes) {
 			write_expected_byte_count = strlen(cmd_quotes->fields[1]);
-			write_buf = (char*)malloc(write_expected_byte_count);
-			memset(write_buf, 0, write_expected_byte_count);
+			write_buf = (char*)malloc(write_expected_byte_count + 1);
+			memset(write_buf, 0, write_expected_byte_count + 1);
 
 			strcat(write_buf, cmd_quotes->fields[1]);
 		}
 		else {
 			write_buf = (char*)malloc(SH_MAXFIELDSIZE);
+			memset(write_buf, 0, SH_MAXFIELDSIZE);
+
 			for (i = 2; i < cmd->nfields; i++)
 			{
 				strcat(write_buf, cmd->fields[i]);
@@ -370,6 +379,8 @@ int main() {
 		if (cmd_quotes->nfields > 1)
 			input_is_quoted = true;
 
+		if('#' == cmd->fields[0][0]) continue; /* Skip commented lines */
+
 		if (!strcmp(cmd->fields[0], "exit")) break;
 		
 		else if (!strcmp(cmd->fields[0], "ls")) {
@@ -519,14 +530,15 @@ int main() {
 			}
 
 			if (cmd->nfields > 2) {
-				char* buf = NULL;
+				char* rdbuf = NULL;
 
-				if (input_is_quoted)	buf = fs.read(atoi(cmd_quotes->fields[1]), atoi(cmd_quotes->fields[2]));
-				else			buf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
-				if (NULL == buf) retv = FS_ERR;
+				if (input_is_quoted)	rdbuf = fs.read(atoi(cmd_quotes->fields[1]), atoi(cmd_quotes->fields[2]));
+				else			rdbuf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
+				if (NULL == rdbuf) retv = FS_ERR;
 				else {
 					retv = FS_OK;
-					printf("%s\n",buf);
+					printf("%s\n",rdbuf);
+					free(rdbuf);
 				}
 			}
 

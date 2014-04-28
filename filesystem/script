@@ -1,49 +1,9 @@
 mkfs
-mkdir a
-mkdir "a b c"
-mkdir c
-mkdir d
-cd a
-mkdir a
-mkdir b
-mkdir c
-mkdir d
-cd a
-mkdir a
-mkdir b
-mkdir c
-mkdir d
-cd a
-mkdir a
-mkdir b
-mkdir c
-mkdir d
-cd a
-mkdir a
-mkdir b
-mkdir c
-mkdir d
-cd a
-mkdir a
-mkdir b
-mkdir c
-mkdir d
-cd a
-mkdir a
-mkdir b
-mkdir c
-mkdir d
+
 open " big  testfile  " w
-write 0 This is a string
-write 0 This is more of a string
+write 0 Astring
+write 0 Bstring
 close 0
 open " big  testfile  " r
 read 0 20
 close 0
-
-cd /
-tree
-cd /a
-ls
-cd a/a/a/a
-tree 
