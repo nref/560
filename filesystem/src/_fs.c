@@ -662,7 +662,6 @@ static void _free_inode(inode* ino) {
 				break;
 			}
 		}
-//		free(ino->ib1);
 		ino->ib1 = NULL;
 	}
 

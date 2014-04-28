@@ -562,12 +562,15 @@ int main() {
 				continue;
 			}
 			if (cmd->nfields == 3) { // if proper argument number
-				if(!fs.stat(cmd->fields[3])){
+				inode *val = fs.stat(cmd->fields[1]);
+				//BUG: If the file doesn't exist, I get an error
+				//inode *val1 = fs.stat(cmd->fields[2]);
+				if(val != NULL){
 					//if the 2nd file doesn't exist
 					fs.link(cmd->fields[1], cmd->fields[2]);
 					retv = FS_OK;
 				} else {
-					printf("destination file exists\n");
+					printf("Invalid files (src dne or dst exists)\n");
 					prompt();
 					continue;
 				}

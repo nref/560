@@ -413,15 +413,15 @@ static void link (char* from, char* to) {
 	fs_path* src_path = fs.pathFromString(from);
 	//fs_path* dst_path = fs.pathFromString(to);
 	char* parent = fs.pathSkipLast(src_path);
-	char* name = fs.pathGetLast(src_path);
+	//char* name = fs.pathGetLast(src_path);
 	//retrieve ino of source
 	inode* src_ino = stat(from);
 	inode* p_ino = stat(parent);
-	filev* src_fv = _fs._ino_to_fv(shfs,src_ino);
-	printf("src inode of file \"%s\" is: %d\n",from, src_ino->num);
-	lfile = _fs._new_link(shfs, p_ino->datav.dir, from);
+	//filev* src_fv = _fs._ino_to_fv(shfs,src_ino);
+	//printf("src inode of file \"%s\" is: %d\n",from, src_ino->num);
+	lfile = _fs._new_link(shfs, p_ino->datav.dir, src_ino);
 	strncpy(lfile->name,to,FS_NAMEMAXLEN);
-	inode* dst_ino;
+	//inode* dst_ino;
 
 	//Check from inode (if not file -> err)
     //Pass off to fs.link()
