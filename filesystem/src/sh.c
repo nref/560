@@ -159,12 +159,14 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 	}
 
 	for (i = 0; i < dv->nfiles; i++) {	// For each file at this level
-		//fs.open(dv_path, dv->files[i]->data.file.name, "r");
-		printf("%*s" "%s [file]\n", depth*2, " ", dv->files[i]->data.file.name);
+		inode* f_ino = fs.statI(dv->ino->data.dir.files[i]);
+		
+		printf("%*s" "%s [file]\n", depth*2, " ", f_ino->data.file.name);
+		fs.inodeUnload(f_ino);
 	}
 
 	for (i = 0; i < dv->ino->nlinks; i++)	// For each link at this level
-		printf("%*s" "%s [link]\n", depth*2, " ", dv->links[i]->data.file.name);
+		printf("%*s" "%s [link]\n", depth*2, " ", dv->links[i]->data.link.name);
 
 	//free(dv_path);
 }

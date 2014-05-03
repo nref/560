@@ -22,11 +22,13 @@ typedef struct {
 	char*		(* trim)		(char*);
 	int		(* isNumeric)		(char*);
 
+	void		(* inodeUnload)		(inode*);
 	void		(* destruct)		();
 	void		(* openfs)		();
 	void		(* mkfs)		();
 	int		(* mkdir)		(char*, char*);
 	inode*		(* stat)		(char*);
+	inode*		(* statI)		(inode_t);
 	int		(* open)		(char*, char*, char*);
 	void		(* close)		(fd_t);
 	dentv*		(* opendir)		(char*);

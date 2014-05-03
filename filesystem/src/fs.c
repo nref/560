@@ -127,6 +127,11 @@ static inode* stat(char* name) {
 	}
 }
 
+/* Stat using an inode number */
+static inode* statI(inode_t num) {
+	return _fs._inode_load(shfs, num);
+}
+
 static void	pathFree(fs_path* p)				{ _fs._pathFree(p); }
 static fs_path*	newPath()					{ return _fs._newPath(); }
 static fs_path*	tokenize(const char* str, const char* delim)	{ return _fs._tokenize(str, delim); }
@@ -142,6 +147,7 @@ static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
 static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
 static char*	trim(char* cpy)					{ return _fs._trim(cpy); }
 static int	isNumeric(char* str)				{ return _fs._isNumeric(str); }
+static void	inodeUnload(inode* ino)				{ _fs._inode_unload(shfs, ino); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
 static int open(char* parent_dir, char* name, char* mode) { 
@@ -437,9 +443,11 @@ fs_public_interface const fs =
 	pathFree, newPath, tokenize, pathFromString, stringFromPath,		/* Path management */
 	pathSkipLast, pathGetLast, pathAppend, getAbsolutePathDV, getAbsolutePath, pathTrimSlashes,
 	strSkipFirst, strSkipLast, trim, isNumeric,
+	
+	inodeUnload,
 
 	destruct, openfs, mkfs, mkdir,
-	stat, open, close, opendir, closedir, 
+	stat, statI, open, close, opendir, closedir,
 	rmdir, read, write, seek,
 	link, ulink
 };
