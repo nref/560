@@ -617,7 +617,7 @@ static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 	hv->ino->num = h->ino;
 	free(h);
 	
-	if (FS_ERR == _balloc(fs, hv->ino->ninoblocks, hv->ino->blocks))
+	if (FS_ERR == _mballoc(fs, hv->ino->ninoblocks, hv->ino->blocks))
 		return NULL;
 	return hv;
 }
@@ -625,10 +625,10 @@ static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 /*Allocates a new link file*/
 static hlinkv* _new_link(filesystem* fs, dentv* parent, const inode* src_ino) {
 	hlinkv* lv = NULL;
-	hlink* l = NULL;
+//	hlink* l = NULL;
 
 	lv = _newlv(fs, true, src_ino->datav.file->name);
-	lv->dest = src_ino;
+	lv->dest = (inode*)src_ino;
 	
 	/* Allocate a new inode number */
 	if (NULL == lv) return NULL;
@@ -1800,7 +1800,6 @@ static char* _inode_read_data(inode* ino, size_t seek_pos, size_t len) {
 	size_t ib1 = 0;
 	size_t ib2 = 0;
 	size_t i = 0;
-	size_t buflen = 0;
 	
 	block_t blk;			/* First block to begin writing at */
 	size_t offset;			/* Byte offset in first block to begin writing at */
