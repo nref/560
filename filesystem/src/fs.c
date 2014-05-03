@@ -182,7 +182,7 @@ static int open(char* parent_dir, char* name, char* mode) {
 			if (NULL == newfv) return FS_ERR;
 			f_ino = newfv->ino;
 
-			// Chris: TODO open an existing file should amrk it for appending, not create a new file
+			// Chris: TODO open an existing file should mark it for appending, not create a new file
 			// Doug: If control flow gets here, then the file did not exist
 			//	 The lab assignment also specifies:
 			//	"The current file offset will be 0 when the file is opened"
@@ -428,7 +428,6 @@ static void link (char* from, char* to) {
 	//inode* dst_ino;
 
 	//Check from inode (if not file -> err)
-    //Pass off to fs.link()
     //Check return errora
 }
 static void	ulink	(char* target) { printf("fs_unlink: %s\n", target); }

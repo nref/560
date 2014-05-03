@@ -575,51 +575,80 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 static hlink* _newl(filesystem* fs, const int alloc_inode, const char* name) {
 	hlink* h = NULL;
 
+	h = (hlink*)malloc(sizeof(hlink));
 	if(alloc_inode){
-		h = (hlink*)malloc(sizeof(hlink));
+		h->ino = (inode_t)_ialloc(fs);
+	}else{
+		h->ino = 0;
 	}
+	
+	// Copy name
+	strncpy(h->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
+	h->name[FS_NAMEMAXLEN-1] = '\0';
+		
 	//Fill in contents of
 	return h;
 }
 /*Create an in-memory link file*/
 static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
+	hlink* h = NULL;
 	hlinkv* hv = NULL;
 
 	hv = (hlinkv*)malloc(sizeof(hlinkv));
 	hv->ino = _fs._new_inode();
-
-	// TODO LINK
-	return NULL;
+	
+	
+	memset(hv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
+	
+	hv->ino->nlinks	= 0;
+	hv->ino->ninoblocks = (uint16_t) (sizeof(inode)/stride+1);	/* How many blocks the inode consumes */
+	hv->ino->ndatablocks=0;
+	hv->ino->nblocks= hv->ino->ninoblocks + hv->ino->ndatablocks;	/* How many blocks the inode data consumes */
+	hv->ino->size	= hv->ino->ninoblocks*BLKSIZE;
+	hv->ino->mode = FS_LINK;
+	hv->ino->v_attached = true;
+	hv->ino->datav.link = hv;
+	
+	strncpy(hv->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
+	hv->name[FS_NAMEMAXLEN-1] = '\0';
+	
+	h = _newl(fs, alloc_inode, name);
+	memcpy(&hv->ino->data.link, h, sizeof(hv->ino->data.link));
+	hv->ino->num = h->ino;
+	free(h);
+	
+	if (FS_ERR == _balloc(fs, hv->ino->ninoblocks, hv->ino->blocks))
+		return NULL;
+	return hv;
 }
+
 /*Allocates a new link file*/
 static hlinkv* _new_link(filesystem* fs, dentv* parent, const inode* src_ino) {
 	hlinkv* lv = NULL;
 	hlink* l = NULL;
 
 	lv = _newlv(fs, true, src_ino->datav.file->name);
-	//parent->nlinks++;
-	//parent->ino->data.dir.nlinks++;
-
+	lv->dest = src_ino;
+	
 	/* Allocate a new inode number */
 	if (NULL == lv) return NULL;
 	
+	parent->nlinks++;
+	parent->ino->nlinks++;
+	parent->ino->data.dir.nlinks++;
 	
-	//parent->files[parent->nfiles] = fv->ino;
-	//parent->ino->data.dir.files[parent->ino->data.dir.nfiles] = fv->ino->num;
+	parent->links[(parent->nlinks)-1] = lv->ino; //Don't forget 0 indexing
+	parent->ino->data.dir.links[parent->ino->data.dir.nlinks] = lv->ino->num;
 	
 	//parent->nfiles++;
 	//parent->ino->data.dir.nfiles++;
 	
-	//_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->ninoblocks, sizeof(inode));
-	//fs->sb.inode_first_blocks[fv->ino->num] = fv->ino->blocks[0];
+	_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->ninoblocks, sizeof(inode));
+	fs->sb.inode_first_blocks[lv->ino->num] = lv->ino->blocks[0];
 	
-	//if (FS_ERR == _fs._sync(fs)) {
-	//	return NULL;
-	//}
-	
-	//return fv;
-	
-	// TODO LINK
+	if (FS_ERR == _fs._sync(fs)) {
+		return NULL;
+	}
 	return lv;
 }
 
