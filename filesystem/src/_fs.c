@@ -625,7 +625,6 @@ static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 /*Allocates a new link file*/
 static hlinkv* _new_link(filesystem* fs, dentv* parent, const inode* src_ino) {
 	hlinkv* lv = NULL;
-//	hlink* l = NULL;
 
 	lv = _newlv(fs, true, src_ino->datav.file->name);
 	lv->dest = (inode*)src_ino;
