@@ -325,6 +325,7 @@ static char* read(fd_t fd, size_t size) {
 	
 	/* No need to check file size; _inode_read_data
 	 * will read as many are are allocated */
+	_fs._inode_fill_blocks_from_disk(shfs, fv->ino);
 	buf = _fs._inode_read_data(fv->ino, fv->seek_pos, size);
 	fv->seek_pos += strlen(buf);
 
@@ -376,29 +377,32 @@ static size_t write (fd_t fd, char* str) {
  *  @param offset the offest of the file */
 static void seek(fd_t fd, size_t offset) {
 	filev* fv = NULL;
-	printf("fs_seek: %d %zu\n", fd, offset); //checking
 	
 	//Check if the file is open (fd is in the allocated
 	if (NULL == shfs) {
-		printf("No filesystem.\n");
+		printf("No filesystem\n");
 		return;
 	}
 	
 	if (fd >= FS_MAXOPENFILES) {
-		printf("Invalid file descriptor.\n");
+		printf("Invalid file descriptor\n");
 		return;
 	}
 	
 	if (false == shfs->allocated_fds[fd]) {
-		printf("File descriptor \"%d\" is not open\n", fd);
+		printf("File descriptor \"%d\" is not open.\n", fd);
 		return; /* fd not allocated, file not open */
 	}
 	
-	//No need to check the mode
-	
-	//Open the file
+	// Get the file from the file descriptor
 	fv = shfs->fds[fd];
-	//if (shfs->fds[fd]->ino->directblocks[find_last_data_block] < seek)
+	
+	// Check that the fd is a file
+	if (FS_FILE != fv->ino->mode) {
+		printf("File descriptor \"%d\" is not a file.\n", fd);
+		return;
+	}
+	
 	fv->seek_pos = offset;
 	
 	return;

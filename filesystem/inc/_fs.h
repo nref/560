@@ -280,7 +280,7 @@ typedef struct {
 	filesystem*		(* _init)		(int);
 
 	int			(* __balloc)		(filesystem* );
-	int			(* _balloc)		(filesystem*, const size_t, block_t*);
+	int			(* _mballoc)		(filesystem*, const size_t, block_t*);
 	int			(* _bfree)		(filesystem* , block*);
 	block*			(* _newBlock)		();
 	inode*			(* _new_inode)		();
@@ -290,7 +290,7 @@ typedef struct {
 	int			(* _ifree)		(filesystem* , inode_t);
 
 	int			(* _inode_fill_blocks_from_data) (filesystem*, inode*, size_t, char*);
-	int			(* _inode_fill_blocks_from_disk) (inode*);
+	int			(* _inode_fill_blocks_from_disk) (filesystem*, inode*);
 
 	int			(* _inode_extend_datablocks)	(filesystem*, inode*, block**);
 	size_t			(* _inode_read_direct_blocks)	(char*, block**, size_t);
