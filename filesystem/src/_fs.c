@@ -906,7 +906,11 @@ static hlinkv* _load_link(filesystem* fs, inode_t num) {
 	hlinkv* lv = NULL;
 	filev* fv = NULL;
 	dentv* dv = NULL;
-
+	
+	if(NULL == ino){
+		return NULL;
+	}
+		
 	ino->datav.link = _ino_to_lv(fs, ino);
 	
 	if (FS_FILE == ino->data.link.mode) {
@@ -1026,7 +1030,11 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 	
 	for (i = 0; i < dv->nlinks; i++) {
 		hlinkv* lv = _load_link(fs, dv->ino->data.dir.links[i]);
-		dv->links[i] = lv->ino;
+		if(NULL == lv) {
+			return NULL;
+		} else {
+			dv->links[i] = lv->ino;
+		}
 	}
 	
 	return dv;
