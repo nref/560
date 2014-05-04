@@ -2188,8 +2188,30 @@ static void _print_mem(void const *vp, size_t n)
 
 /* Print the sizes of various structs, defines, and fields. */
 static void _debug_print() {
+	
+#if defined(_WIN64) || defined(_WIN32)
+	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	WORD saved_attributes;
+	GetConsoleScreenBufferInfo(console, &info);
+	saved_attributes = info.wAttributes;
+#endif
+	
+#if defined(_WIN64) || defined(_WIN32)
+	SetConsoleTextAttribute(console, FOREGROUND_RED);
+#else
+	printf("%s",ANSI_COLOR_RED);
+#endif
+	
 	printf("Welcome to the 560 shell by Doug Slater and Chris Craig\n");
 	printf("Here is some useful information about the filesystem:\n\n");
+	
+#if defined(_WIN64) || defined(_WIN32)
+	SetConsoleTextAttribute(console, saved_attributes);
+#else
+	printf("%s",ANSI_COLOR_RESET);
+#endif
+	
 	printf("\tsizeof(map): %lu\n", sizeof(map));
 	printf("\tsizeof(block): %lu\n", sizeof(block));
 	printf("\tsizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
@@ -2206,6 +2228,7 @@ static void _debug_print() {
 	printf("\tMAX FILE SIZE (KByte): %d\n", MAXFILEBLOCKS*BLKSIZE/1024);
 	printf("\tFS_MAXPATHLEN: %d\n", FS_MAXPATHLEN);
 	printf("\n");
+	
 	fflush(stdout);
 }
 
