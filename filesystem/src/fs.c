@@ -260,9 +260,39 @@ static dentv* opendir(char* path) {
 		return NULL;
 	}
 
-	if (FS_DIR != ino->mode) {
-		printf("opendir: Found \"%s\", but it's not a directory.\n", path);
+	if (FS_FILE == ino->mode) {
+		printf("opendir: Found \"%s\", but it's a file.\n", path);
 		return NULL;
+	}
+	
+	/* TODO follow a path of links */
+	if (FS_LINK == ino->mode) {
+		inode* dest = NULL;
+		
+		if (NULL == ino->datav.link) {
+			printf("opendir: Link \"%s\" has NULL datav.\n", path);
+			return NULL;			return NULL;
+		}
+		
+		dest = ino->datav.link->dest;
+		
+		if (NULL== dest) {
+			printf("opendir: Link\"%s\" has NULL destination.\n", path);
+			return NULL;
+		}
+		
+		if (FS_DIR != dest->mode) {
+			printf("opendir: Link \"%s\" does not point to a directory.\n", path);
+			return NULL;
+		}
+		
+		if (!dest->v_attached) {
+			if (FS_ERR == _fs._v_attach(shfs, dest))
+				return NULL;
+		}
+		
+		return dest->datav.dir;
+		
 	}
 
 	if (NULL == ino->datav.dir) {

@@ -235,7 +235,7 @@ typedef struct {
 	char*			(* _stringFromPath)	(fs_path*);
 	char*			(* _pathSkipLast)	(fs_path*);
 	char*			(* _pathGetLast)	(fs_path*);
-	int				(* _pathAppend)		(fs_path*, const char*);
+	int			(* _pathAppend)		(fs_path*, const char*);
 	char*			(* _pathTrimSlashes)	(char*);
 	char*			(* _getAbsolutePathDV)	(dentv*, fs_path *);
 	char*			(* _getAbsolutePath)	(char*, char*);
@@ -243,7 +243,7 @@ typedef struct {
 	char*			(* _strSkipLast)	(char*);
 	char*			(* _trim)		(char*);
 
-	int				(* _isNumeric)		(char* str);
+	int			(* _isNumeric)		(char* str);
 
 	dent*			(* _newd)		(filesystem*, const int, const char*);
 	dentv*			(* _newdv)		(filesystem* , const int, const char*);
@@ -261,66 +261,66 @@ typedef struct {
 	dentv*			(* _mkroot)		(filesystem *, int);
 	
 	filev*			(* _load_file)		(filesystem*, inode_t);
-	int				(* _unload_file)	(filesystem*, inode*);
+	int			(* _unload_file)	(filesystem*, inode*);
 
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
-	int				(* _unload_dir)		(filesystem* , inode*);
+	int			(* _unload_dir)		(filesystem* , inode*);
 
 	hlinkv*			(* _load_link)		(filesystem* , inode_t);
-	int				(* _unload_link)	(filesystem* , inode*);
+	int			(* _unload_link)	(filesystem* , inode*);
 	
 	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
 	filev*			(* _new_file)		(filesystem *, dentv*, const char*);
 	hlinkv*			(* _new_link)		(filesystem *, dentv*, inode*, const char*);
 	
-	int				(* _v_attach)		(filesystem* , inode*); 
-	int				(* _v_detach)		(filesystem* , inode*); 
+	int			(* _v_attach)		(filesystem* , inode*);
+	int			(* _v_detach)		(filesystem* , inode*);
 	
-	int				(* _get_fd)			(filesystem*);
-	int				(* _free_fd)		(filesystem*, int);
+	int			(* _get_fd)		(filesystem*);
+	int			(* _free_fd)		(filesystem*, int);
 
-	int				(* _prealloc)		();
-	int				(* _zero)			();
-	filesystem*		(* _open)			();
-	filesystem*		(* _mkfs)			();
-	filesystem*		(* _init)			(int);
-
-	int				(* __balloc)		(filesystem* );
-	int				(* _mballoc)		(filesystem*, const size_t, block_t*);
-	int				(* _bfree)			(filesystem* , block*);
+	int			(* _prealloc)		();
+	int			(* _zero)		();
+	filesystem*		(* _open)		();
+	filesystem*		(* _mkfs)		();
+	filesystem*		(* _init)		(int);
+	
+	int			(* __balloc)		(filesystem* );
+	int			(* _mballoc)		(filesystem*, const size_t, block_t*);
+	int			(* _bfree)		(filesystem* , block*);
 	block*			(* _newBlock)		();
 	inode*			(* _new_inode)		();
 	void			(* _free_inode)		(inode*);
 
-	int				(* _ialloc)			(filesystem *);
-	int				(* _ifree)			(filesystem* , inode_t);
+	int			(* _ialloc)		(filesystem *);
+	int			(* _ifree)		(filesystem* , inode_t);
 
-	int				(* _inode_fill_blocks_from_data) (filesystem*, inode*, size_t, char*);
-	int				(* _inode_fill_blocks_from_disk) (inode*);
+	int			(* _inode_fill_blocks_from_data) (filesystem*, inode*, size_t, char*);
+	int			(* _inode_fill_blocks_from_disk) (inode*);
 
-	int				(* _inode_extend_datablocks)	(filesystem*, inode*, block**);
+	int			(* _inode_extend_datablocks)	(filesystem*, inode*, block**);
 	size_t			(* _inode_read_direct_blocks)	(char*, block**, size_t);
 	char*			(* _inode_read_data)		(inode*, size_t, size_t);
-	int				(* _inode_commit_data)		(inode*);
+	int			(* _inode_commit_data)		(inode*);
 
-	inode*			(* _inode_load)			(filesystem* , inode_t);
-	int				(* _inode_unload)		(filesystem*, inode*);
+	inode*			(* _inode_load)		(filesystem* , inode_t);
+	int			(* _inode_unload)	(filesystem*, inode*);
 
-	int				(* readblock)			(void*, block_t);
-	int				(* writeblock)			(block_t, size_t, void*);
+	int			(* readblock)		(void*, block_t);
+	int			(* writeblock)		(block_t, size_t, void*);
 
-	int				(* readirectblocks)		(void*, block_t*, size_t, size_t);
-	int				(* writeblocks)			(void*, block_t*, size_t, size_t);
+	int			(* readirectblocks)	(void*, block_t*, size_t, size_t);
+	int			(* writeblocks)		(void*, block_t*, size_t, size_t);
 
-	int				(* write_commit)		(filesystem*, inode*);
-	inode*			(* _recurse)			(filesystem* , dentv*, size_t, size_t, fs_path*);
-	int				(* _sync)				(filesystem* );
+	int			(* write_commit)	(filesystem*, inode*);
+	inode*			(* _recurse)		(filesystem* , dentv*, size_t, size_t, fs_path*);
+	int			(* _sync)		(filesystem* );
 
-	void			(* _safeopen)			(char*, char*);
-	void			(* _safeclose)			();
-
-	void			(* _print_mem)			(void const*, size_t);
-	void			(* _debug_print)		();
+	void			(* _safeopen)		(char*, char*);
+	void			(* _safeclose)		();
+	
+	void			(* _print_mem)		(void const*, size_t);
+	void			(* _debug_print)	();
 
 } fs_private_interface;
 extern fs_private_interface const _fs;

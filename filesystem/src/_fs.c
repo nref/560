@@ -1161,35 +1161,35 @@ static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t m
 
 		if (!dv->head->v_attached) {					// Load the first directory from disk if not already in memory
 			if (FS_ERR == _v_attach(fs, dv->head))
-				return NULL;
+				dv->head->v_attached = false;
 		}
 
-		if (NULL == dv->head->datav.dir) 
-			return NULL;
+		if (dv->head->v_attached && NULL != dv->head->datav.dir) {
 
-		iterator = dv->head->datav.dir;
+			iterator = dv->head->datav.dir;
 
-		/* For each subdirectory */
-		for (i = 0; i < dv->ndirs; i++)
-		{
-			if (NULL == iterator) return NULL;				// This happens if there are no subdirs
+			/* For each subdirectory */
+			for (i = 0; i < dv->ndirs; i++)
+			{
+				if (NULL == iterator) break;				// This happens if there are no subdirs
 
-			if (!strcmp(iterator->name, p->fields[current_depth])) {	// If we have a matching directory name
-				if (max_depth == current_depth)				// If we can't go any deeper
-					return iterator->ino;				// Return the inode of the matching dir
+				if (!strcmp(iterator->name, p->fields[current_depth])) {	// If we have a matching directory name
+					if (max_depth == current_depth)				// If we can't go any deeper
+						return iterator->ino;				// Return the inode of the matching dir
 
-				else return _recurse(fs, iterator,			// Else recurse into subdir
-					current_depth + 1, max_depth, p); 
+					else return _recurse(fs, iterator,			// Else recurse into subdir
+						current_depth + 1, max_depth, p); 
+				}
+
+				if (NULL == iterator->next) break;			// Return if we have iterated over all subdirs
+
+				if (!iterator->next->v_attached) {				// Load the next directory from disk if not already in memory
+					if (FS_ERR == _v_attach(fs, iterator->next))
+						break;
+				}
+
+				iterator = iterator->next->datav.dir;
 			}
-
-			if (NULL == iterator->next) return NULL;			// Return if we have iterated over all subdirs
-
-			if (!iterator->next->v_attached) {				// Load the next directory from disk if not already in memory
-				if (FS_ERR == _v_attach(fs, iterator->next))
-					return NULL;
-			}
-
-			iterator = iterator->next->datav.dir;
 		}
 	}
 
@@ -1211,7 +1211,7 @@ static inode* _recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t m
 	}
 
 	/* Iterate over links */
-	for (i = 0; i < dv->ino->nlinks; i++) {						// For each link at this level
+	for (i = 0; i < dv->nlinks; i++) {						// For each link at this level
 		if (!strcmp(dv->links[i]->data.link.name, p->fields[current_depth])) {
 
 			if (!dv->links[i]->v_attached) {				// Load the file from disk if not already in memory
