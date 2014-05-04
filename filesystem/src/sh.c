@@ -331,11 +331,19 @@ int sh_open(char* filename, char* mode){
 	fd = fs.open(parent, name, mode);
 	return fd;
 }
-char* sh_read(int fd, int size){
-	printf("not done yet\n");
-	return "";
+
+char* sh_read(int fd, size_t size){
+	char* rdbuf = NULL;
+	
+	rdbuf = fs.read(fd, size);
+	if (NULL != rdbuf)
+		printf("Error: Buffer is empty\n");
+	return rdbuf;
 }
 
+void sh_close(int fd){
+	fs.close(fd);
+}
 
 int sh_write(fs_args* cmd, fs_args* cmd_quotes) {
 	
@@ -757,19 +765,17 @@ int main() {
 			}
 
 			if (cmd->nfields == 3) {
-				/*
-				//Perform Open and Read to get file contents
-				fd = sh_open(cmd->fields[1], (char*)'r');
-				output = sh_read(fd,<#int size#>)
-				
-				
-				
-				
-				//Stat the first file
 				inode* src = fs.stat(cmd->fields[1]);
+				char* out_buf;
+				int fd;
+				
+				//Perform Open and Read to get inner file contents
+				fd = sh_open(cmd->fields[1], (char*) "r");
+				out_buf = sh_read(fd,src->size);
 				
 				//Test if file exists
-				if( -1 !=access(cmd->fields[2], F_OK)){
+				int ret = access(fs.trim(cmd->fields[2]), F_OK);
+				if( -1 != ret){
 					printf("File already exists\n");
 					prompt();
 					continue;
@@ -779,8 +785,12 @@ int main() {
 				
 
 				//pass to export to write each block to the file
-				fs.export(src, fp);
-				 */
+				if(0 == fwrite(out_buf, src->size, 1, fp)) {
+					printf("Error occurred while writing export\n");
+					retv = FS_ERR;
+				} else {
+					retv = FS_OK;
+				}
 			}
 		} else {
 			printf("Bad command \"%s\"", buf); 

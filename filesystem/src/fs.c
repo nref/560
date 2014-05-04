@@ -508,14 +508,15 @@ static int	ulink	(char* target) {
 }
 
 /* Exports a file in memory to the filesystem*/
-static void export (inode* src, FILE* dst_fp){
-	int i;
+//static void export (inode* src, FILE* dst_fp){
+	
+	//this is kinda useless
 	
 	/*
 	for(i=0;src->nblocks;++i){
 		fwrite(src->blocks[i], BLKSIZE, 1, dst_fp);
 	}*/
-}
+//}
 
 
 
