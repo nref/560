@@ -195,9 +195,6 @@ static int open(char* parent_dir, char* name, char* mode) {
 			//	i.e. the user has to remember to seek for append
 		}
 	}
-	else {
-		//_fs._inode_read_data(f_ino, f_ino->nblocks - f_ino->ninoblocks, f_ino->size);
-	}
 
 	if (NULL == f_ino) return FS_ERR;
 	
@@ -331,7 +328,7 @@ static char* read(fd_t fd, size_t size) {
 	
 	/* No need to check file size; _inode_read_data
 	 * will read as many are are allocated */
-	_fs._inode_fill_blocks_from_disk(shfs, fv->ino);
+	_fs._inode_fill_blocks_from_disk(fv->ino);
 	buf = _fs._inode_read_data(fv->ino, fv->seek_pos, size);
 	fv->seek_pos += strlen(buf);
 
@@ -365,7 +362,7 @@ static size_t write (fd_t fd, char* str) {
 	if (NULL == fv || !fv->ino->v_attached ) { 
 		printf("Could not write to file.\n");
 
-		return 0;	/* TODO: Read in from disk */
+		return 0;
 	}
 	if (NULL == str || '\0' == str[0])
 		return 0;
@@ -418,25 +415,28 @@ static void seek(fd_t fd, size_t offset) {
  * @param path of src file
  * @param path of dst link
  */
-static void link (char* from, char* to) {
-	hlinkv* lfile;
-	fs_path* src_path = fs.pathFromString(from);
-	//fs_path* dst_path = fs.pathFromString(to);
-	char* parent = fs.pathSkipLast(src_path);
-	//char* name = fs.pathGetLast(src_path);
-	//retrieve ino of source
-	inode* src_ino = stat(from);
-	inode* p_ino = stat(parent);
-	//filev* src_fv = _fs._ino_to_fv(shfs,src_ino);
-	//printf("src inode of file \"%s\" is: %d\n",from, src_ino->num);
-	lfile = _fs._new_link(shfs, p_ino->datav.dir, src_ino);
-	strncpy(lfile->name,to,FS_NAMEMAXLEN);
-	//inode* dst_ino;
+static int link (char* from, char* to) {
+	hlinkv* newlv = NULL;
+	fs_path* src_path = NULL;
+	inode* src_ino = NULL;
+	inode* p_ino = NULL;
+	char* parent = NULL;
 
-	//Check from inode (if not file -> err)
-    //Check return errora
+	src_path = fs.pathFromString(from);
+	parent = fs.pathSkipLast(src_path);
+
+	src_ino = stat(from);
+	p_ino = stat(parent);
+
+	newlv = _fs._new_link(shfs, p_ino->datav.dir, src_ino, to);
+	if (NULL == newlv) return FS_ERR;
+
+	return FS_OK;
 }
-static void	ulink	(char* target) { printf("fs_unlink: %s\n", target); }
+static int	ulink	(char* target) {
+	printf("fs_unlink: NOT IMPLEMENTED %s\n", target);
+	return FS_ERR;
+}
 
 fs_public_interface const fs = 
 { 

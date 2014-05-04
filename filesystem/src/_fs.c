@@ -14,7 +14,7 @@
 #include <math.h>
 
 #include "_fs.h"
-#
+
 #if defined(_WIN64) || defined(_WIN32)
 #include <windows.h>
 #endif
@@ -497,7 +497,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 	return dv;
 }
 
-/* Create an on-disk file*/
+/* Create an on-disk file */
 static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	file* f = NULL;
 	f = (file*)malloc(sizeof(file));
@@ -505,7 +505,6 @@ static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	if (alloc_inode)
 		f->ino = (inode_t)_ialloc(fs);
 	else f->ino = 0;
-	f->seek_pos = 0;
 
 	// Copy name
 	strncpy(f->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
@@ -558,10 +557,10 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 
 	parent->files[parent->nfiles] = fv->ino;
 	parent->ino->data.dir.files[parent->ino->data.dir.nfiles] = fv->ino->num;
-
+	
 	parent->nfiles++;
 	parent->ino->data.dir.nfiles++;
-
+	
 	_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->ninoblocks, sizeof(inode));
 	fs->sb.inode_first_blocks[fv->ino->num] = fv->ino->blocks[0];
 	
@@ -571,14 +570,15 @@ static filev* _new_file(filesystem* fs, dentv* parent, const char* name) {
 
 	return fv;
 }
-/*create an on-disk link file*/
+
+/* Create an on-disk link */
 static hlink* _newl(filesystem* fs, const int alloc_inode, const char* name) {
 	hlink* h = NULL;
 
 	h = (hlink*)malloc(sizeof(hlink));
-	if(alloc_inode){
+	if (alloc_inode) {
 		h->ino = (inode_t)_ialloc(fs);
-	}else{
+	} else {
 		h->ino = 0;
 	}
 	
@@ -586,17 +586,16 @@ static hlink* _newl(filesystem* fs, const int alloc_inode, const char* name) {
 	strncpy(h->name, name, min(FS_NAMEMAXLEN-1, strlen(name)+1));
 	h->name[FS_NAMEMAXLEN-1] = '\0';
 		
-	//Fill in contents of
 	return h;
 }
-/*Create an in-memory link file*/
+
+/* Create an in-memory link */
 static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 	hlink* h = NULL;
 	hlinkv* hv = NULL;
 
 	hv = (hlinkv*)malloc(sizeof(hlinkv));
 	hv->ino = _fs._new_inode();
-	
 	
 	memset(hv->ino->blocks, 0, sizeof(block_t)*MAXFILEBLOCKS);
 	
@@ -622,36 +621,32 @@ static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 	return hv;
 }
 
-/*Allocates a new link file*/
-static hlinkv* _new_link(filesystem* fs, dentv* parent, const inode* src_ino) {
+/* Create a new link */
+static hlinkv* _new_link(filesystem* fs, dentv* parent, inode* src_ino, const char* name) {
 	hlinkv* lv = NULL;
-
-	lv = _newlv(fs, true, src_ino->datav.file->name);
-	lv->dest = (inode*)src_ino;
+		
+	lv = _newlv(fs, true, name);
+	lv->dest = src_ino;
+	lv->ino->data.link.dest = src_ino->num;
 	
 	/* Allocate a new inode number */
 	if (NULL == lv) return NULL;
 	
-	parent->nlinks++;
-	parent->ino->nlinks++;
-	parent->ino->data.dir.nlinks++;
+	lv->ino->data.link.mode = src_ino->mode;
+
+	parent->links[parent->nlinks++] = lv->ino;
+	parent->ino->data.dir.links[parent->ino->data.dir.nlinks++] = lv->ino->num;
+	src_ino->nlinks++;
 	
-	parent->links[(parent->nlinks)-1] = lv->ino; //Don't forget 0 indexing
-	parent->ino->data.dir.links[parent->ino->data.dir.nlinks] = lv->ino->num;
-	
-	//parent->nfiles++;
-	//parent->ino->data.dir.nfiles++;
-	
-	_fs.writeblocks(parent->ino, parent->ino->blocks, parent->ino->ninoblocks, sizeof(inode));
 	fs->sb.inode_first_blocks[lv->ino->num] = lv->ino->blocks[0];
 	
-	if (FS_ERR == _fs._sync(fs)) {
-		return NULL;
-	}
+	_fs.write_commit(fs, lv->ino);
+	_fs.write_commit(fs, parent->ino);
+	_fs.write_commit(fs, src_ino);
+
 	return lv;
 }
 
-/* TODO Fix allocation */
 static inode* _new_inode() {
 	uint i, j, k;
 	inode* ino = NULL;
@@ -892,9 +887,62 @@ static filev* _ino_to_fv(filesystem* fs, inode* ino) {
 	return fv;
 }
 
+static hlinkv* _ino_to_lv(filesystem* shfs, inode* ino) {
+	hlinkv* lv = NULL;
+	if (NULL == ino) return NULL;
+	
+	lv = _newlv(shfs, false, ino->data.link.name);
+	if (NULL == lv) return NULL;
+	
+	lv->ino			= ino;
+	lv->ino->datav.link	= lv;
+	lv->ino->v_attached	= true;
+	lv->ino->mode		= FS_LINK;
+	return lv;
+}
+
+static hlinkv* _load_link(filesystem* fs, inode_t num) {
+	inode* ino = _inode_load(fs, num);
+	hlinkv* lv = NULL;
+	filev* fv = NULL;
+	dentv* dv = NULL;
+
+	ino->datav.link = _ino_to_lv(fs, ino);
+	
+	if (FS_FILE == ino->data.link.mode) {
+		fv = _fs._load_file(fs, ino->data.link.dest);
+		ino->datav.link->dest = fv->ino;
+	}
+	else if (FS_DIR == ino->data.link.mode) {
+		dv = _fs._load_dir(fs, ino->data.link.dest);
+		ino->datav.link->dest = dv->ino;
+	}
+	else if (FS_LINK == ino->data.link.mode) {
+		if (ino->data.link.dest != ino->num) {	/* Don't link a link to itself */
+			lv = _fs._load_link(fs, ino->data.link.dest);
+			ino->datav.link->dest = lv->ino;
+		}
+	}
+	return ino->datav.link;
+}
+
+/* Free the memory allocated to an in-memory file structure */
+static int _unload_link(filesystem* fs, inode* ino) {
+	int status1;
+	
+	free(ino->datav.link);
+	ino->datav.link = NULL;
+	ino->v_attached = false;
+	
+	status1 = _inode_unload(fs, ino);
+	
+	if (FS_ERR == status1)
+		return FS_ERR;
+	return FS_OK;
+}
+
 /* Given an inode number, load the corresponding file structure. 
- * Wrap it in an inode which contains the in-memory version of the file 
- * TODO: Also read into indirect blocks */
+ * Wrap it in an inode which contains the in-memory version of the file */
 static filev* _load_file(filesystem* fs, inode_t num) {
 	inode* ino = _inode_load(fs, num);
 	ino->datav.file = _ino_to_fv(fs, ino);
@@ -975,8 +1023,12 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 		filev* fv = _load_file(fs, dv->ino->data.dir.files[i]);
 		dv->files[i] = fv->ino;
 	}
-	//for (i = 0; i < dv->nlinks; i++)	// TODO LINK
-	//	dv->files[i] = _load_link(fs, dv->ino->data.dir.links[i]);
+	
+	for (i = 0; i < dv->nlinks; i++) {
+		hlinkv* lv = _load_link(fs, dv->ino->data.dir.links[i]);
+		dv->links[i] = lv->ino;
+	}
+	
 	return dv;
 }
 
@@ -1010,8 +1062,9 @@ static int _unload_dir(filesystem* fs, inode* ino) {
 
 	for (i = 0; i < dv->nfiles; i++)
 		_unload_file(fs, dv->files[i]);
-	//for (int i = 0; i < dv->nlinks; i++) /* TODO LINK */
-	//	_unload_link(fs, dv->files[i]);
+	
+	for (i = 0; i < dv->nlinks; i++)
+		_unload_link(fs, dv->links[i]);
 
 	free(ino->datav.dir);
 	ino->datav.dir = NULL;
@@ -1027,16 +1080,21 @@ static int _v_attach(filesystem* fs, inode* ino) {
 	if (!ino->v_attached) {
 		switch (ino->mode) {
 
-		case FS_DIR: 
-		{
-			ino->datav.dir = _load_dir(fs, ino->num);
-			break;
-		}
-		case FS_FILE:
-			ino->datav.file = _load_file(fs, ino->num);
-			break;
-		case FS_LINK:
-			break; /* TODO LINK */
+			case FS_DIR:
+			{
+				ino->datav.dir = _load_dir(fs, ino->num);
+				break;
+			}
+			case FS_FILE:
+			{
+				ino->datav.file = _load_file(fs, ino->num);
+				break;
+			}
+			case FS_LINK:
+			{
+				ino->datav.link = _load_link(fs, ino->num);
+				break;
+			}
 		}
 
 		if (NULL == ino->datav.dir) return FS_ERR;
@@ -1052,17 +1110,23 @@ static int _v_detach(filesystem* fs, inode* ino) {
 	if (ino->v_attached) {
 		switch (ino->mode) {
 
-		case FS_DIR: 
-		{
-			_unload_dir(fs, ino);
-			break;
+			case FS_DIR:
+			{
+				_unload_dir(fs, ino);
+				break;
+			}
+			case FS_FILE:
+			{
+				_unload_file(fs, ino);
+				break;
+			}
+			case FS_LINK:
+			{
+				_unload_link(fs, ino);
+				break;
+			}
 		}
-		case FS_FILE:
-			_unload_file(fs, ino);
-			break;
-		case FS_LINK:
-			break; /* TODO LINK */
-		}
+		ino->v_attached = false;
 	}
 
 	return FS_OK;
@@ -1632,7 +1696,7 @@ static int _inode_fill_blocks_from_data(filesystem* fs, inode* ino, size_t seek_
 }
 
 /* Read data from blocks on disk into the blocks and iblocks of an inode */
-static int _inode_fill_blocks_from_disk(filesystem* fs, inode* ino) {
+static int _inode_fill_blocks_from_disk(inode* ino) {
 	block_t blk = 0;
 	size_t ib1 = 0;
 	size_t ib2 = 0;
@@ -1662,7 +1726,7 @@ static int _inode_fill_blocks_from_disk(filesystem* fs, inode* ino) {
 					ino->directblocks[db] = _newBlock();
 					ino->directblocks[db]->num = ino->blocks[blk];
 					
-					if (blk+1 < ino->nblocks)
+					if (blk+1 < (block_t)ino->nblocks)
 						ino->directblocks[db]->next = ino->blocks[blk+1];
 				}
 				_fs.readblock(ino->directblocks[db], ino->blocks[blk]);
@@ -1675,7 +1739,7 @@ static int _inode_fill_blocks_from_disk(filesystem* fs, inode* ino) {
 					ino->ib1->blocks[db] = _newBlock();
 					ino->ib1->blocks[db]->num = ino->blocks[blk];
 					
-					if (blk+1 < ino->nblocks)
+					if (blk+1 < (block_t)ino->nblocks)
 						ino->ib1->blocks[db]->next = ino->blocks[blk+1];
 					
 					ino->directblocks[MAXBLOCKS_DIRECT-1]->next = ino->ib1->blocks[0]->num;
@@ -1692,7 +1756,7 @@ static int _inode_fill_blocks_from_disk(filesystem* fs, inode* ino) {
 					ino->ib2->iblocks[ib1]->blocks[db] = _newBlock();
 					ino->ib2->iblocks[ib1]->blocks[db]->num = ino->blocks[blk];
 					
-					if (blk+1 < ino->nblocks)
+					if (blk+1 < (block_t)ino->nblocks)
 						ino->ib2->iblocks[ib1]->blocks[db]->next = ino->blocks[blk+1];
 					
 					ino->ib1->blocks[MAXBLOCKS_DIRECT-1]->next = ino->ib2->iblocks[ib1]->blocks[0]->num;
@@ -1710,7 +1774,7 @@ static int _inode_fill_blocks_from_disk(filesystem* fs, inode* ino) {
 					ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks[db] = _newBlock();
 					ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks[db]->num = ino->blocks[blk];
 					
-					if (blk+1 < ino->nblocks)
+					if (blk+1 < (block_t)ino->nblocks)
 						ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks[db]->next = ino->blocks[blk+1];
 					
 					ino->ib2->iblocks[ib1]->blocks[MAXBLOCKS_DIRECT-1]->next = ino->ib3->iblocks[ib2]->iblocks[ib1]->blocks[0]->num;
@@ -1886,7 +1950,7 @@ static int _inode_commit_data(inode* ino) {
 	size_t db = 0;
 	size_t blocks_written = 0;
 	
-	block_t blk = ino->blocks[ino->ninoblocks];
+	block_t blk = 0;
 	
 	uint indirection = DIRECT;
 	
@@ -2069,7 +2133,7 @@ static filesystem* _mkfs() {
 	fs = _init(true);
 	if (NULL == fs) return NULL;
 	
-	/* Write root inode to disk. TODO: Need to write iblocks */
+	/* Write root inode to disk. */
 	writeblocks( fs->root->ino, fs->root->ino->blocks, fs->root->ino->nblocks, sizeof(inode)); 
 
 	/* Write superblock and other important first blocks */
@@ -2162,9 +2226,14 @@ fs_private_interface const _fs =
 	_newf, _newfv, 
 	_newl, _newlv,
 
-	_ino_to_dv, _ino_to_fv, _mkroot, 
+	_ino_to_dv, _ino_to_fv, _ino_to_lv,
+	
+	_mkroot,
+	
 	_load_file, _unload_file,
-	_load_dir, _unload_dir,	
+	_load_dir, _unload_dir,
+	_load_link, _unload_link,
+	
 	_new_dir, _new_file, _new_link,
 	_v_attach, _v_detach,
 

@@ -114,7 +114,7 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 		dv->nlinks == 0) 
 	{
 		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
-		free(dv_path);
+//		free(dv_path);
 		return;
 	}
 
@@ -165,9 +165,14 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 		fs.inodeUnload(f_ino);
 	}
 
-	for (i = 0; i < dv->ino->nlinks; i++)	// For each link at this level
-		printf("%*s" "%s [link]\n", depth*2, " ", dv->links[i]->data.link.name);
-
+	for (i = 0; i < dv->nlinks; i++)	{// For each link at this level
+		inode* l_ino = NULL;
+		l_ino = fs.statI(dv->ino->data.dir.links[i]);
+		
+		printf("%*s" "%s [link]\n", depth*2, " ", l_ino->data.link.name);
+		
+		fs.inodeUnload(l_ino);
+	}
 	//free(dv_path);
 }
 
