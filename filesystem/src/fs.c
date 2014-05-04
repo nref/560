@@ -271,7 +271,7 @@ static dentv* opendir(char* path) {
 		
 		if (NULL == ino->datav.link) {
 			printf("opendir: Link \"%s\" has NULL datav.\n", path);
-			return NULL;			return NULL;
+			return NULL;
 		}
 		
 		dest = ino->datav.link->dest;

@@ -2158,9 +2158,7 @@ static void _print_mem(void const *vp, size_t n)
 	WORD saved_attributes;
 	GetConsoleScreenBufferInfo(console, &info);
 	saved_attributes = info.wAttributes;
-#else
-	char* red = "\x1b[31m";
-	char* reset = "\x1b[0m";
+
 #endif
 
 	for (i = 0; i < n; i++) {
@@ -2170,7 +2168,7 @@ static void _print_mem(void const *vp, size_t n)
 #if defined(_WIN64) || defined(_WIN32)
 			SetConsoleTextAttribute(console, FOREGROUND_RED);
 #else
-			printf("%s",red);
+			printf("%s",ANSI_COLOR_RED);
 #endif
 		}
 
@@ -2181,7 +2179,7 @@ static void _print_mem(void const *vp, size_t n)
 #if defined(_WIN64) || defined(_WIN32)
 			SetConsoleTextAttribute(console, saved_attributes);
 #else
-			printf("%s",reset);
+			printf("%s",ANSI_COLOR_RESET);
 #endif
 		}
 	}
