@@ -635,35 +635,53 @@ int main() {
 			}
 
 		} else if (!strcmp(cmd->fields[0], "link")) {
+			
 			if (NULL == current_path || current_path[0] == '\0') {
 				printf("No filesystem.\n");
 				prompt();
 				continue;
 			}
-			if (cmd->nfields == 3) { // if proper argument number
-				inode *val = fs.stat(cmd->fields[1]);
+			
+			if (3 == cmd->nfields) {
+				
+				char* abs_path, *abs_path2;
+				inode *val, *val2;
+				
+				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+				abs_path2 = fs.getAbsolutePath(current_path, cmd->fields[2]);
+				
+				val = fs.stat(abs_path);
 				//BUG: If the file doesn't exist, I get an error
-				//inode *val1 = fs.stat(cmd->fields[2]);
-				if(val != NULL){
-					//if the 2nd file doesn't exist
-					fs.link(cmd->fields[1], cmd->fields[2]);
-					retv = FS_OK;
-				} else {
-					printf("Invalid files (src dne or dst exists)\n");
+				val2 = fs.stat(abs_path2);
+				
+				if (NULL != val2) {
+					printf("sh_link: target exists.\n");
 					prompt();
 					continue;
 				}
 				
+				if (NULL == val) {
+					printf("sh_link: Source does not exist \n");
+					prompt();
+					continue;
+				}
+				
+				retv = fs.link(abs_path, abs_path2);
 			}
+			
 		} else if (!strcmp(cmd->fields[0], "unlink")) {
+			
 			if (NULL == current_path || current_path[0] == '\0') {
 				printf("No filesystem.\n");
 				prompt();
 				continue;
 			}
-			if (cmd->nfields == 2) {
-				fs.ulink(cmd->fields[1]);
+			if (2 == cmd->nfields) {
+				char* abs_path;
+				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+				fs.ulink(abs_path);
 			}
+			
 	        } else if (!strcmp(cmd->fields[0], "export")) {
 			if (NULL == current_path || current_path[0] == '\0') {
 				printf("No filesystem.\n");

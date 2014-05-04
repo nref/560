@@ -158,51 +158,74 @@ static int open(char* parent_dir, char* name, char* mode) {
 	char* f_path;		/* Fully-qualified path to the file */
 	filev* newfv;
 
-	p_ino = stat(parent_dir);
-		
-	if (FS_DIR != p_ino->mode) {
-		printf("open: Parent of \"%s\" is not a valid directory.\n", name);
-		return FS_ERR;
-	}
-
 	if (!strcmp("r", mode))		mode_i = FS_READ;
 	else if (!strcmp("w", mode))	mode_i = FS_WRITE;
 	else if (!strcmp("rw", mode))	mode_i = FS_RW;
-	else { 
-		printf("open: Bad mode \"%s\"\n",mode); 
-		return -1; 
+	else {
+		printf("open: Bad mode \"%s\"\n",mode);
+		return -1;
 	}
-
+	
+	p_ino = stat(parent_dir);
 	f_path = fs.getAbsolutePath(parent_dir, name);
 	f_ino = stat(f_path);
+	
+	if (NULL == p_ino || FS_FILE == p_ino->mode) {
+		printf("open: Parent of \"%s\" is not a directory.\n", name);
+		return FS_ERR;
+	}
+
+	if (NULL != f_ino && FS_LINK == f_ino->mode) {
+		const size_t max_recursion = 8;
+		size_t recursion = 0;
+		
+		/* Follow a path of links to the file */
+		while (FS_LINK == f_ino->mode) {
+			if (max_recursion == recursion) {
+				printf("open: Too many nested links (%zu).\n", recursion);
+				return FS_ERR;
+			}
+			
+			if (NULL == f_ino->datav.link) {
+				printf("open: Link \"%s\" leads to NULL datav.\n", f_path);
+				return FS_ERR;
+			}
+			
+			f_ino = f_ino->datav.link->dest;
+			++recursion;
+		}
+		
+		if (FS_FILE != f_ino->mode) {
+			printf("open: Link \"%s\" does not point to a file.\n", f_path);
+			return FS_ERR;
+		}
+	}
 
 	if (NULL == f_ino) {
+		
 		if (FS_READ == mode_i) {
 			printf("open: File does not exist \"%s\"\n", name);
 			return FS_ERR;
 		}
+		
 		if (FS_WRITE == mode_i) {
+			newfv = _fs._new_file(shfs, p_ino->datav.dir, name);	// Create file
 			
-			// Create file
-			newfv = _fs._new_file(shfs, p_ino->datav.dir, name);
 			if (NULL == newfv) return FS_ERR;
+			
 			f_ino = newfv->ino;
-
-			// Chris: TODO open an existing file should mark it for appending, not create a new file
-			// Doug: If control flow gets here, then the file did not exist
-			//	 The lab assignment also specifies:
-			//	"The current file offset will be 0 when the file is opened"
-			//	i.e. the user has to remember to seek for append
+			if (NULL == f_ino) return FS_ERR;
 		}
 	}
-
-	if (NULL == f_ino) return FS_ERR;
+	
+	if (NULL == f_ino->datav.file) return FS_ERR;
 	
 	f_ino->datav.file->mode = mode_i;
 
 	/* Return a file descriptor which indexes to the filev */
 	fd = _fs._get_fd(shfs);
 	shfs->fds[fd] = f_ino->datav.file;
+	
 	return fd;
 }
 
@@ -265,33 +288,42 @@ static dentv* opendir(char* path) {
 		return NULL;
 	}
 	
-	/* TODO follow a path of links */
 	if (FS_LINK == ino->mode) {
-		inode* dest = NULL;
-		
-		if (NULL == ino->datav.link) {
-			printf("opendir: Link \"%s\" has NULL datav.\n", path);
-			return NULL;
+		const size_t max_recursion = 8;
+		size_t recursion = 0;
+
+		/* Follow a path of links */
+		while (FS_LINK == ino->mode) {
+			if (max_recursion == recursion) {
+				printf("opendir: Too many nested links (%zu).\n", recursion);
+				return NULL;
+			}
+			
+			if (NULL == ino->datav.link) {
+				printf("opendir: Link \"%s\" leads to NULL datav.\n", path);
+				return NULL;
+			}
+			
+			ino = ino->datav.link->dest;
+			++recursion;
 		}
 		
-		dest = ino->datav.link->dest;
-		
-		if (NULL== dest) {
+		if (NULL== ino) {
 			printf("opendir: Link\"%s\" has NULL destination.\n", path);
 			return NULL;
 		}
 		
-		if (FS_DIR != dest->mode) {
+		if (FS_DIR != ino->mode) {
 			printf("opendir: Link \"%s\" does not point to a directory.\n", path);
 			return NULL;
 		}
 		
-		if (!dest->v_attached) {
-			if (FS_ERR == _fs._v_attach(shfs, dest))
+		if (!ino->v_attached) {
+			if (FS_ERR == _fs._v_attach(shfs, ino))
 				return NULL;
 		}
 		
-		return dest->datav.dir;
+		return ino->datav.dir;
 		
 	}
 
@@ -389,9 +421,14 @@ static size_t write (fd_t fd, char* str) {
 	}
 
 	fv = shfs->fds[fd];
+	
+	if (FS_WRITE != fv->mode) {
+		printf("File descriptor \"%d\" is not open for writing.\n", fd);
+		return 0;
+	}
+	
 	if (NULL == fv || !fv->ino->v_attached ) { 
 		printf("Could not write to file.\n");
-
 		return 0;
 	}
 	if (NULL == str || '\0' == str[0])
@@ -447,18 +484,18 @@ static void seek(fd_t fd, size_t offset) {
  */
 static int link (char* from, char* to) {
 	hlinkv* newlv = NULL;
-	fs_path* src_path = NULL;
+	fs_path* dst_path = NULL;
 	inode* src_ino = NULL;
 	inode* p_ino = NULL;
 	char* parent = NULL;
 
-	src_path = fs.pathFromString(from);
-	parent = fs.pathSkipLast(src_path);
+	dst_path = fs.pathFromString(to);
+	parent = fs.pathSkipLast(dst_path);
 
 	src_ino = stat(from);
 	p_ino = stat(parent);
 
-	newlv = _fs._new_link(shfs, p_ino->datav.dir, src_ino, to);
+	newlv = _fs._new_link(shfs, p_ino->datav.dir, src_ino, fs.pathTrimSlashes(to));
 	if (NULL == newlv) return FS_ERR;
 
 	return FS_OK;
