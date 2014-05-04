@@ -438,6 +438,18 @@ static int	ulink	(char* target) {
 	return FS_ERR;
 }
 
+/* Exports a file in memory to the filesystem*/
+static void export (inode* src, FILE* dst_fp){
+	int i;
+	
+	/*
+	for(i=0;src->nblocks;++i){
+		fwrite(src->blocks[i], BLKSIZE, 1, dst_fp);
+	}*/
+}
+
+
+
 fs_public_interface const fs = 
 { 
 	pathFree, newPath, tokenize, pathFromString, stringFromPath,		/* Path management */

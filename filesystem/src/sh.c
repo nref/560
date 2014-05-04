@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 dentv* cur_dv = NULL;
 char* current_path;
@@ -201,6 +202,25 @@ void sh_tree(char* name) {
 	sh_tree_recurse(1, FS_MAXPATHFIELDS, dv);
 	//fs.closedir(dv);
 }
+
+int sh_open(char* filename, char* mode){
+	char* parent;
+	char* name;
+	int fd = 0;
+	fs_path* p;
+	
+	p = fs.pathFromString(filename);
+	parent = fs.pathSkipLast(p);
+	name = fs.pathGetLast(p);
+	
+	fd = fs.open(parent, name, mode);
+	return fd;
+}
+char* sh_read(int fd, int size){
+	printf("not done yet\n");
+	return "";
+}
+
 
 int sh_write(fs_args* cmd, fs_args* cmd_quotes) {
 	
@@ -591,6 +611,39 @@ int main() {
 			}
 			if (cmd->nfields == 2) {
 				fs.ulink(cmd->fields[1]);
+			}
+	        } else if (!strcmp(cmd->fields[0], "export")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
+			if (cmd->nfields == 3) {
+				/*
+				//Perform Open and Read to get file contents
+				fd = sh_open(cmd->fields[1], (char*)'r');
+				output = sh_read(fd,<#int size#>)
+				
+				
+				
+				
+				//Stat the first file
+				inode* src = fs.stat(cmd->fields[1]);
+				
+				//Test if file exists
+				if( -1 !=access(cmd->fields[2], F_OK)){
+					printf("File already exists\n");
+					prompt();
+					continue;
+				}
+				//Create file pointer for dst
+				FILE* fp = fopen(cmd->fields[2], "w");
+				
+
+				//pass to export to write each block to the file
+				fs.export(src, fp);
+				 */
 			}
 		} else {
 			printf("Bad command \"%s\"", buf); 

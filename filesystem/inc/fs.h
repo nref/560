@@ -37,8 +37,9 @@ typedef struct {
 	char*		(* read)		(fd_t, size_t);
 	size_t		(* write)		(fd_t, char*);
 	void		(* seek)		(fd_t, size_t);
-	int		(* link)		(char* from, char* to);
-	int		(* ulink)		(char*);
+	void		(* link)		(char* from, char* to);
+	void		(* ulink)		(char*);
+	void		(* export)		(inode*, FILE*);
 
 } fs_public_interface;
 extern fs_public_interface const fs;
