@@ -12,6 +12,8 @@ typedef struct fs_args {
 
 } fs_args;
 
+extern void		sh_traverse_files(dentv* dv, int depth);
+extern void		sh_traverse_links(dentv* dv, int depth);
 extern int		sh_getfsroot	();
 extern void		sh_openfs	();
 extern void		sh_mkfs		();

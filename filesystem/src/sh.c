@@ -101,14 +101,8 @@ char* sh_path_cat(char* path, char* suffix) {
 	return ret;
 }
 
-void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
-	size_t copysize;
-	uint i;
-	dentv* iterator = NULL;
-	char next[FS_NAMEMAXLEN];
-	char *dv_path;
-	char* newpath;
-
+void sh_print_dir(char* name, int depth) {
+	
 #if defined(_WIN64) || defined(_WIN32)
 	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
 	CONSOLE_SCREEN_BUFFER_INFO info;
@@ -116,6 +110,32 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 	GetConsoleScreenBufferInfo(console, &info);
 	saved_attributes = info.wAttributes;
 #endif
+	
+#if defined(_WIN64) || defined(_WIN32)
+	SetConsoleTextAttribute(console, FOREGROUND_BLUE);
+#else
+	printf("%s", ANSI_COLOR_BLUE);
+#endif
+	if (0 == depth)	printf("%s/", name);
+	else		printf("%*s" "%s/", depth*2, " ", name);
+	
+	// Restore color
+#if defined(_WIN64) || defined(_WIN32)
+	SetConsoleTextAttribute(console, saved_attributes);
+	printf(" \n");
+#else
+	printf("%s \n", ANSI_COLOR_RESET);
+#endif
+	
+}
+
+void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
+	size_t copysize;
+	uint i;
+	dentv* iterator = NULL;
+	char next[FS_NAMEMAXLEN];
+	char *dv_path;
+	char* newpath;
 		
 	memset(next, 0, FS_NAMEMAXLEN);
 
@@ -127,7 +147,6 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 		dv->nfiles == 0 &&
 		dv->nlinks == 0) 
 	{
-		printf("%*s" "%s\n", depth*2, " ", "(empty)" );
 //		free(dv_path);
 		return;
 	}
@@ -145,24 +164,10 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 				printf("sh_tree_recurse: Could not open directory \"%s\"",next);
 				return;
 			}
-#if defined(_WIN64) || defined(_WIN32)
-			SetConsoleTextAttribute(console, FOREGROUND_BLUE);
-#else
-			printf("%s", ANSI_COLOR_BLUE);
-#endif
-			printf("%*s" "%s/", depth*2, " ", iterator->name);
 			
-			// Restore color
-#if defined(_WIN64) || defined(_WIN32)
-				SetConsoleTextAttribute(console, saved_attributes);
-				printf(" \n");
-#else
-				printf("%s \n",ANSI_COLOR_RESET);
-#endif
-			if (depth < maxdepth) {
-
-				sh_tree_recurse(depth+1, maxdepth, iterator);
-			}
+			sh_print_dir(iterator->name, depth);
+			
+			if (depth < maxdepth) sh_tree_recurse(depth+1, maxdepth, iterator);
 
 			if (	NULL == iterator->next ||
 				0 == iterator->next->data.dir.ino ||			/* If the dir has a next */			
@@ -184,6 +189,22 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 		}
 	}
 
+	sh_traverse_files(dv, depth);
+	sh_traverse_links(dv, depth);
+	//free(dv_path);
+}
+
+void sh_traverse_files(dentv* dv, int depth) {
+	size_t i;
+	
+#if defined(_WIN64) || defined(_WIN32)
+	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	WORD saved_attributes;
+	GetConsoleScreenBufferInfo(console, &info);
+	saved_attributes = info.wAttributes;
+#endif
+	
 	for (i = 0; i < dv->nfiles; i++) {	// For each file at this level
 		inode* f_ino = fs.statI(dv->ino->data.dir.files[i]);
 		
@@ -199,13 +220,30 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 #else
 		printf("%s \n",ANSI_COLOR_RESET);
 #endif
-
+		
 		fs.inodeUnload(f_ino);
 	}
 
+}
+
+void sh_traverse_links(dentv* dv, int depth) {
+	size_t i;
+
+#if defined(_WIN64) || defined(_WIN32)
+	HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	WORD saved_attributes;
+	GetConsoleScreenBufferInfo(console, &info);
+	saved_attributes = info.wAttributes;
+#endif
+	
 	for (i = 0; i < dv->nlinks; i++)	{// For each link at this level
 		inode* l_ino = NULL;
+		inode* dest_ino;
+		
 		l_ino = fs.statI(dv->ino->data.dir.links[i]);
+		dest_ino = fs.statI(l_ino->data.link.dest);
+
 		
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, FOREGROUND_RED | FOREGROUND_BLUE);
@@ -213,15 +251,43 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 		printf("%s", ANSI_COLOR_MAGENTA);
 #endif
 		printf("%*s" "%s", depth*2, " ", l_ino->data.link.name);
+		
+		if (FS_LINK == l_ino->data.link.mode)
+			printf("%s", dest_ino->data.link.name);
+
+#if defined(_WIN64) || defined(_WIN32)
+		SetConsoleTextAttribute(console, saved_attributes);
+#else
+		printf("%s", ANSI_COLOR_RESET);
+#endif
+		printf(" --> ");
+		
+#if defined(_WIN64) || defined(_WIN32)
+		SetConsoleTextAttribute(console, FOREGROUND_BLUE);
+#else
+		printf("%s", ANSI_COLOR_BLUE);
+#endif
+
+		if (FS_DIR == l_ino->data.link.mode)
+			printf("%s", dest_ino->data.dir.name);
+		
+#if defined(_WIN64) || defined(_WIN32)
+		SetConsoleTextAttribute(console, FOREGROUND_GREEN);
+#else
+		printf("%s", ANSI_COLOR_GREEN);
+#endif
+		if (FS_FILE == l_ino->data.link.mode)
+			printf("%s", dest_ino->data.file.name);
+		
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, saved_attributes);
 		printf(" \n");
 #else
-		printf("%s \n",ANSI_COLOR_RESET);
+		printf("%s \n", ANSI_COLOR_RESET);
 #endif
 		fs.inodeUnload(l_ino);
+		fs.inodeUnload(dest_ino);
 	}
-	//free(dv_path);
 }
 
 void sh_tree(char* name) {
@@ -244,7 +310,8 @@ void sh_tree(char* name) {
 		return;
 	}
 
-	printf("%s\n", dv->name);
+	if (!strcmp("/", name))	sh_print_dir("", 0);
+	else			sh_print_dir(dv->name, 0);
 
 	sh_tree_recurse(1, FS_MAXPATHFIELDS, dv);
 //	fs.closedir(dv);

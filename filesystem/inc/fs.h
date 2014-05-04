@@ -22,6 +22,7 @@ typedef struct {
 	char*		(* trim)		(char*);
 	int		(* isNumeric)		(char*);
 
+	inode*		(* inodeLoad)		(inode_t);
 	void		(* inodeUnload)		(inode*);
 	void		(* destruct)		();
 	void		(* openfs)		();

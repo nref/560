@@ -147,7 +147,9 @@ static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
 static char*	strSkipLast(char* cpy)				{ return _fs._strSkipLast(cpy); }
 static char*	trim(char* cpy)					{ return _fs._trim(cpy); }
 static int	isNumeric(char* str)				{ return _fs._isNumeric(str); }
+
 static void	inodeUnload(inode* ino)				{ _fs._inode_unload(shfs, ino); }
+static inode*	inodeLoad(inode_t num)				{ return _fs._inode_load(shfs, num); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
 static int open(char* parent_dir, char* name, char* mode) { 
@@ -523,7 +525,7 @@ fs_public_interface const fs =
 	pathSkipLast, pathGetLast, pathAppend, getAbsolutePathDV, getAbsolutePath, pathTrimSlashes,
 	strSkipFirst, strSkipLast, trim, isNumeric,
 	
-	inodeUnload,
+	inodeLoad, inodeUnload,
 
 	destruct, openfs, mkfs, mkdir,
 	stat, statI, open, close, opendir, closedir,
