@@ -60,7 +60,7 @@ enum { OK, ERR, DIREXISTS, BADPATH, NOTONDISK, TOOFEWARGS } FS_MESSAGE;
 enum { FS_FILE, FS_DIR, FS_LINK } FILETYPE;
 enum { FS_READ, FS_WRITE, FS_RW } FILEMODES;
 
-extern char* fname;				/* The name our filesystem will have on disk */
+extern const char* fname;			/* The name our filesystem will have on disk */
 extern char* fs_responses[6];
 extern size_t stride;
 
@@ -332,7 +332,7 @@ typedef struct {
 	
 	int			(* _sync)		(filesystem* );
 
-	void			(* _safeopen)		(char*, char*);
+	void			(* _safeopen)		(const char*, char*);
 	void			(* _safeclose)		();
 	
 	void			(* _print_mem)		(void const*, size_t);

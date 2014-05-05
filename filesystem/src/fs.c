@@ -172,8 +172,8 @@ static int open(char* parent_dir, char* name, char* mode) {
 	fd_t fd = 0;
 	inode* p_ino = NULL;	/* Path inode */
 	inode* f_ino = NULL;	/* File inode */
-	char* f_path;		/* Fully-qualified path to the file */
-	filev* newfv;
+	char* f_path = NULL;	/* Fully-qualified path to the file */
+	filev* newfv = NULL;
 
 	if (!strcmp("r", mode))		mode_i = FS_READ;
 	else if (!strcmp("w", mode))	mode_i = FS_WRITE;
@@ -242,6 +242,7 @@ static int open(char* parent_dir, char* name, char* mode) {
 		}
 	}
 	
+	if (NULL == f_ino) return FS_ERR;
 	if (NULL == f_ino->datav.file) return FS_ERR;
 	
 	f_ino->datav.file->mode = mode_i;

@@ -28,7 +28,7 @@ char* fs_responses[6]		= {	"OK", "General Error", "Directory exists",
 					"An inode was not found on disk",
 					"Too few arguments" };
 
-char* fname = "fs";			/* The name our filesystem will have on disk */
+const char* fname = "fs";		/* The name our filesystem will have on disk */
 block block_cache[MAXBLOCKS];		/* In-memory copies of blocks on disk */
 size_t stride;				/* The data field is smaller than BLKSIZE
 					 * so our writes to disk are not BLKSIZE but rather 
@@ -55,7 +55,7 @@ static int _isNumeric(char* str) {
 }
 
 /* Open the filesystem file and check for NULL */
-static void _safeopen(char* fname, char* mode) {
+static void _safeopen(const char* fname, char* mode) {
 	_safeclose();	/* Close whatever was already open */
 
 	fp = fopen(fname, mode);
@@ -115,7 +115,7 @@ static fs_path* _tokenize(const char* str, const char* delim) {
 
 		i = path->nfields;
 		len = strlen(next_field);
-
+		
 		strncpy(path->fields[i], next_field, min(FS_NAMEMAXLEN-1, len+1));	
 		path->fields[i][len] = '\0';
 
@@ -150,15 +150,15 @@ static int _sync(filesystem* fs) {
 /* Read from disk the inode to which @param num refers. */
 static inode* _inode_load(filesystem* fs, inode_t num) {
 	inode* ino = NULL;
+	inode* tmp_ino;
+	block_t first_block_num;
 
 	if (NULL != attached_inodes[num])
 		return attached_inodes[num];
 	
 	/* Need to read disk block into tmp inode and copy into real inode 
 	 * to prevent old garbage from being read into volatile structures */
-	inode* tmp_ino = NULL;
-	
-	block_t first_block_num;
+	tmp_ino = NULL;
 
 	if (NULL == fs) return NULL;
 	if (MAXBLOCKS <= num) return NULL;	/* Sanity check */
@@ -225,7 +225,7 @@ static int _inode_unload(filesystem* fs, inode* ino) {
 	_fs._free_inode(ino);
 	ino = NULL;
 
-	return FS_OK;
+	return retv;
 }
 
 /* Free the index of an inode and its malloc'd memory
@@ -1234,7 +1234,7 @@ static inode* _stat_recurse(filesystem* fs, dentv* dv, size_t current_depth, siz
 
 				next_ino = iterator->next->num;
 //				_fs._unload_dir(fs, iterator->ino);
-				iterator = _fs._load_dir(fs, next_ino);
+				iterator = _fs._load_dir(fs, (inode_t)next_ino);
 			}
 		}
 	}
@@ -1249,7 +1249,7 @@ static inode* _files_iterate(filesystem* fs, dentv* dv, fs_path* p, size_t curre
 	int i;
 	
 	/* Iterate over files */
-	for (i = 0; i < dv->nfiles; i++) {						// For each file at this level
+	for (i = 0; i < (int)dv->nfiles; i++) {						// For each file at this level
 		
 		filev* fv = _load_file(fs, dv, dv->ino->data.dir.files[i]);
 		
@@ -1262,7 +1262,7 @@ static inode* _files_iterate(filesystem* fs, dentv* dv, fs_path* p, size_t curre
 			}
 			return dv->files[i]->datav.file->ino;
 		}
-		else _unload_file(fs, fv->ino);		// TODO: this _load_file, _unload_file pair results in disk writes. Make write-free.
+		//else _unload_file(fs, fv->ino);		// TODO: this _load_file, _unload_file pair results in disk writes. Make write-free.
 	}
 	return NULL;
 }
@@ -1271,7 +1271,7 @@ static inode* _links_iterate(filesystem* fs, dentv* dv, fs_path* p, size_t curre
 	int i;
 	
 	/* Iterate over links */
-	for (i = 0; i < dv->nlinks; i++) {						// For each link at this level
+	for (i = 0; i < (int)dv->nlinks; i++) {						// For each link at this level
 		if (!strcmp(dv->links[i]->data.link.name, p->fields[current_depth])) {
 			
 			if (!dv->links[i]->v_attached) {				// Load the file from disk if not already in memory
@@ -1369,8 +1369,45 @@ static char* _pathTrimSlashes(char* path) {
 
 /* Split a string on "/" */
 static fs_path* _pathFromString(const char* str) {
+	int i, j;
+	fs_path *p  = NULL;
 	if (NULL == str) return NULL;
-	return _tokenize(str, "/");
+	p = _tokenize(str, "/");
+	
+	for (i = (int)p->nfields - 1 ; i > -1; i--) {
+		if (strlen(p->fields[i]) > 0 && '.' == p->fields[i][0]) {
+			
+			/* Handle the ".." path operator */
+			if (strlen(p->fields[i]) > 1 && '.' == p->fields[i][1]) {
+				if (0 == i) return NULL;	/* Can't start an abs path with '..' */
+				
+				j = i;
+				while ((int)p->nfields > j) { // If there is a next field
+					
+					strncpy(p->fields[j-1], p->fields[j+1], strlen(p->fields[j+1]));
+					
+					p->fields[p->nfields-1][0] = '\0';
+					p->fields[p->nfields-2][0] = '\0';
+					p->nfields -= 2;
+					++j;
+				}
+			}
+			
+			/* Handle the "." path operator */
+			else {
+				j = i;
+				while ((int)p->nfields > j+1) { // If there is a next field
+					strncpy(p->fields[j], p->fields[j+1], strlen(p->fields[j]));
+					++j;
+				}
+				p->fields[p->nfields-1][0] = '\0';
+				p->nfields--;
+			}
+		}
+	}
+
+	
+	return p;
 }
 
 /* Return an absolute path */
@@ -1470,24 +1507,20 @@ static int _pathAppend(fs_path* p, const char* appendage) {
 static char* _getAbsolutePath(char* current_dir, char* path) {
 	fs_path* p = NULL;
 	char* abs_path = NULL;
+	char path_tmp[FS_MAXPATHLEN];
+
+	memset(path_tmp, 0, FS_MAXPATHLEN);
 	
-	p = _pathFromString(current_dir);
-
 	if ('/' == path[0]) {	/* Path is already absolute*/
-		free(p);
-		return path;
+		p = _pathFromString(path);
+		abs_path = _stringFromPath(p);
+	} else {
+		strcat(path_tmp, current_dir);
+		strcat(path_tmp, path);
+		p = _pathFromString(path_tmp);
+		abs_path = _stringFromPath(p);
 	}
-	if ('.' == path[0]) {
-		if ('.' == path[1])	printf("_getAbsolutePath(): .. not yet implemented\n");
-		else			printf("_getAbsolutePath(): . not yet implemented\n");
-		free(p);
-		return NULL;
-	}
-
-	_pathAppend(p, path);
-	abs_path = _stringFromPath(p);
-
-	free(p);
+	_pathFree(p);
 	return abs_path;
 }
 

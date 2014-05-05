@@ -4,8 +4,11 @@
 #define SH_MAXFIELDS 8		// How many whitespace-separated fields to accept from user
 #define SH_MAXFIELDSIZE 1024*1024
 
+#define SH_MAXFSARGS 32
+
 typedef struct fs_args {
-	char fields[8][SH_MAXFIELDSIZE]; /* A struct for storing command arguments */
+	char fields[SH_MAXFSARGS][SH_MAXFIELDSIZE]; /* A struct for storing command arguments */
+	size_t quoted_fields[SH_MAXFSARGS];
 	size_t nfields;
 	size_t firstField;
 	size_t fieldSize;
@@ -17,10 +20,10 @@ extern void		sh_traverse_links(dentv* dv, int depth);
 extern int		sh_getfsroot	();
 extern void		sh_openfs	();
 extern void		sh_mkfs		();
-extern int		sh_open		(char* filename, char* mode);
+extern int		sh_open		(fs_args*);
 extern void		sh_close	(int fd);
 extern char*		sh_read		(int fd, size_t size);
-extern int		sh_write	(fs_args*, fs_args*);
+extern int		sh_write	(fs_args*);
 extern void		sh_seek		(int fd, int offset);
 extern void		sh_close	(int fd);
 extern int		sh_mkdir	(char* name);
@@ -33,5 +36,5 @@ extern int		sh_ls		(char* path);
 extern void		sh_cat		(char* path);
 extern void		sh_cp		(char* src, char* dest);
 extern void		sh_tree		(char* name);
-extern void		sh_import	();
-extern void		sh_export	();
+extern int		sh_import	(fs_args*);
+extern int		sh_export	(fs_args*);
