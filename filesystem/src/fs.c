@@ -84,20 +84,26 @@ static int mkdir(char* cur_path, char* dir_path) {
 
 	parent_inode = fs.stat(parent_str);
 	if (NULL == parent_inode)	return BADPATH;
-
+	parent_dv = parent_inode->datav.dir;
+	
 	// Get parent dir from memory or disk
-	if (!parent_inode->v_attached)
-		parent_dv = _fs._ino_to_dv(shfs, parent_inode);	 // Try from memory
-	else parent_dv = parent_inode->datav.dir;
+//	parent_dv = _fs._load_dir(shfs, parent_inode->num);
+//	parent_inode->datav.dir = parent_dv;
+	
+//	if (!parent_inode->v_attached)
+//		parent_dv = _fs._ino_to_dv(shfs, parent_inode);	 // Try from memory
+//	else parent_dv = parent_inode->datav.dir;
 
-	if (!parent_inode->v_attached)
-		parent_dv = _fs._load_dir(shfs, parent_dv->ino->num);	// Try from disk
+//	if (!parent_inode->v_attached)
+//		parent_dv = _fs._load_dir(shfs, parent_dv->ino->num);	// Try from disk
 
 	if (NULL == parent_dv) return NOTONDISK;			// Give up
 
 	new_dv = _fs._new_dir(shfs, parent_dv, newdir_name);
 	if (NULL == new_dv) return ERR;
-
+	
+//	_fs._unload_dir(shfs, new_dv->ino);
+//	_fs._unload_dir(shfs, parent_dv->ino);
 	return OK;
 }
 
@@ -120,7 +126,7 @@ static inode* stat(char* name) {
 
 	if (depth == 0) return shfs->root->ino;	// Return if we are at the root
 	else {					// Else traverse the path, get matching inode
-		ino = _fs._recurse(shfs, shfs->root, 0, depth-1, dPath);	
+		ino = _fs._stat_recurse(shfs, shfs->root, 0, depth-1, dPath);
 		for (i = 0; i < depth; i++) 
 			free(dPath->fields[i]);
 		return ino;
@@ -129,7 +135,16 @@ static inode* stat(char* name) {
 
 /* Stat using an inode number */
 static inode* statI(inode_t num) {
-	return _fs._inode_load(shfs, num);
+	inode* ino = _fs._inode_load(shfs, num);
+	if (NULL == ino) return NULL;
+	
+	if (!ino->v_attached) {
+		if (FS_ERR == _fs._v_attach(shfs, ino)) {
+			free(ino);
+			return NULL;
+		}
+	}
+	return ino;
 }
 
 static void	pathFree(fs_path* p)				{ _fs._pathFree(p); }
@@ -140,7 +155,7 @@ static char*	stringFromPath(fs_path*p )			{ return _fs._stringFromPath(p); }
 static char*	pathSkipLast(fs_path* p)			{ return _fs._pathSkipLast(p); }
 static char*	pathGetLast(fs_path* p)				{ return _fs._pathGetLast(p); }
 static int	pathAppend(fs_path* p, const char* str)		{ return _fs._pathAppend(p, str); }
-static char*	getAbsolutePathDV(dentv* dv, fs_path* p)	{ return _fs._getAbsolutePathDV(dv, p); }
+static char*	getAbsolutePathDV(dentv* dv, fs_path* p)	{ return _fs._getAbsolutePathDV(shfs, dv, p); }
 static char*	getAbsolutePath(char* current_path, char* next)	{ return _fs._getAbsolutePath(current_path, next); }
 static char*	pathTrimSlashes(char* path)			{ return _fs._pathTrimSlashes(path); }
 static char*	strSkipFirst(char* cpy)				{ return _fs._strSkipFirst(cpy); }
@@ -171,8 +186,13 @@ static int open(char* parent_dir, char* name, char* mode) {
 	p_ino = stat(parent_dir);
 	f_path = fs.getAbsolutePath(parent_dir, name);
 	f_ino = stat(f_path);
+
+	if (NULL == p_ino) {
+		printf("open: Parent of \"%s\" does not exist.\n", name);
+		return FS_ERR;
+	}
 	
-	if (NULL == p_ino || FS_FILE == p_ino->mode) {
+	if (FS_FILE == p_ino->mode) {
 		printf("open: Parent of \"%s\" is not a directory.\n", name);
 		return FS_ERR;
 	}
@@ -194,6 +214,8 @@ static int open(char* parent_dir, char* name, char* mode) {
 			}
 			
 			f_ino = f_ino->datav.link->dest;
+			if (!f_ino->v_attached)
+				_fs._v_attach(shfs, f_ino);
 			++recursion;
 		}
 		
@@ -262,7 +284,7 @@ static dentv* opendir(char* path) {
 	inode* ino = NULL;
 	inode* parent = NULL;
 	fs_path* p = NULL;
-
+	
 	p = pathFromString(path);
 
 	ino = stat(path);
@@ -274,10 +296,9 @@ static dentv* opendir(char* path) {
 		return NULL;
 	}
 
-	if (!strcmp(path, "/")) 
-		return ino->datav.dir;
-
-	parent = stat(pathSkipLast(p));
+	if (!strcmp(path, "/")) parent = ino;
+//		return ino->datav.dir;
+	else	parent = stat(pathSkipLast(p));
 	free(p);
 
 	if (NULL == parent) {
@@ -333,13 +354,11 @@ static dentv* opendir(char* path) {
 		printf("opendir: Could not load \"%s\".\n", path);
 		return NULL;
 	}
-
-	if (!ino->v_attached) {
-		//printf("opendir: Attaching directory \"%s\".\n", ino->data.dir.name);
-		_fs._v_attach(shfs, ino);
-	}
-
-	ino->datav.dir->parent = parent;
+//
+//	if (!ino->v_attached) {
+//		//printf("opendir: Attaching directory \"%s\".\n", ino->data.dir.name);
+//		_fs._v_attach(shfs, ino);
+//	}
 
 	return ino->datav.dir; 
 }

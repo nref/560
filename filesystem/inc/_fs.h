@@ -95,20 +95,22 @@ typedef struct iblock3 {
 /* files, directories, and links have an in-memory "volatile" structure as well as an on-disk structure */
 typedef struct file {
 	inode_t ino;				// Index of the file's inode
+	inode_t parent;				// Inode number of parent dir
 //	size_t seek_pos;			// Byte offset seek'ed to
 	char name[FS_NAMEMAXLEN];		// filename
 } file;
 
 typedef struct hlink {				// On-disk link
-	inode_t ino;					// This link's inode
-	inode_t dest;					// inode pointing to
-	uint16_t mode;					// 0 file, 1 dir, 2 link
+	inode_t ino;				// This link's inode
+	inode_t dest;				// inode pointing to
+	inode_t parent;				// Inode number of parent dir
+	uint16_t mode;				// 0 file, 1 dir, 2 link
 	char name[FS_NAMEMAXLEN];		// link name
 } hlink;		/* hardlink */
 
 typedef struct dent {				// On-disk directory entry
 	inode_t ino;				// Inode number
-	inode_t parent;				// Parent directory (inode number)
+	inode_t parent;				// Parent directory inode number
 	inode_t head;				// First dir added here
 	inode_t tail;				// Last dir added here
 	inode_t next;				// Next dir in parent
@@ -124,7 +126,8 @@ typedef struct dent {				// On-disk directory entry
 struct inode;					/* Forward declaration because of mutual 
 						 * dependence inode <-> { file, dent, link } */
 typedef struct filev {
-	struct inode* ino;			// pointer to the file's inode
+	struct inode* ino;			// Pointer to the file's inode
+	struct inode* parent;			// Pointer to the parent dir inode
 	fs_mode_t mode;				// 0 or 'r' read, 1 or 'w' write
 	size_t seek_pos;			// Byte offset seek'ed to
 	char name[FS_NAMEMAXLEN];		// Filename
@@ -132,7 +135,8 @@ typedef struct filev {
 
 typedef struct hlinkv {				// In-memory link
 	struct inode* ino;			// This link's inode
-	struct inode* dest;			// inode pointing to
+	struct inode* dest;			// Inode pointing to
+	struct inode* parent;			// Pointer to the parent dir inode
 	char name[FS_NAMEMAXLEN];		// Link name
 } hlinkv;
 
@@ -246,7 +250,7 @@ typedef struct {
 	char*			(* _pathGetLast)	(fs_path*);
 	int			(* _pathAppend)		(fs_path*, const char*);
 	char*			(* _pathTrimSlashes)	(char*);
-	char*			(* _getAbsolutePathDV)	(dentv*, fs_path *);
+	char*			(* _getAbsolutePathDV)	(filesystem*, dentv*, fs_path *);
 	char*			(* _getAbsolutePath)	(char*, char*);
 	char*			(* _strSkipFirst)	(char*);
 	char*			(* _strSkipLast)	(char*);
@@ -269,13 +273,13 @@ typedef struct {
 	
 	dentv*			(* _mkroot)		(filesystem *, int);
 	
-	filev*			(* _load_file)		(filesystem*, inode_t);
+	filev*			(* _load_file)		(filesystem*, dentv* parent, inode_t);
 	int			(* _unload_file)	(filesystem*, inode*);
 
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
 	int			(* _unload_dir)		(filesystem* , inode*);
 
-	hlinkv*			(* _load_link)		(filesystem* , inode_t);
+	hlinkv*			(* _load_link)		(filesystem*, dentv* parent, inode_t);
 	int			(* _unload_link)	(filesystem* , inode*);
 	
 	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
@@ -322,7 +326,10 @@ typedef struct {
 	int			(* writeblocks)		(void*, block_t*, size_t, size_t);
 
 	int			(* write_commit)	(filesystem*, inode*);
-	inode*			(* _recurse)		(filesystem* , dentv*, size_t, size_t, fs_path*);
+	inode*			(* _stat_recurse)	(filesystem* , dentv*, size_t, size_t, fs_path*);
+	inode*			(* _files_iterate)	(filesystem*, dentv*, fs_path*, size_t);
+	inode*			(* _links_iterate)	(filesystem*, dentv*, fs_path*, size_t);
+	
 	int			(* _sync)		(filesystem* );
 
 	void			(* _safeopen)		(char*, char*);

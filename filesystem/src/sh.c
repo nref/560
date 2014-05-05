@@ -157,35 +157,35 @@ void sh_tree_recurse(uint depth, uint maxdepth, dentv* dv) {
 		strncat(next, newpath, copysize);
 		next[copysize] = '\0';
 
-		for (i = 0; i < dv->ndirs; i++)	// For each subdir at this level
-		{
+		for (i = 0; i < dv->ndirs; i++) {	// For each subdir at this level
+		
 			iterator = fs.opendir(next);
-			if (NULL == iterator) {
+			if (NULL == iterator)
 				printf("sh_tree_recurse: Could not open directory \"%s\"",next);
-				return;
-			}
-			
-			sh_print_dir(iterator->name, depth);
-			
-			if (depth < maxdepth) sh_tree_recurse(depth+1, maxdepth, iterator);
+			else {
 
-			if (	NULL == iterator->next ||
-				0 == iterator->next->data.dir.ino ||			/* If the dir has a next */			
-				iterator->ino->num == iterator->next->data.dir.ino)	/* If the dir doesn't point to itself */
-			{
+				sh_print_dir(iterator->name, depth);
+				
+				if (depth < maxdepth) sh_tree_recurse(depth+1, maxdepth, iterator);
+
+				if (	NULL == iterator->next ||
+					0 == iterator->next->data.dir.ino ||			/* If the dir has a next */			
+					iterator->ino->num == iterator->next->data.dir.ino)	/* If the dir doesn't point to itself */
+				{
+					//fs.closedir(iterator);
+					//iterator = NULL;
+					break;
+				}
+				
+				newpath = sh_path_cat(dv_path, iterator->next->data.dir.name);
+				copysize = min(FS_NAMEMAXLEN - 1, strlen(newpath));
+				next[0] = '\0';
+				strncat(next, newpath, copysize);
+				next[copysize] = '\0';
+
 				//fs.closedir(iterator);
 				//iterator = NULL;
-				break;
 			}
-			
-			newpath = sh_path_cat(dv_path, iterator->next->data.dir.name);
-			copysize = min(FS_NAMEMAXLEN - 1, strlen(newpath));
-			next[0] = '\0';
-			strncat(next, newpath, copysize);
-			next[copysize] = '\0';
-
-			//fs.closedir(iterator);
-			//iterator = NULL;
 		}
 	}
 
@@ -241,8 +241,11 @@ void sh_traverse_links(dentv* dv, int depth) {
 		inode* l_ino = NULL;
 		inode* dest_ino;
 		
-		l_ino = fs.statI(dv->ino->data.dir.links[i]);
-		dest_ino = fs.statI(l_ino->data.link.dest);
+		l_ino = dv->links[i];
+		dest_ino = l_ino->datav.link->dest;
+		
+//		l_ino = fs.statI(dv->ino->data.dir.links[i]);
+//		dest_ino = fs.statI(l_ino->data.link.dest);
 
 		
 #if defined(_WIN64) || defined(_WIN32)
@@ -252,15 +255,34 @@ void sh_traverse_links(dentv* dv, int depth) {
 #endif
 		printf("%*s" "%s", depth*2, " ", l_ino->data.link.name);
 		
-		if (FS_LINK == l_ino->data.link.mode)
-			printf("%s", dest_ino->data.link.name);
-
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, saved_attributes);
 #else
 		printf("%s", ANSI_COLOR_RESET);
 #endif
 		printf(" --> ");
+
+#if defined(_WIN64) || defined(_WIN32)
+		SetConsoleTextAttribute(console, FOREGROUND_RED | FOREGROUND_BLUE);
+#else
+		printf("%s", ANSI_COLOR_MAGENTA);
+#endif
+		if (FS_LINK == l_ino->data.link.mode)
+			printf("%s", dest_ino->data.link.name);
+		
+//		if (FS_LINK == l_ino->data.link.mode) {
+//			char* parent_path = NULL;
+//			char* full_path = NULL;
+//			fs_path* p;
+//			
+//			p = fs.newPath();
+//			parent_path = fs.getAbsolutePathDV(dest_ino->datav.link->parent->datav.dir, p);
+//			fs.pathFree(p);
+//			
+//			full_path = sh_path_cat(parent_path, dest_ino->data.link.name);
+//			printf("%s", full_path);
+//			free(full_path);
+//		}
 		
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, FOREGROUND_BLUE);
@@ -268,8 +290,17 @@ void sh_traverse_links(dentv* dv, int depth) {
 		printf("%s", ANSI_COLOR_BLUE);
 #endif
 
-		if (FS_DIR == l_ino->data.link.mode)
-			printf("%s", dest_ino->data.dir.name);
+		if (FS_DIR == l_ino->data.link.mode) {
+			char* path = NULL;
+			fs_path* p;
+			
+			p = fs.newPath();
+			path = fs.getAbsolutePathDV(dest_ino->datav.dir, p);
+			fs.pathFree(p);
+			
+			printf("%s", path);
+			free(path);
+		}
 		
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, FOREGROUND_GREEN);
@@ -279,14 +310,32 @@ void sh_traverse_links(dentv* dv, int depth) {
 		if (FS_FILE == l_ino->data.link.mode)
 			printf("%s", dest_ino->data.file.name);
 		
+//		if (FS_FILE == l_ino->data.link.mode) {
+//			char* parent_path = NULL;
+//			char* full_path = NULL;
+//			fs_path* p = NULL;
+//			
+////			inode* dest_ino2 = NULL;
+////			dest_ino2 = fs.statI(l_ino->data.link.dest);
+//			
+//			p = fs.newPath();
+//			parent_path = fs.getAbsolutePathDV(dest_ino->datav.file->parent->datav.dir, p);
+//			fs.pathFree(p);
+//			
+//			full_path = sh_path_cat(parent_path, dest_ino->data.file.name);
+//			printf("%s", full_path);
+//			free(full_path);
+//			free(parent_path);
+//		}
+		
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, saved_attributes);
 		printf(" \n");
 #else
 		printf("%s \n", ANSI_COLOR_RESET);
 #endif
-		fs.inodeUnload(l_ino);
-		fs.inodeUnload(dest_ino);
+//		fs.inodeUnload(l_ino);
+//		fs.inodeUnload(dest_ino);
 	}
 }
 
