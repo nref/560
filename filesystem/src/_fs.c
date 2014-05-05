@@ -1763,6 +1763,7 @@ static int _inode_fill_blocks_from_data(filesystem* fs, inode* ino, size_t seek_
 		}
 	}
 
+	ino->size = write_cnt + seek_pos;
 	return FS_OK;
 }
 
