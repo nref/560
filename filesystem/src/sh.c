@@ -820,6 +820,12 @@ int main() {
 				
 				//Perform Open and Read to get inner file contents
 				fd = sh_open(cmd->fields[1], (char*) "r");
+				
+				if (FS_ERR == fd) {
+					prompt();
+					continue;
+				}
+				
 				out_buf = sh_read(fd,src->size);
 				
 				//Test if file exists
@@ -832,7 +838,6 @@ int main() {
 				//Create file pointer for dst
 				FILE* fp = fopen(cmd->fields[2], "w");
 				
-
 				//pass to export to write each block to the file
 				if(0 == fwrite(out_buf, src->size, 1, fp)) {
 					printf("Error occurred while writing export\n");
