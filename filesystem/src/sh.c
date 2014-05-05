@@ -791,6 +791,55 @@ int main() {
 				} else {
 					retv = FS_OK;
 				}
+				free(out_buf);
+				sh_close(fd);
+				fclose(fp);
+			}
+		} else if (!strcmp(cmd->fields[0], "import")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+			//Test if file exists
+			int ret = access(fs.trim(cmd->fields[1]), R_OK);
+			if(-1 == ret){
+				printf("File is not read accessible\n");
+				prompt();
+				continue;
+			}
+			if (cmd->nfields == 3) {
+				//Create file pointer for source
+				FILE* fp = fopen(cmd->fields[1], "rb");
+				fseek(fp, 0, SEEK_END);
+				long fsize = ftell(fp); //getting the offset
+				fseek(fp, 0, SEEK_SET); //setting it back to the start
+				
+				char *src_buf = malloc(fsize + 1); //allocating the right size
+				fread(src_buf, fsize, 1, fp);
+				src_buf[fsize] = 0; //making it null terminated
+				
+				//Open the DST file for writing
+				int fd;
+				fd = sh_open(cmd->fields[2], "w");
+				fs_args* cmd_tmp = newArgs();
+				fs_args* cmd_tmp_quote = newArgs();
+				cmd_tmp->nfields = 2;
+				cmd_tmp_quote->nfields = 2;
+				//hack to use the sh_write correctly
+				strcpy(cmd_tmp->fields[0],"write");
+				strcpy(cmd_tmp_quote->fields[0],"write");
+				sprintf(cmd_tmp->fields[1],"%d",fd);
+				sprintf(cmd_tmp_quote->fields[0],"%d",fd);
+				
+				strncpy(cmd_tmp_quote->fields[1], src_buf, FS_NAMEMAXLEN);
+				
+				sh_write(cmd_tmp, cmd_tmp_quote);
+				argsFree(cmd_tmp);
+				argsFree(cmd_tmp_quote);
+				sh_close(fd);
+				fclose(fp);
+				free(src_buf);
 			}
 		} else {
 			printf("Bad command \"%s\"", buf); 
