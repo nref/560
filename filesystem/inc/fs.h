@@ -40,7 +40,6 @@ typedef struct {
 	void		(* seek)		(fd_t, size_t);
 	int		(* link)		(char* from, char* to);
 	int		(* ulink)		(char*);
-	void		(* export)		(inode*, FILE*);
 
 } fs_public_interface;
 extern fs_public_interface const fs;

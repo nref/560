@@ -380,11 +380,19 @@ int sh_open(char* filename, char* mode){
 	fd = fs.open(parent, name, mode);
 	return fd;
 }
-char* sh_read(int fd, int size){
-	printf("not done yet\n");
-	return "";
+
+char* sh_read(int fd, size_t size){
+	char* rdbuf = NULL;
+	
+	rdbuf = fs.read(fd, size);
+	if (NULL != rdbuf)
+		printf("Error: Buffer is empty\n");
+	return rdbuf;
 }
 
+void sh_close(int fd){
+	fs.close(fd);
+}
 
 int sh_write(fs_args* cmd, fs_args* cmd_quotes) {
 	
@@ -806,19 +814,17 @@ int main() {
 			}
 
 			if (cmd->nfields == 3) {
-				/*
-				//Perform Open and Read to get file contents
-				fd = sh_open(cmd->fields[1], (char*)'r');
-				output = sh_read(fd,<#int size#>)
-				
-				
-				
-				
-				//Stat the first file
 				inode* src = fs.stat(cmd->fields[1]);
+				char* out_buf;
+				int fd;
+				
+				//Perform Open and Read to get inner file contents
+				fd = sh_open(cmd->fields[1], (char*) "r");
+				out_buf = sh_read(fd,src->size);
 				
 				//Test if file exists
-				if( -1 !=access(cmd->fields[2], F_OK)){
+				int ret = access(fs.trim(cmd->fields[2]), F_OK);
+				if( -1 != ret){
 					printf("File already exists\n");
 					prompt();
 					continue;
@@ -828,8 +834,61 @@ int main() {
 				
 
 				//pass to export to write each block to the file
-				fs.export(src, fp);
-				 */
+				if(0 == fwrite(out_buf, src->size, 1, fp)) {
+					printf("Error occurred while writing export\n");
+					retv = FS_ERR;
+				} else {
+					retv = FS_OK;
+				}
+				free(out_buf);
+				sh_close(fd);
+				fclose(fp);
+			}
+		} else if (!strcmp(cmd->fields[0], "import")) {
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+			//Test if file exists
+			int ret = access(fs.trim(cmd->fields[1]), R_OK);
+			if(-1 == ret){
+				printf("File is not read accessible\n");
+				prompt();
+				continue;
+			}
+			if (cmd->nfields == 3) {
+				//Create file pointer for source
+				FILE* fp = fopen(cmd->fields[1], "rb");
+				fseek(fp, 0, SEEK_END);
+				long fsize = ftell(fp); //getting the offset
+				fseek(fp, 0, SEEK_SET); //setting it back to the start
+				
+				char *src_buf = malloc(fsize + 1); //allocating the right size
+				fread(src_buf, fsize, 1, fp);
+				src_buf[fsize] = 0; //making it null terminated
+				
+				//Open the DST file for writing
+				int fd;
+				fd = sh_open(cmd->fields[2], "w");
+				fs_args* cmd_tmp = newArgs();
+				fs_args* cmd_tmp_quote = newArgs();
+				cmd_tmp->nfields = 2;
+				cmd_tmp_quote->nfields = 2;
+				//hack to use the sh_write correctly
+				strcpy(cmd_tmp->fields[0],"write");
+				strcpy(cmd_tmp_quote->fields[0],"write");
+				sprintf(cmd_tmp->fields[1],"%d",fd);
+				sprintf(cmd_tmp_quote->fields[0],"%d",fd);
+				
+				strncpy(cmd_tmp_quote->fields[1], src_buf, FS_NAMEMAXLEN);
+				
+				sh_write(cmd_tmp, cmd_tmp_quote);
+				argsFree(cmd_tmp);
+				argsFree(cmd_tmp_quote);
+				sh_close(fd);
+				fclose(fp);
+				free(src_buf);
 			}
 		} else {
 			printf("Bad command \"%s\"", buf); 
