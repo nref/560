@@ -439,7 +439,7 @@ int sh_write(fs_args* cmd) {
 	write_expected_byte_count = strlen(cmd->fields[2]);
 	write_byte_count = fs.write(fd, cmd->fields[2]);
 
-	printf("Wrote %lu of %lu bytes to fd %d ", 
+	printf("Wrote %lu of %lu bytes to fd %d ",
 		write_byte_count, write_expected_byte_count, fd);
 
 	if (write_expected_byte_count != write_byte_count) 
@@ -827,10 +827,12 @@ fs_args* sh_parse_input(char* buf) {
 	fs_args* cmd_quotes;
 	char* delimiter = "\t ";
 	
-	// Split input on whitespace. 
+	// Split input on whitespace
 	cmd = newArgs();
 	sh_tokenize(buf, delimiter, cmd);
 		
+	//TODO issue here w/ treating every like as a newline
+	
 	/* Split input on quoted strings.
 		* First element will be the unquoted leading input,
 		* Second to n elements will be quoted fields, and the (n+1)th
