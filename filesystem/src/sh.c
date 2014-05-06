@@ -439,7 +439,7 @@ int sh_write(fs_args* cmd) {
 	write_expected_byte_count = strlen(cmd->fields[2]);
 	write_byte_count = fs.write(fd, cmd->fields[2]);
 
-	printf("Wrote %lu of %lu bytes to fd %d ", 
+	printf("Wrote %lu of %lu bytes to fd %d ",
 		write_byte_count, write_expected_byte_count, fd);
 
 	if (write_expected_byte_count != write_byte_count) 
@@ -805,10 +805,12 @@ fs_args* sh_parse_input(char* buf) {
 	fs_args* cmd_quotes;
 	char* delimiter = "\t ";
 	
-	// Split input on whitespace. 
+	// Split input on whitespace
 	cmd = newArgs();
 	sh_tokenize(buf, delimiter, cmd);
 		
+	//TODO issue here w/ treating every like as a newline
+	
 	/* Split input on quoted strings.
 		* First element will be the unquoted leading input,
 		* Second to n elements will be quoted fields, and the (n+1)th
@@ -829,7 +831,6 @@ fs_args* sh_parse_input(char* buf) {
 }
 
 int sh_cat(fs_args* cmd){
-//extern void sh_cat (char* path){
 	int fd = 0;
 	char* out_buf = NULL;
 	
@@ -856,6 +857,10 @@ int sh_cat(fs_args* cmd){
 	argsFree(open_tmp);
 	
 	out_buf = sh_read(fd, src->size); //memory was malloced for this
+	if(out_buf == NULL){
+		printf("An error occurred while reading\n");
+		return FS_ERR;
+	}
 	printf("%s\n",out_buf);
 	sh_close(fd);
 	free(out_buf);
