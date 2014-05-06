@@ -520,7 +520,32 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 static int _rmdir(filesystem* fs, dentv* dv) {
 
 	if (NULL == dv) return FS_ERR;
-	return FS_ERR;
+
+	/* Update parent head. Ignoring tail. We're not using it anyway. */
+	if (dv->parent->data.dir.head == dv->ino->num) {
+		dv->parent->data.dir.head = dv->ino->data.dir.next;
+		dv->parent->datav.dir->head = dv->ino->datav.dir->next;
+	}
+
+	dv->prev->datav.dir->next = dv->next;
+	dv->next->datav.dir->prev = dv->prev;
+
+	dv->prev->data.dir.next = dv->ino->data.dir.next;
+	dv->next->data.dir.prev = dv->ino->data.dir.prev;
+
+	dv->parent->datav.dir->ndirs--;
+	dv->parent->data.dir.ndirs--;
+
+	/* Update changes on disk */
+	_fs.writeblocks(dv->parent, dv->parent->blocks, dv->parent->ninoblocks, sizeof(inode));
+	_fs.writeblocks(dv->prev, dv->prev->blocks, dv->prev->ninoblocks, sizeof(inode));
+	_fs.writeblocks(dv->next, dv->next->blocks, dv->next->ninoblocks, sizeof(inode));
+	_fs._unload_dir(fs, dv->ino);
+	
+	if (FS_ERR == _sync(fs))
+		return FS_ERR;
+
+	return FS_OK;
 }
 
 /* Create an on-disk file */

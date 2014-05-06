@@ -44,17 +44,17 @@ static void mkfs() {
 /* cur_path should always be an absolute path; 
  * dir_path can be relative to cur_path */
 static int mkdir(char* cur_path, char* dir_path) {
-	dentv* parent_dv = NULL, *new_dv = NULL;
+	dentv* parent_dv = NULL;
+	dentv* new_dv = NULL;
+	inode* parent_inode = NULL;
+	uint i = 0;
 
-	inode* parent_inode;
-	uint i;
+	fs_path* abs_path = NULL;
+	fs_path* rel_path = NULL;
 
-	fs_path* abs_path;
-	fs_path* rel_path;
-
-	char* path_str;
-	char* parent_str;
-	char* newdir_name;
+	char* path_str = NULL;
+	char* parent_str = NULL;
+	char* newdir_name = NULL;
 
 	if (strlen(cur_path) + strlen(dir_path) + 1 >= FS_MAXPATHLEN)
 		return BADPATH;
@@ -86,31 +86,51 @@ static int mkdir(char* cur_path, char* dir_path) {
 	if (NULL == parent_inode)	return BADPATH;
 	parent_dv = parent_inode->datav.dir;
 	
-	// Get parent dir from memory or disk
-//	parent_dv = _fs._load_dir(shfs, parent_inode->num);
-//	parent_inode->datav.dir = parent_dv;
-	
-//	if (!parent_inode->v_attached)
-//		parent_dv = _fs._ino_to_dv(shfs, parent_inode);	 // Try from memory
-//	else parent_dv = parent_inode->datav.dir;
-
-//	if (!parent_inode->v_attached)
-//		parent_dv = _fs._load_dir(shfs, parent_dv->ino->num);	// Try from disk
-
-	if (NULL == parent_dv) return NOTONDISK;			// Give up
+	if (NULL == parent_dv) return NOTONDISK;		// Give up
 
 	new_dv = _fs._new_dir(shfs, parent_dv, newdir_name);
 	if (NULL == new_dv) return ERR;
-	
-//	_fs._unload_dir(shfs, new_dv->ino);
-//	_fs._unload_dir(shfs, parent_dv->ino);
+
 	return OK;
 }
 
-static int rmdir(char* parent, char* name) { 
-	dentv* target = NULL;
+/* Remove the directory of @param dir_path in directory @param cur_path 
+ * dir_path can be relative or absolute; cur_path must be absolute */
+static int rmdir(char* cur_path, char* dir_path) { 
+	uint i = 0;
+	inode* target = NULL;
+	fs_path* abs_path = NULL;
+	fs_path* rel_path = NULL;
+	char* path_str = NULL;
 
-	return _fs._rmdir(shfs, target); 
+	if (strlen(cur_path) + strlen(dir_path) + 1 >= FS_MAXPATHLEN)
+		return FS_ERR;
+
+	if ('/' != cur_path[0])					// Require leading "/"
+		return FS_ERR;
+
+	if ('/' == dir_path[0])					// If there's a leading forward slash, we have an abs. path
+		abs_path = _fs._pathFromString(dir_path);
+	else {							// Have to make abs. path from cur_path + dir_name
+		rel_path = _fs._pathFromString(dir_path);
+
+		abs_path = _fs._newPath();
+		_fs._pathAppend(abs_path, cur_path);
+
+		for (i = 0; i < rel_path->nfields; i++)
+			_fs._pathAppend(abs_path, rel_path->fields[i]);
+	}
+
+	path_str = _fs._stringFromPath(abs_path);
+
+	target = fs.stat(path_str);
+	if (NULL == target) 
+		return FS_ERR;
+
+	if (FS_DIR != target->mode)
+		return FS_ERR;
+
+	return _fs._rmdir(shfs, target->datav.dir); 
 }
 
 /*
