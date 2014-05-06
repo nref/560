@@ -312,7 +312,7 @@ static void close(fd_t fd) {
 
 	if (shfs->fds[fd]) {
 
-		//_fs._inode_unload(shfs, shfs->fds[fd]->ino);
+		_fs._inode_unload(shfs, shfs->fds[fd]->ino);
 		shfs->fds[fd] = NULL;
 
 		//ino = shfs->fds[fd]->ino;

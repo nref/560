@@ -31,7 +31,7 @@ extern int		sh_rmdir	(char* name);
 extern int		sh_cd		(char* path);
 extern void		sh_link		(char* src, char* dest);
 extern void		sh_unlink	(char* path);
-extern void		sh_stat		(char* path);
+extern int		sh_stat		(char* path);
 extern int		sh_ls		(char* path);
 extern int		sh_cat		(fs_args*);
 extern void		sh_cp		(char* src, char* dest);

@@ -247,21 +247,21 @@ static int _ifree(filesystem* fs, inode_t num) {
 }
 
 /* Find an unused inode number and return it */
-static int _ialloc(filesystem *fs) {
+static int _ialloc(filesystem *shfs) {
 	uint i, blockidx, blockval;
 
-	for (i = fs->sb.free_inodes_base; i < MAXINODES; i++)
+	for (i = shfs->sb.free_inodes_base; i < MAXINODES; i++)
 	{
 		blockidx = i/255;	/* max int value of char */
-		blockval = (int)fs->ino_map.data[blockidx];
+		blockval = (int)shfs->ino_map.data[blockidx];
 		if (blockval < 255) {		// If this char is not full 
-			((fs->ino_map).data)[blockidx]++;
-			fs->sb.free_inodes_base++;
+			((shfs->ino_map).data)[blockidx]++;
+			shfs->sb.free_inodes_base++;
 
-			if (FS_ERR == _sync(fs))
+			if (FS_ERR == _sync(shfs))
 				return FS_ERR;
 
-			return fs->sb.free_inodes_base;
+			return shfs->sb.free_inodes_base;
 		}
 	}
 	return 0;
@@ -290,24 +290,24 @@ static int _bfree(filesystem* fs, block* blk) {
 
 /* Traverse the free block array and return a block 
  * whose field num is the index of the first free bock */
-static int __balloc(filesystem* fs) {
+static int __balloc(filesystem* shfs) {
 	size_t i, blockidx, blockval;
 
 	/* One char in the free block map represents 
 	 * 8 blocks (sizeof(char) == 1 byte == 8 bits) */
 	
-	for (i = fs->sb.free_blocks_base; i < MAXBLOCKS; i++)
+	for (i = shfs->sb.free_blocks_base; i < MAXBLOCKS; i++)
 	{
 		blockidx = i/255;	/* max int value of char */
-		blockval = (int)fs->fb_map.data[blockidx];
+		blockval = (int)shfs->fb_map.data[blockidx];
 		if (blockval < 255) {		// If this char is not full 
-			((fs->fb_map).data)[blockidx]++;
-			fs->sb.free_blocks_base++;
+			((shfs->fb_map).data)[blockidx]++;
+			shfs->sb.free_blocks_base++;
 
-			if (FS_ERR == _sync(fs))
+			if (FS_ERR == _sync(shfs))
 				return FS_ERR;
 
-			return (int)fs->sb.free_blocks_base;
+			return (int)shfs->sb.free_blocks_base;
 		}
 	}
 	return FS_ERR;

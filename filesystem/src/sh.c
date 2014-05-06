@@ -447,12 +447,15 @@ int sh_write(fs_args* cmd) {
 	return (int)write_byte_count;
 }
 
-void sh_stat(char* name) {
+int sh_stat(char* name) {
 	inode* ino;
 
 	ino = fs.stat(name);
 	
-	if (NULL == ino) printf("inode not found for \"%s\"", name);
+	if (NULL == ino) {
+		printf("inode not found for \"%s\"", name);
+		return FS_ERR;
+	}
 	else {
 		
 #if defined(_WIN64) || defined(_WIN32)
@@ -469,7 +472,7 @@ void sh_stat(char* name) {
 		printf("%s", ANSI_COLOR_BLUE);
 #endif
 		printf("\nstat() for \"%s\":\n\n", name);
-		printf("\tNumber: %d\n", ino->num);
+		printf("\tInode number: %d\n", ino->num);
 		printf("\tType: ");
 		
 		switch (ino->mode) {
@@ -485,11 +488,18 @@ void sh_stat(char* name) {
 			default:
 				break;
 		}
+
+#if defined(_WIN64) || defined(_WIN32)
+		printf("\tSize (bytes): %Iu\n", ino->size);
+		printf("\tLink count: %Iu\n", ino->nlinks);
+		printf("\tNumber of blocks: %Iu\n", ino->ndatablocks);
+#else
 		printf("\tSize (bytes): %zu\n", ino->size);
 		printf("\tLink count: %zu\n", ino->nlinks);
 		printf("\tNumber of blocks: %zu\n", ino->ndatablocks);
-		printf("\tVolatile data attached: ");
+#endif
 		
+		printf("\tVolatile data attached: ");
 		switch (ino->v_attached) {
 			case true:
 				printf("TRUE\n");
@@ -522,6 +532,8 @@ void sh_stat(char* name) {
 		printf("%s", ANSI_COLOR_RESET);
 #endif
 	}
+
+	return FS_OK;
 }
 
 int sh_mkdir(char* dir_name) {
@@ -588,14 +600,17 @@ int sh_cd(char* path) {
 	}
 
 	abs_path = fs.getAbsolutePath(current_path, path);
-
 	if (NULL == abs_path) return FS_ERR;
 
 	dv = fs.opendir(abs_path);
-	if (NULL == dv) return FS_ERR;
+	if (NULL == dv) {
+		free(abs_path);
+		return FS_ERR;
+	}
 
 	cur_dv = dv;
 	sh_update_current_path();
+	free(abs_path);
 	return FS_OK;
 }
 
@@ -612,9 +627,13 @@ int sh_ls(char* path) {
 	if (NULL == abs_path) return FS_ERR;
 
 	dv = fs.opendir(abs_path);
-	if (NULL == dv) return FS_ERR;
 
+	if (NULL == dv) {
+		free(abs_path);
+		return FS_ERR;
+	}
 	sh_tree_recurse(0, 0, dv);
+	free(abs_path);
 	return FS_NORMAL;
 }
 
@@ -854,33 +873,42 @@ fs_args* sh_parse_input(char* buf) {
 int sh_cat(fs_args* cmd){
 	int fd = 0;
 	char* out_buf = NULL;
- 	
+ 	char* abs_path = NULL;
+
 	inode* src = NULL;
 	fs_args* open_tmp = NULL;
 	
 	if (cmd->nfields < 2) {
  		printf("Not the correct number of arguments\n");
+		free(abs_path);
  		return FS_ERR;
 	}
-	
-	src = fs.stat(cmd->fields[1]);
+
+	abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+	if (NULL == abs_path) return FS_ERR;
+
+	src = fs.stat(abs_path);
 	if(src == NULL){
  		printf("File could not be found\n");
+		free(abs_path);
  		return FS_ERR;
 	}
 	
 	open_tmp = newArgs();
 	open_tmp->nfields = 3;
 	strcpy(open_tmp->fields[0], "open");
-	strcpy(open_tmp->fields[1], cmd->fields[1]);
+	strcpy(open_tmp->fields[1], abs_path);
 	strcpy(open_tmp->fields[2], "r");
 	fd = sh_open(open_tmp); //should check if return null
 	argsFree(open_tmp);
 	
 	out_buf = sh_read(fd, src->size); //memory was malloced for this
 	printf("%s\n",out_buf);
+	
 	sh_close(fd);
 	free(out_buf);
+	free(abs_path);
+
 	return FS_OK;
  }
  
@@ -898,6 +926,7 @@ int main() {
 	prompt();
         memset(buf, 0, SH_BUFLEN); // Clean buffer before printing
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {	// Get user input
+		retv = FS_NORMAL;	/* Suppress end output*/
 
 		if (strlen(buf) == 0 || '\n' == buf[0]) { 
 			prompt(); 
@@ -919,8 +948,17 @@ int main() {
 			}
 
 			// If the user provided more than one field
-			if (1 < cmd->nfields)	retv = sh_ls(cmd->fields[1]);
-			else			retv = sh_ls(current_path);
+			if (1 < cmd->nfields)	{
+				char* abs_path;
+				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+				
+				if (NULL != abs_path) {
+					retv = sh_ls(abs_path);
+					free(abs_path);
+				}
+				else retv = FS_ERR;
+			}
+			else retv = sh_ls(current_path);
 		}
 
 		else if (!strcmp(cmd->fields[0], "cd")) {
@@ -930,8 +968,17 @@ int main() {
 				continue;
 			}
 
-			if (1 < cmd->nfields)	retv = sh_cd(cmd->fields[1]);
-			else			retv = sh_cd("/");
+			if (1 < cmd->nfields)	{
+				char* abs_path;
+				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+				
+				if (NULL != abs_path) {
+					retv = sh_cd(abs_path);
+					free(abs_path);
+				} 
+				else retv = FS_ERR;
+			}
+			else retv = sh_cd("/");
 		}
 
 		else if (!strcmp(cmd->fields[0], "pwd")) { 
@@ -942,7 +989,6 @@ int main() {
 			}
 
 			printf("%s\n", current_path); 
-			retv = FS_NORMAL;
 		}
 
 		else if (!strcmp(cmd->fields[0], "tree")) { 
@@ -953,7 +999,6 @@ int main() {
 			}
 
 			sh_tree(current_path); 
-			retv = FS_NORMAL;
 		}
 
 		else if (!strcmp(cmd->fields[0], "mkdir")) { 
@@ -992,8 +1037,13 @@ int main() {
 			}
 
 			if (1 < cmd->nfields) {
-				sh_stat(cmd->fields[1]); 
-				retv = FS_NORMAL;
+				char* abs_path;
+				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+				if (NULL != abs_path) {
+					retv = sh_stat(abs_path); 
+					free(abs_path);
+				}
+				else retv = FS_ERR;
 			} else {
 				printf("Not enough arguments\n");
 				retv = FS_ERR;
@@ -1094,7 +1144,6 @@ int main() {
 				abs_path2 = fs.getAbsolutePath(current_path, cmd->fields[2]);
 				
 				val = fs.stat(abs_path);
-				//BUG: If the file doesn't exist, I get an error
 				val2 = fs.stat(abs_path2);
 				
 				if (NULL != val2) {
@@ -1110,6 +1159,10 @@ int main() {
 				}
 				
 				retv = fs.link(abs_path, abs_path2);
+				
+				free(abs_path);
+				free(abs_path2);
+
 			} else {
 				printf("Not enough arguments\n");
 				retv = FS_ERR;
@@ -1125,7 +1178,9 @@ int main() {
 			if (1 < cmd->nfields) {
 				char* abs_path;
 				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+
 				retv = fs.ulink(abs_path);
+				free(abs_path);
 			} else {
 				printf("Not enough arguments\n");
 				retv = FS_ERR;
@@ -1158,12 +1213,14 @@ int main() {
 
 			retv = sh_cat(cmd);
 		
-		} else {
-			printf("Bad command \"%s\"", buf); 
-			retv = FS_NORMAL; 
+		} else if (!strcmp(cmd->fields[0], "cp")) {
+			printf("cp not implemented. have command: \"%s\"", buf); 
+			retv = FS_ERR;
 		}
+		
+		else printf("Bad command \"%s\"", buf); 
 
-		if (FS_OK == retv)		printf("OK");
+		if (FS_OK == retv)		printf("SUCCESS");
 		else if (FS_ERR == retv)	printf("ERROR");
 		printf("\n");
 
