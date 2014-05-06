@@ -730,7 +730,7 @@ int sh_import(fs_args* cmd) {
 	strcpy(write_cmd_tmp->fields[0],"write");
 	sprintf(write_cmd_tmp->fields[1],"%d",fd);
 	
-	strncpy(write_cmd_tmp->fields[2], src_buf, FS_NAMEMAXLEN);
+	strncpy(write_cmd_tmp->fields[2], src_buf, SH_MAXFIELDSIZE);
 	
 	sh_write(write_cmd_tmp);
 	argsFree(write_cmd_tmp);

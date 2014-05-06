@@ -15,8 +15,8 @@
 #define ANSI_COLOR_RESET   "\x1b[0m"
 
 #define BLKSIZE 4096				// Block size in bytes
-//#define MAXBLOCKS 25600				// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
-#define MAXBLOCKS 256				// Temporary for rapid development: 1MB filesystem
+#define MAXBLOCKS 25600				// Max num allocatable blocks. 4096 bytes * 25600 blocks == 100MB
+//#define MAXBLOCKS 256				// Temporary for rapid development: 1MB filesystem
 #define MAXINODES MAXBLOCKS			// Max num allocatable inodes. Free inode numbers is always <= MAXBLOCKS
 
 #define NBLOCKS 8				// Number of direct blocks an inode can point to
