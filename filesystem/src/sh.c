@@ -412,7 +412,7 @@ char* sh_read(int fd, size_t size){
 	char* rdbuf = NULL;
 	
 	rdbuf = fs.read(fd, size);
-	if (NULL != rdbuf)
+	if (NULL == rdbuf)
 		printf("Error: Buffer is empty\n");
 	return rdbuf;
 }
@@ -851,6 +851,39 @@ fs_args* sh_parse_input(char* buf) {
 	return cmd;
 }
 
+int sh_cat(fs_args* cmd){
+	int fd = 0;
+	char* out_buf = NULL;
+ 	
+	inode* src = NULL;
+	fs_args* open_tmp = NULL;
+	
+	if (cmd->nfields < 2) {
+ 		printf("Not the correct number of arguments\n");
+ 		return FS_ERR;
+	}
+	
+	src = fs.stat(cmd->fields[1]);
+	if(src == NULL){
+ 		printf("File could not be found\n");
+ 		return FS_ERR;
+	}
+	
+	open_tmp = newArgs();
+	open_tmp->nfields = 3;
+	strcpy(open_tmp->fields[0], "open");
+	strcpy(open_tmp->fields[1], cmd->fields[1]);
+	strcpy(open_tmp->fields[2], "r");
+	fd = sh_open(open_tmp); //should check if return null
+	argsFree(open_tmp);
+	
+	out_buf = sh_read(fd, src->size); //memory was malloced for this
+	printf("%s\n",out_buf);
+	sh_close(fd);
+	free(out_buf);
+	return FS_OK;
+ }
+ 
 int main() {
 	int retv = 0;
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
@@ -1115,6 +1148,16 @@ int main() {
 			
 			retv = sh_import(cmd);
 			
+		} else if (!strcmp(cmd->fields[0], "cat")) {
+
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+
+			retv = sh_cat(cmd);
+		
 		} else {
 			printf("Bad command \"%s\"", buf); 
 			retv = FS_NORMAL; 
