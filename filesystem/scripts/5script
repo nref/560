@@ -1,0 +1,13 @@
+mkfs
+mkdir a
+mkdir a/b
+mkdir a/b/c
+cd /a/b/c
+open testfile w
+write testfile "test string"
+close 0
+cd /
+link /a/b/c c.lnk
+link a/b/c/testfile testfile.lnk
+link c.lnk/testfile testfile2.lnk
+tree

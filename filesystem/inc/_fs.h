@@ -271,7 +271,7 @@ typedef struct {
 	filev*			(* _ino_to_fv)		(filesystem* , inode*);
 	hlinkv*			(* _ino_to_lv)		(filesystem* , inode*);
 	
-	dentv*			(* _mkroot)		(filesystem *, int);
+	dentv*			(* _mkroot)		(filesystem* , int);
 	
 	filev*			(* _load_file)		(filesystem*, dentv* parent, inode_t);
 	int			(* _unload_file)	(filesystem*, inode*);
@@ -282,10 +282,14 @@ typedef struct {
 	hlinkv*			(* _load_link)		(filesystem*, dentv* parent, inode_t);
 	int			(* _unload_link)	(filesystem* , inode*);
 	
-	dentv*			(* _new_dir)		(filesystem *, dentv*, const char*);
-	filev*			(* _new_file)		(filesystem *, dentv*, const char*);
-	hlinkv*			(* _new_link)		(filesystem *, dentv*, inode*, const char*);
-	
+	dentv*			(* _new_dir)		(filesystem* , dentv*, const char*);
+	int			(* _rmdir)		(filesystem* , dentv*);
+
+	filev*			(* _new_file)		(filesystem* , dentv*, const char*);
+
+	hlinkv*			(* _new_link)		(filesystem* , dentv*, inode*, const char*);
+	int			(* _rmlink)		(filesystem* , hlinkv*);
+
 	int			(* _v_attach)		(filesystem* , inode*);
 	int			(* _v_detach)		(filesystem* , inode*);
 	

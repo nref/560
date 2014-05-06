@@ -30,7 +30,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		2A2603671906135100312E06 /* 3script */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = 3script; path = ../../3script; sourceTree = "<group>"; };
 		2A5A9C4D18F7824900484816 /* fs_xcode */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = fs_xcode; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A5A9C5218F7824900484816 /* fs_xcode.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = fs_xcode.1; sourceTree = "<group>"; };
 		2A5A9C5A18F7828D00484816 /* makefile */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.make; name = makefile; path = ../../makefile; sourceTree = "<group>"; };
@@ -42,12 +41,21 @@
 		2A5A9C6618F7828D00484816 /* fs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = fs.c; sourceTree = "<group>"; };
 		2A5A9C6718F7828D00484816 /* sh.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = sh.c; sourceTree = "<group>"; };
 		2A5A9C6818F7828D00484816 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = README.md; path = ../../README.md; sourceTree = "<group>"; };
-		2A5A9C6918F7828D00484816 /* samplescript.sh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.script.sh; name = samplescript.sh; path = ../../samplescript.sh; sourceTree = "<group>"; };
 		2A5A9C7118F7851F00484816 /* fs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fs.h; sourceTree = "<group>"; };
 		2A5A9C7218F7851F00484816 /* sh.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sh.h; sourceTree = "<group>"; };
+		2AA20AAE191887E200EBFA3D /* 3script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 3script; path = ../../scripts/3script; sourceTree = "<group>"; };
+		2AA20AAF191887E200EBFA3D /* 4script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 4script; path = ../../scripts/4script; sourceTree = "<group>"; };
+		2AA20AB0191887E200EBFA3D /* 5script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 5script; path = ../../scripts/5script; sourceTree = "<group>"; };
+		2AA20AB1191887E200EBFA3D /* 6script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 6script; path = ../../scripts/6script; sourceTree = "<group>"; };
+		2AA20AB2191887E200EBFA3D /* 7script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 7script; path = ../../scripts/7script; sourceTree = "<group>"; };
+		2AA20AB3191887E200EBFA3D /* script */ = {isa = PBXFileReference; lastKnownFileType = text; name = script; path = ../../scripts/script; sourceTree = "<group>"; };
+		2AA20AB4191887E200EBFA3D /* hex.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = hex.txt; path = ../../scripts/hex.txt; sourceTree = "<group>"; };
+		2AA20AB5191887E200EBFA3D /* samplescript.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = samplescript.sh; path = ../../scripts/samplescript.sh; sourceTree = "<group>"; };
+		2AA20AB6191887EF00EBFA3D /*   sample a b c .txt  */ = {isa = PBXFileReference; lastKnownFileType = text; name = "  sample a b c .txt "; path = "../  sample a b c .txt "; sourceTree = "<group>"; };
+		2AA20AB7191887EF00EBFA3D /* sample.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = sample.txt; path = ../sample.txt; sourceTree = "<group>"; };
+		2AA20AB8191887FC00EBFA3D /* do.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; name = do.sh; path = ../do.sh; sourceTree = "<group>"; };
 		2AB7577A19008AC0003BCEB3 /* _fs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = _fs.h; sourceTree = "<group>"; };
 		2AB7577B19008AC6003BCEB3 /* _fs.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = _fs.c; sourceTree = "<group>"; };
-		2AB7577D1902E030003BCEB3 /* script */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = script; path = ../../script; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +74,9 @@
 			children = (
 				2A5A9C4F18F7824900484816 /* fs_xcode */,
 				2A5A9C4E18F7824900484816 /* Products */,
+				2AA20AB6191887EF00EBFA3D /*   sample a b c .txt  */,
+				2AA20AB7191887EF00EBFA3D /* sample.txt */,
+				2AA20AB8191887FC00EBFA3D /* do.sh */,
 			);
 			sourceTree = "<group>";
 		};
@@ -80,14 +91,12 @@
 		2A5A9C4F18F7824900484816 /* fs_xcode */ = {
 			isa = PBXGroup;
 			children = (
-				2A2603671906135100312E06 /* 3script */,
-				2AB7577D1902E030003BCEB3 /* script */,
+				2AA20AAD1918876400EBFA3D /* scripts */,
 				2A5A9C5A18F7828D00484816 /* makefile */,
 				2A5A9C5B18F7828D00484816 /* bin */,
 				2A5A9C6218F7828D00484816 /* inc */,
 				2A5A9C6518F7828D00484816 /* src */,
 				2A5A9C6818F7828D00484816 /* README.md */,
-				2A5A9C6918F7828D00484816 /* samplescript.sh */,
 				2A5A9C5218F7824900484816 /* fs_xcode.1 */,
 			);
 			path = fs_xcode;
@@ -134,6 +143,21 @@
 			);
 			name = src;
 			path = ../../src;
+			sourceTree = "<group>";
+		};
+		2AA20AAD1918876400EBFA3D /* scripts */ = {
+			isa = PBXGroup;
+			children = (
+				2AA20AAE191887E200EBFA3D /* 3script */,
+				2AA20AAF191887E200EBFA3D /* 4script */,
+				2AA20AB0191887E200EBFA3D /* 5script */,
+				2AA20AB1191887E200EBFA3D /* 6script */,
+				2AA20AB2191887E200EBFA3D /* 7script */,
+				2AA20AB3191887E200EBFA3D /* script */,
+				2AA20AB4191887E200EBFA3D /* hex.txt */,
+				2AA20AB5191887E200EBFA3D /* samplescript.sh */,
+			);
+			name = scripts;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

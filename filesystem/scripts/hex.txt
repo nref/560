@@ -1,0 +1,14 @@
+vim hex viewer
+%!xxd
+%!xxd -r (reverts)
+
+vim pg down, up
+^F, ^B
+
+vim reload
+:e
+
+od print named chars
+od -a -x fs
+
+hexdump -C

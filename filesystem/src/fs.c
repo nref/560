@@ -107,6 +107,12 @@ static int mkdir(char* cur_path, char* dir_path) {
 	return OK;
 }
 
+static int rmdir(char* parent, char* name) { 
+	dentv* target = NULL;
+
+	return _fs._rmdir(shfs, target); 
+}
+
 /*
  * Return the inode of the directory at the path "name"
  */
@@ -387,8 +393,6 @@ static void closedir (dentv* dv) {
 	}
 }
 
-static void rmdir(fd_t fd) { printf("fs_rmdir: %d\n", fd); }
-
 /* Read text from a file
  * @ param fd file descriptor
  * @ param size number of bytes to read from file */
@@ -522,22 +526,45 @@ static int link(char* from, char* to) {
 	inode* src_ino = NULL;
 	inode* p_ino = NULL;
 	char* parent = NULL;
+	char* name = NULL;
 
 	dst_path = fs.pathFromString(to);
 	parent = fs.pathSkipLast(dst_path);
+	name = fs.pathTrimSlashes(fs.pathGetLast(dst_path));
 
 	src_ino = stat(from);
 	p_ino = stat(parent);
 
-	newlv = _fs._new_link(shfs, p_ino->datav.dir, src_ino, fs.pathTrimSlashes(to));
+	if (NULL == src_ino) return FS_ERR;
+	if (NULL == p_ino) return FS_ERR;
+
+	newlv = _fs._new_link(shfs, p_ino->datav.dir, src_ino, name);
 	if (NULL == newlv) return FS_ERR;
 
 	return FS_OK;
 }
 static int ulink(char* target) {
 	// TODO
-	printf("fs_unlink: NOT IMPLEMENTED %s\n", target);
-	return FS_ERR;
+
+	fs_path* dst_path = NULL;
+	inode* src_ino = NULL;
+	inode* p_ino = NULL;
+	char* parent = NULL;
+	char* name = NULL;
+
+	dst_path = fs.pathFromString(target);
+	parent = fs.pathSkipLast(dst_path);
+	name = fs.pathTrimSlashes(fs.pathGetLast(dst_path));
+
+	src_ino = stat(target);
+	p_ino = stat(parent);
+
+	if (NULL == src_ino) return FS_ERR;
+	if (NULL == p_ino) return FS_ERR;
+
+	_fs._rmlink(shfs, src_ino->datav.link);
+
+	return FS_OK;
 }
 
 fs_public_interface const fs = 
@@ -548,8 +575,8 @@ fs_public_interface const fs =
 	
 	inodeLoad, inodeUnload,
 
-	destruct, openfs, mkfs, mkdir,
+	destruct, openfs, mkfs, mkdir, rmdir,
 	stat, statI, open, close, opendir, closedir,
-	rmdir, read, write, seek,
+	read, write, seek,
 	link, ulink
 };

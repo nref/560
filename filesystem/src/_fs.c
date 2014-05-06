@@ -517,6 +517,12 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 	return dv;
 }
 
+static int _rmdir(filesystem* fs, dentv* dv) {
+
+	if (NULL == dv) return FS_ERR;
+	return FS_ERR;
+}
+
 /* Create an on-disk file */
 static file* _newf(filesystem* fs, const int alloc_inode, const char* name) {
 	file* f = NULL;
@@ -671,6 +677,12 @@ static hlinkv* _new_link(filesystem* fs, dentv* parent, inode* src_ino, const ch
 	_fs.write_commit(fs, src_ino);
 
 	return lv;
+}
+
+static int _rmlink(filesystem* fs, hlinkv* hv) {
+
+	if (NULL == hv) return FS_ERR;
+	return FS_ERR;
 }
 
 static inode* _new_inode() {
@@ -2374,7 +2386,11 @@ fs_private_interface const _fs =
 	_load_dir, _unload_dir,
 	_load_link, _unload_link,
 	
-	_new_dir, _new_file, _new_link,
+	_new_dir, _rmdir,
+	
+	_new_file, 
+	
+	_new_link, _rmlink,
 	_v_attach, _v_detach,
 
 	_get_fd, _free_fd,			/* File descriptors */

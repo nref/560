@@ -1,0 +1,9 @@
+mkfs
+mkdir a
+cd a
+open /a/test.txt w
+write 0 "hello"
+close 0
+open /a/test.txt r
+close 0
+tree

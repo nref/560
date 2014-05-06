@@ -1,0 +1,8 @@
+mkfs
+mkdir a
+mkdir a/./c/
+mkdir a/./c/./d
+cd a
+mkdir c/../e
+mkdir ../f
+tree

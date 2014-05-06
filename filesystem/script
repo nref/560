@@ -1,9 +1,0 @@
-mkfs
-
-open " big  testfile  " w
-write 0 Astring
-write 0 Bstring
-close 0
-open " big  testfile  " r
-read 0 20
-close 0

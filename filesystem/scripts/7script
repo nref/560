@@ -1,0 +1,6 @@
+mkfs
+import "  sample a b c .txt "  "  test file  "
+open "  test file  " r
+read 0 4000
+close 0
+export "  test file  " "  test export  "

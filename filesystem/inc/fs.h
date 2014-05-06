@@ -28,13 +28,14 @@ typedef struct {
 	void		(* openfs)		();
 	void		(* mkfs)		();
 	int		(* mkdir)		(char*, char*);
+	int		(* rmdir)		(char*, char*);
+
 	inode*		(* stat)		(char*);
 	inode*		(* statI)		(inode_t);
 	int		(* open)		(char*, char*, char*);
 	void		(* close)		(fd_t);
 	dentv*		(* opendir)		(char*);
 	void		(* closedir)		(dentv*);
-	void		(* rmdir)		(fd_t);
 	char*		(* read)		(fd_t, size_t);
 	size_t		(* write)		(fd_t, char*);
 	void		(* seek)		(fd_t, size_t);

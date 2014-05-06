@@ -863,7 +863,7 @@ int main() {
 			}
 
 			// If the user provided more than one field
-			if (cmd->nfields > 1)	retv = sh_ls(cmd->fields[1]);
+			if (1 < cmd->nfields)	retv = sh_ls(cmd->fields[1]);
 			else			retv = sh_ls(current_path);
 		}
 
@@ -874,7 +874,7 @@ int main() {
 				continue;
 			}
 
-			if (cmd->nfields > 1)	retv = sh_cd(cmd->fields[1]);
+			if (1 < cmd->nfields)	retv = sh_cd(cmd->fields[1]);
 			else			retv = sh_cd("/");
 		}
 
@@ -907,7 +907,7 @@ int main() {
 				continue;
 			}
 
-			if (cmd->nfields > 1)	retv = sh_mkdir(cmd->fields[1]);
+			if (1 < cmd->nfields)	retv = sh_mkdir(cmd->fields[1]);
 			else {
 				printf("Not enough arguments\n");
 				retv = FS_ERR;
@@ -921,7 +921,7 @@ int main() {
 				continue;
 			}
 
-			if (cmd->nfields > 1) {
+			if (1 < cmd->nfields) {
 				sh_stat(cmd->fields[1]); 
 				retv = FS_NORMAL;
 			} else {
@@ -943,7 +943,7 @@ int main() {
 				continue;
 			}
 
-			if( 3 == cmd->nfields ) {
+			if(2 < cmd->nfields) {
 				fs.seek((fd_t)atoi(cmd->fields[1]), (size_t)atoi(cmd->fields[2]));
 				retv = FS_OK;
 			} else {
@@ -976,7 +976,7 @@ int main() {
 				continue;
 			}
 
-			if (cmd->nfields > 2) {
+			if (2 < cmd->nfields) {
 				char* rdbuf = NULL;
 
 				rdbuf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
@@ -998,7 +998,7 @@ int main() {
 				continue;
 			}
 
-			if (cmd->nfields > 1) {
+			if (1 < cmd->nfields) {
 
 				fs.close(atoi(cmd->fields[1]));
 				retv = FS_OK;
@@ -1015,7 +1015,7 @@ int main() {
 				continue;
 			}
 			
-			if (3 == cmd->nfields) {
+			if (2 < cmd->nfields) {
 				
 				char* abs_path, *abs_path2;
 				inode *val, *val2;
@@ -1052,7 +1052,7 @@ int main() {
 				prompt();
 				continue;
 			}
-			if (2 == cmd->nfields) {
+			if (1 < cmd->nfields) {
 				char* abs_path;
 				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
 				retv = fs.ulink(abs_path);
