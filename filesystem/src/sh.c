@@ -929,7 +929,64 @@ int sh_cat(fs_args* cmd){
 
 	return FS_OK;
  }
- 
+
+/*ccraig7
+ I openly admit this is not the 'best' way to 
+ accomplish this goal by abusing sh_read/sh_write
+*/
+int sh_cp(char* src_file, char* dest_file){
+	int fd = 0;
+	char* src_buf = NULL;
+ 	char* abs_path = NULL;
+	
+	inode* s_ino = NULL;
+	fs_args* open_tmp = NULL;
+	
+	abs_path = fs.getAbsolutePath(current_path, src_file);
+	if (NULL == abs_path) return FS_ERR;
+	
+	s_ino = fs.stat(abs_path);
+	if(s_ino == NULL){
+ 		printf("File could not be found\n");
+		free(abs_path);
+ 		return FS_ERR;
+	}
+	
+	//Open source file for reading
+	open_tmp = newArgs();
+	open_tmp->nfields = 3;
+	strcpy(open_tmp->fields[0], "open");
+	strcpy(open_tmp->fields[1], abs_path);
+	strcpy(open_tmp->fields[2], "r");
+	fd = sh_open(open_tmp); //should check if return null
+	argsFree(open_tmp);
+	
+	
+	src_buf = sh_read(fd, s_ino->size); //memory was malloced for this
+	sh_close(fd);
+	
+	//Now we open a new file for writing
+	open_tmp = newArgs();
+	open_tmp->nfields = 3;
+	strcpy(open_tmp->fields[0], "open");
+	strcpy(open_tmp->fields[1], dest_file);
+	strcpy(open_tmp->fields[2], "w");
+	fd = sh_open(open_tmp); //should check if return null
+	argsFree(open_tmp);
+	
+	//Now we write to the new file (this should be a template)
+	open_tmp = newArgs();
+	open_tmp->nfields = 3;
+	strcpy(open_tmp->fields[0], "write");
+	sprintf(open_tmp->fields[1],"%d", fd);
+	strcpy(open_tmp->fields[2], src_buf);
+	sh_write(open_tmp);
+	argsFree(open_tmp);
+	free(src_buf);
+	sh_close(fd);
+	return FS_OK;
+}
+
 int main() {
 	int retv = 0;
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
@@ -1232,8 +1289,14 @@ int main() {
 			retv = sh_cat(cmd);
 		
 		} else if (!strcmp(cmd->fields[0], "cp")) {
-			printf("cp not implemented. have command: \"%s\"", buf); 
-			retv = FS_ERR;
+			if (NULL == current_path || current_path[0] == '\0') {
+				printf("No filesystem.\n");
+				prompt();
+				continue;
+			}
+			if(3 == cmd->nfields){
+				retv = sh_cp(cmd->fields[1], cmd->fields[2]);
+			}
 		}
 		
 		else printf("Bad command \"%s\"", buf); 
