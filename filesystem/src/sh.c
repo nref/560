@@ -426,47 +426,104 @@ int sh_write(fs_args* cmd) {
 	size_t write_byte_count;
 	size_t write_expected_byte_count;
 	fd_t fd;
-	uint i;
 	int retv;
 
-	char* write_buf = NULL;
-
-
+	if (NULL == cmd) return FS_ERR;
 	if (cmd->nfields < 2) return FS_ERR;
 
 	if (!fs.isNumeric(cmd->fields[1]))
 		return FS_ERR;
-	else {
-		fd = atoi(cmd->fields[1]);
 
-		write_buf = (char*)malloc(SH_MAXFIELDSIZE);
-		memset(write_buf, 0, SH_MAXFIELDSIZE);
+	fd = atoi(cmd->fields[1]);
 
-		for (i = 2; i < cmd->nfields; i++)
-		{
-			strcat(write_buf, cmd->fields[i]);
-			strcat(write_buf, " ");
-		}
-		write_expected_byte_count = strlen(write_buf);
+	write_expected_byte_count = strlen(cmd->fields[2]);
+	write_byte_count = fs.write(fd, cmd->fields[2]);
 
-		write_byte_count = fs.write(fd, write_buf);
+	printf("Wrote %lu of %lu bytes to fd %d ", 
+		write_byte_count, write_expected_byte_count, fd);
 
-		if (write_expected_byte_count != write_byte_count) retv = FS_ERR;
-		else {
-			printf("Wrote %lu bytes to fd %d ", write_byte_count, fd);
-			retv = FS_OK;
-		}
-	}
-	return retv;
+	if (write_expected_byte_count != write_byte_count) 
+		retv = FS_ERR;
+	else	retv = FS_OK;
+
+	return (int)write_byte_count;
 }
 
 void sh_stat(char* name) {
-	inode* ret;
+	inode* ino;
 
-	ret = fs.stat(name);
-	if (NULL == ret) printf("Inode not found for \"%s\"!", name);
-	else printf("%d %lu", ret->mode, ret->size);
-	printf("\n");
+	ino = fs.stat(name);
+	
+	if (NULL == ino) printf("inode not found for \"%s\"", name);
+	else {
+		
+#if defined(_WIN64) || defined(_WIN32)
+		HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO info;
+		WORD saved_attributes;
+		GetConsoleScreenBufferInfo(console, &info);
+		saved_attributes = info.wAttributes;
+#endif
+		
+#if defined(_WIN64) || defined(_WIN32)
+		SetConsoleTextAttribute(console, FOREGROUND_BLUE);
+#else
+		printf("%s", ANSI_COLOR_BLUE);
+#endif
+		printf("\nstat() for \"%s\":\n\n", name);
+		printf("\tNumber: %d\n", ino->num);
+		printf("\tType: ");
+		
+		switch (ino->mode) {
+			case FS_FILE:
+				printf("FILE\n");
+				break;
+			case FS_DIR:
+				printf("DIRECTORY\n");
+				break;
+			case FS_LINK:
+				printf("LINK\n");
+				break;
+			default:
+				break;
+		}
+		printf("\tSize (bytes): %zu\n", ino->size);
+		printf("\tLink count: %zu\n", ino->nlinks);
+		printf("\tNumber of blocks: %zu\n", ino->ndatablocks);
+		printf("\tVolatile data attached: ");
+		
+		switch (ino->v_attached) {
+			case true:
+				printf("TRUE\n");
+				break;
+			case false:
+				printf("FALSE\n");
+				break;
+			default:
+				break;
+		}
+		printf("\tName: ");
+		switch (ino->mode) {
+			case FS_FILE:
+				printf("%s\n", ino->data.file.name);
+				break;
+			case FS_DIR:
+				printf("%s\n", ino->data.dir.name);
+				break;
+			case FS_LINK:
+				printf("%s\n", ino->data.link.name);
+				break;
+			default:
+				break;
+		}
+		
+		// Restore color
+#if defined(_WIN64) || defined(_WIN32)
+		SetConsoleTextAttribute(console, saved_attributes);
+#else
+		printf("%s", ANSI_COLOR_RESET);
+#endif
+	}
 }
 
 int sh_mkdir(char* dir_name) {
@@ -850,7 +907,11 @@ int main() {
 				continue;
 			}
 
-			if (cmd->nfields > 1)	retv = sh_mkdir(cmd->fields[1]); 
+			if (cmd->nfields > 1)	retv = sh_mkdir(cmd->fields[1]);
+			else {
+				printf("Not enough arguments\n");
+				retv = FS_ERR;
+			}
 		}
 
 		else if (!strcmp(cmd->fields[0], "stat")) { 
@@ -863,7 +924,10 @@ int main() {
 			if (cmd->nfields > 1) {
 				sh_stat(cmd->fields[1]); 
 				retv = FS_NORMAL;
-			} else retv = FS_ERR;
+			} else {
+				printf("Not enough arguments\n");
+				retv = FS_ERR;
+			}
 		}
 
 		else if (!strcmp(cmd->fields[0], "mkfs")) {
@@ -881,6 +945,7 @@ int main() {
 
 			if( 3 == cmd->nfields ) {
 				fs.seek((fd_t)atoi(cmd->fields[1]), (size_t)atoi(cmd->fields[2]));
+				retv = FS_OK;
 			} else {
 				printf("Not enough arguments\n");
 				retv = FS_ERR;
@@ -921,6 +986,9 @@ int main() {
 					printf("%s\n",rdbuf);
 					free(rdbuf);
 				}
+			}  else {
+				printf("Not enough arguments\n");
+				retv = FS_ERR;
 			}
 
 		} else if (!strcmp(cmd->fields[0], "close")) {
@@ -934,8 +1002,11 @@ int main() {
 
 				fs.close(atoi(cmd->fields[1]));
 				retv = FS_OK;
+			}  else {
+				printf("Not enough arguments\n");
+				retv = FS_ERR;
 			}
-
+			
 		} else if (!strcmp(cmd->fields[0], "link")) {
 			
 			if (NULL == current_path || current_path[0] == '\0') {
@@ -969,6 +1040,9 @@ int main() {
 				}
 				
 				retv = fs.link(abs_path, abs_path2);
+			} else {
+				printf("Not enough arguments\n");
+				retv = FS_ERR;
 			}
 			
 		} else if (!strcmp(cmd->fields[0], "unlink")) {
@@ -981,9 +1055,11 @@ int main() {
 			if (2 == cmd->nfields) {
 				char* abs_path;
 				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
-				fs.ulink(abs_path);
+				retv = fs.ulink(abs_path);
+			} else {
+				printf("Not enough arguments\n");
+				retv = FS_ERR;
 			}
-			
 	        } else if (!strcmp(cmd->fields[0], "export")) {
 			if (NULL == current_path || current_path[0] == '\0') {
 				printf("No filesystem.\n");

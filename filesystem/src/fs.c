@@ -168,6 +168,7 @@ static inode*	inodeLoad(inode_t num)				{ return _fs._inode_load(shfs, num); }
 
 /* Return a file descriptor (just an inode number) corresponding to the file at the path*/
 static int open(char* parent_dir, char* name, char* mode) { 
+	fd_t i = 0;
 	fs_mode_t mode_i = FS_READ;
 	fd_t fd = 0;
 	inode* p_ino = NULL;	/* Path inode */
@@ -245,6 +246,15 @@ static int open(char* parent_dir, char* name, char* mode) {
 	if (NULL == f_ino) return FS_ERR;
 	if (NULL == f_ino->datav.file) return FS_ERR;
 	
+	for (i = 0; i < FS_MAXOPENFILES; i++) {
+		if (!shfs->fds[i]) continue;
+		
+		if (f_ino->num == shfs->fds[i]->ino->num) {
+			printf("open: File is already open with fd %d\n", i);
+			return FS_ERR;
+		}
+	}
+	
 	f_ino->datav.file->mode = mode_i;
 
 	/* Return a file descriptor which indexes to the filev */
@@ -255,7 +265,7 @@ static int open(char* parent_dir, char* name, char* mode) {
 }
 
 static void close(fd_t fd) { 
-	inode* ino = NULL;
+	//inode* ino = NULL;
 
 	if (NULL == shfs) {
 		printf("No filesystem.\n");
@@ -274,9 +284,11 @@ static void close(fd_t fd) {
 
 	if (shfs->fds[fd]) {
 
-		ino = shfs->fds[fd]->ino;
-		if (ino->v_attached)
-			_fs._v_detach(shfs, ino);
+		//ino = shfs->fds[fd]->ino;
+		_fs._inode_unload(shfs, shfs->fds[fd]->ino);
+		shfs->fds[fd] = NULL;
+		//if (ino->v_attached)
+		//	_fs._v_detach(shfs, ino);
 	}
 	_fs._free_fd(shfs, fd);
 }
@@ -504,7 +516,7 @@ static void seek(fd_t fd, size_t offset) {
  * @param path of src file
  * @param path of dst link
  */
-static int link (char* from, char* to) {
+static int link(char* from, char* to) {
 	hlinkv* newlv = NULL;
 	fs_path* dst_path = NULL;
 	inode* src_ino = NULL;
@@ -522,23 +534,11 @@ static int link (char* from, char* to) {
 
 	return FS_OK;
 }
-static int	ulink	(char* target) {
+static int ulink(char* target) {
+	// TODO
 	printf("fs_unlink: NOT IMPLEMENTED %s\n", target);
 	return FS_ERR;
 }
-
-/* Exports a file in memory to the filesystem*/
-//static void export (inode* src, FILE* dst_fp){
-	
-	//this is kinda useless
-	
-	/*
-	for(i=0;src->nblocks;++i){
-		fwrite(src->blocks[i], BLKSIZE, 1, dst_fp);
-	}*/
-//}
-
-
 
 fs_public_interface const fs = 
 { 

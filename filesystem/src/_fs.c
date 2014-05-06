@@ -843,6 +843,7 @@ static int _free_fd(filesystem* fs, int fd) {
 		return FS_ERR;
 
 	fs->allocated_fds[fd] = false;
+	fs->fds[fd] = NULL;
 	fs->first_free_fd = fd;
 
 	return FS_OK;
@@ -1678,6 +1679,7 @@ static filesystem* _init(int newfs) {
 	memset( &fs->sb.inode_first_blocks, 0,	MAXBLOCKS*sizeof(block_t));
 	memset( &fs->sb.inode_block_counts, 0,	MAXBLOCKS*sizeof(uint));
 	memset( &fs->allocated_fds, 0,		FS_MAXOPENFILES*sizeof(fd_t));
+	memset( &fs->fds, 0,			FS_MAXOPENFILES*sizeof(filev*));
 
 	memset(attached_inodes, 0, MAXBLOCKS*sizeof(inode*));
 	
@@ -2317,6 +2319,12 @@ static void _debug_print() {
 	printf("%s",ANSI_COLOR_RESET);
 #endif
 	
+#if defined(_WIN64) || defined(_WIN32)
+	SetConsoleTextAttribute(console, FOREGROUND_BLUE);
+#else
+	printf("%s", ANSI_COLOR_BLUE);
+#endif
+	
 	printf("\tsizeof(map): %lu\n", sizeof(map));
 	printf("\tsizeof(block): %lu\n", sizeof(block));
 	printf("\tsizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
@@ -2333,6 +2341,12 @@ static void _debug_print() {
 	printf("\tMAX FILE SIZE (KByte): %d\n", MAXFILEBLOCKS*BLKSIZE/1024);
 	printf("\tFS_MAXPATHLEN: %d\n", FS_MAXPATHLEN);
 	printf("\n");
+
+#if defined(_WIN64) || defined(_WIN32)
+	SetConsoleTextAttribute(console, saved_attributes);
+#else
+	printf("%s",ANSI_COLOR_RESET);
+#endif
 	
 	fflush(stdout);
 }
