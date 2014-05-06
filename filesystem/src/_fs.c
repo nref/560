@@ -1430,8 +1430,10 @@ static char* _pathTrimSlashes(char* path) {
 static fs_path* _pathFromString(const char* str) {
 	int i, j;
 	fs_path *p  = NULL;
-	if (NULL == str) return NULL;
+	if (NULL == str || 0 == strlen(str)) return NULL;
+	
 	p = _tokenize(str, "/");
+	if (NULL == p) return NULL;
 	
 	for (i = (int)p->nfields - 1 ; i > -1; i--) {
 		if (strlen(p->fields[i]) > 0 && '.' == p->fields[i][0]) {

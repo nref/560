@@ -43,6 +43,7 @@
 		2A5A9C6818F7828D00484816 /* README.md */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; name = README.md; path = ../../README.md; sourceTree = "<group>"; };
 		2A5A9C7118F7851F00484816 /* fs.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = fs.h; sourceTree = "<group>"; };
 		2A5A9C7218F7851F00484816 /* sh.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = sh.h; sourceTree = "<group>"; };
+		2A64745F1919657E005DCBD8 /* 8script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 8script; path = ../../scripts/8script; sourceTree = "<group>"; };
 		2AA20AAE191887E200EBFA3D /* 3script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 3script; path = ../../scripts/3script; sourceTree = "<group>"; };
 		2AA20AAF191887E200EBFA3D /* 4script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 4script; path = ../../scripts/4script; sourceTree = "<group>"; };
 		2AA20AB0191887E200EBFA3D /* 5script */ = {isa = PBXFileReference; lastKnownFileType = text; name = 5script; path = ../../scripts/5script; sourceTree = "<group>"; };
@@ -153,6 +154,7 @@
 				2AA20AB0191887E200EBFA3D /* 5script */,
 				2AA20AB1191887E200EBFA3D /* 6script */,
 				2AA20AB2191887E200EBFA3D /* 7script */,
+				2A64745F1919657E005DCBD8 /* 8script */,
 				2AA20AB3191887E200EBFA3D /* script */,
 				2AA20AB4191887E200EBFA3D /* hex.txt */,
 				2AA20AB5191887E200EBFA3D /* samplescript.sh */,

@@ -221,7 +221,8 @@ void sh_traverse_files(dentv* dv, int depth) {
 #else
 		printf("%s", ANSI_COLOR_GREEN);
 #endif
-		printf("%*s" "%s", depth*2, " ", f_ino->data.file.name);
+		if (0 == depth)	printf("%s", f_ino->data.file.name);
+		else printf("%*s" "%s", depth*2, " ", f_ino->data.file.name);
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, saved_attributes);
 		printf(" \n");
@@ -261,7 +262,8 @@ void sh_traverse_links(dentv* dv, int depth) {
 #else
 		printf("%s", ANSI_COLOR_MAGENTA);
 #endif
-		printf("%*s" "%s", depth*2, " ", l_ino->data.link.name);
+		if (0 == depth)	printf("%s", l_ino->data.link.name);
+		else printf("%*s" "%s", depth*2, " ", l_ino->data.link.name);
 		
 #if defined(_WIN64) || defined(_WIN32)
 		SetConsoleTextAttribute(console, saved_attributes);
@@ -655,6 +657,7 @@ int sh_export(fs_args* cmd) {
 	int file_exists;
 	int fd = 0;
 	char* out_buf = NULL;
+	char* abs_path = NULL;
 	char* filename = NULL;
 	FILE* fp;
 	
@@ -666,20 +669,30 @@ int sh_export(fs_args* cmd) {
 		return FS_ERR;
 	}
 
-	src = fs.stat(cmd->fields[1]);
-
+	abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+	if (NULL == abs_path) return FS_ERR;
+	
+	src = fs.stat(abs_path);
+	if (NULL == src) {
+		printf("Could not stat \"%s\"\n", abs_path);
+		free(abs_path);
+		return FS_ERR;
+	}
+	
 	open_tmp = newArgs();
 	open_tmp->nfields = 3;
 	strcpy(open_tmp->fields[0], "open");
-	strcpy(open_tmp->fields[1], cmd->fields[1]);
+	strcpy(open_tmp->fields[1], abs_path);
 	strcpy(open_tmp->fields[2], "r");
+	free(abs_path);
 	
 	// Perform Open and Read to get inner file contents
 	fd = sh_open(open_tmp);
 	argsFree(open_tmp);
 	
-	if (FS_ERR == fd)
+	if (FS_ERR == fd) {
 		return FS_ERR;
+	}
 
 	out_buf = sh_read(fd,src->size);
 	filename = cmd->fields[2];
@@ -724,8 +737,9 @@ int sh_import(fs_args* cmd) {
 	int fd;
 	
 	long fsize;
-	char *src_buf = NULL;
-
+	char* src_buf = NULL;
+	char* abs_path = NULL;
+	
 	fs_args* open_tmp = NULL;
 	fs_args* write_cmd_tmp = NULL;
 	FILE* fp;
@@ -752,11 +766,14 @@ int sh_import(fs_args* cmd) {
 	
 	src_buf[fsize] = 0;		//making it null terminated
 	
+	abs_path = fs.getAbsolutePath(current_path, cmd->fields[2]);
+	if (NULL == abs_path) return FS_ERR;
+	
 	open_tmp = newArgs();
 	open_tmp->nfields = 3;
 	strcpy(open_tmp->fields[0], "open");
 	strcpy(open_tmp->fields[2], "w");
-	strcpy(open_tmp->fields[1], cmd->fields[2]);
+	strcpy(open_tmp->fields[1], abs_path);
 	
 	// Open the destination file for writing
 	fd = sh_open(open_tmp);
@@ -764,7 +781,7 @@ int sh_import(fs_args* cmd) {
 	argsFree(open_tmp);
 	
 	write_cmd_tmp		= newArgs();
-	write_cmd_tmp->nfields	= 2;
+	write_cmd_tmp->nfields	= 3;
 	
 	strcpy(write_cmd_tmp->fields[0],"write");
 	sprintf(write_cmd_tmp->fields[1],"%d",fd);
@@ -775,6 +792,7 @@ int sh_import(fs_args* cmd) {
 	argsFree(write_cmd_tmp);
 	sh_close(fd);
 
+	free(abs_path);
 	free(src_buf);
 		
 	return retv;
