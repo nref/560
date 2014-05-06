@@ -293,6 +293,8 @@ static int open(char* parent_dir, char* name, char* mode) {
 static void close(fd_t fd) { 
 	//inode* ino = NULL;
 
+	printf("Closing fd %d...\n", fd);
+
 	if (NULL == shfs) {
 		printf("No filesystem.\n");
 		return;
@@ -310,12 +312,15 @@ static void close(fd_t fd) {
 
 	if (shfs->fds[fd]) {
 
-		//ino = shfs->fds[fd]->ino;
-		_fs._inode_unload(shfs, shfs->fds[fd]->ino);
+		//_fs._inode_unload(shfs, shfs->fds[fd]->ino);
 		shfs->fds[fd] = NULL;
+
+		//ino = shfs->fds[fd]->ino;
 		//if (ino->v_attached)
 		//	_fs._v_detach(shfs, ino);
 	}
+
+	printf("Closed fd %d\n", fd);
 	_fs._free_fd(shfs, fd);
 }
 
@@ -570,11 +575,9 @@ static int ulink(char* target) {
 	inode* src_ino = NULL;
 	inode* p_ino = NULL;
 	char* parent = NULL;
-	char* name = NULL;
 
 	dst_path = fs.pathFromString(target);
 	parent = fs.pathSkipLast(dst_path);
-	name = fs.pathTrimSlashes(fs.pathGetLast(dst_path));
 
 	src_ino = stat(target);
 	p_ino = stat(parent);

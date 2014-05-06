@@ -404,7 +404,7 @@ static dentv* _newdv(filesystem* fs, const int alloc_inode, const char* name) {
 	dv->name[FS_NAMEMAXLEN-1] = '\0';
 
 	d = _newd(fs, alloc_inode, name);
-	memcpy(&dv->ino->data.dir, d, sizeof(dv->ino->data.dir));
+	memcpy(&dv->ino->data.dir, d, sizeof(dent));
 	dv->ino->datav.dir = dv;
 	dv->ino->num = d->ino;
 
@@ -588,7 +588,7 @@ static filev* _newfv(filesystem* fs, const int alloc_inode, const char* name) {
 	fv->seek_pos = 0;
 
 	f = _newf(fs, alloc_inode, name);
-	memcpy(&fv->ino->data.file, f, sizeof(fv->ino->data.file));
+	memcpy(&fv->ino->data.file, f, sizeof(file));
 	fv->ino->num = f->ino;
 	free(f);
 
@@ -666,7 +666,7 @@ static hlinkv* _newlv(filesystem*fs, int alloc_inode, const char* name) {
 	hv->name[FS_NAMEMAXLEN-1] = '\0';
 	
 	h = _newl(fs, alloc_inode, name);
-	memcpy(&hv->ino->data.link, h, sizeof(hv->ino->data.link));
+	memcpy(&hv->ino->data.link, h, sizeof(hlink));
 	hv->ino->num = h->ino;
 	free(h);
 	
@@ -2157,6 +2157,7 @@ static int readblock(void* dest, block_t b) {
 /* Write a block to disk */
 static int writeblock(block_t b, size_t size, void* data) {
 	if (NULL == fp) return FS_ERR;
+	if (NULL == data) return FS_ERR;
 
 	if (0 != fseek(fp, b*BLKSIZE, SEEK_SET))
 		return FS_ERR;
@@ -2362,21 +2363,32 @@ static void _debug_print() {
 	printf("%s", ANSI_COLOR_BLUE);
 #endif
 	
-	printf("\tsizeof(map): %lu\n", sizeof(map));
-	printf("\tsizeof(block): %lu\n", sizeof(block));
-	printf("\tsizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
+	printf("Size of the filesystem (kB): %d \n\n", MAXBLOCKS*BLKSIZE/1024);
+	
+	printf("\tMaximum file size (kB): %d\n", MAXFILEBLOCKS*BLKSIZE/1024);
+	printf("\tMaximum path length (chars): %d\n", FS_MAXPATHLEN);
+	printf("\tMaximum directory/file/link name length: %d\n", FS_NAMEMAXLEN);
+	printf("\tMaximum path depth: %d\n\n", FS_MAXPATHFIELDS);
+	
+	printf("\tInode # direct blocks: %d\n", MAXBLOCKS_DIRECT);
+	printf("\tInode # single indirect blocks: %d\n", MAXBLOCKS_IB1);
+	printf("\tInode # double indirect blocks: %d\n", MAXBLOCKS_IB2);
+	printf("\tInode # triple indirect blocks: %d\n", MAXBLOCKS_IB3);
+	printf("\tInode maximum blocks / max blocks per file: %d\n\n", MAXFILEBLOCKS);
+	
 	printf("\tsizeof(iblock1): %lu\n", sizeof(iblock1));
 	printf("\tsizeof(iblock2): %lu\n", sizeof(iblock2));
 	printf("\tsizeof(iblock3): %lu\n", sizeof(iblock3));
-	printf("\tsizeof(superblock): %lu\n", sizeof(superblock));
 	printf("\tsizeof(superblock_i): %lu\n", sizeof(superblock_i));
 	printf("\tsizeof(inode): %lu\n", sizeof(inode));
 	printf("\tsizeof(dent): %lu\n", sizeof(dent));
 	printf("\tsizeof(dentv): %lu\n", sizeof(dentv));
-	printf("\tsizeof(filesystem): %lu\n", sizeof(filesystem));
-	printf("\tMAXFILEBLOCKS: %d\n", MAXFILEBLOCKS);
-	printf("\tMAX FILE SIZE (KByte): %d\n", MAXFILEBLOCKS*BLKSIZE/1024);
-	printf("\tFS_MAXPATHLEN: %d\n", FS_MAXPATHLEN);
+	printf("\tsizeof(map): %lu\n", sizeof(map));
+	printf("\tsizeof(block): %lu\n", sizeof(block));
+	printf("\tsizeof(block->data)): %ld\n", sizeof(((struct block*)0)->data));
+	printf("\tsizeof(superblock): %lu\n", sizeof(superblock));
+	printf("\tsizeof(struct filesystem): %lu\n\n", sizeof(filesystem));
+	
 	printf("\n");
 
 #if defined(_WIN64) || defined(_WIN32)

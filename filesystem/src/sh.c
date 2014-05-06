@@ -426,7 +426,6 @@ int sh_write(fs_args* cmd) {
 	size_t write_byte_count;
 	size_t write_expected_byte_count;
 	fd_t fd;
-	int retv;
 
 	if (NULL == cmd) return FS_ERR;
 	if (cmd->nfields < 2) return FS_ERR;
@@ -443,8 +442,7 @@ int sh_write(fs_args* cmd) {
 		write_byte_count, write_expected_byte_count, fd);
 
 	if (write_expected_byte_count != write_byte_count) 
-		retv = FS_ERR;
-	else	retv = FS_OK;
+		return FS_ERR;
 
 	return (int)write_byte_count;
 }
@@ -849,6 +847,7 @@ fs_args* sh_parse_input(char* buf) {
 			strcpy(cmd->fields[i], cmd_quotes->fields[cmd->quoted_fields[i]]);
 	}
 
+	argsFree(cmd_quotes);
 	return cmd;
 }
 

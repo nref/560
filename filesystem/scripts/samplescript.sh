@@ -151,7 +151,7 @@ ls
 import sample.txt sample.txt
 cat sample.txt
 #mkfs
-mkdir dir1dir
+mkdir dir1
 mkdir dir2
 mkdir dir3
 mkdir dir4
