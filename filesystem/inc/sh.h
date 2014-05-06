@@ -2,9 +2,9 @@
 
 #define SH_BUFLEN 1024*1024	// How many chars to accept per line from user
 #define SH_MAXFIELDS 8		// How many whitespace-separated fields to accept from user
-#define SH_MAXFIELDSIZE 1024*1024
+#define SH_MAXFIELDSIZE 512*512
 
-#define SH_MAXFSARGS 32
+#define SH_MAXFSARGS 16
 
 typedef struct fs_args {
 	char fields[SH_MAXFSARGS][SH_MAXFIELDSIZE]; /* A struct for storing command arguments */

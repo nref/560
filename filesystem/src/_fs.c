@@ -1446,12 +1446,13 @@ static fs_path* _pathFromString(const char* str) {
 				while ((int)p->nfields > j) { // If there is a next field
 					
 					strncpy(p->fields[j-1], p->fields[j+1], strlen(p->fields[j+1]));
-					
-					p->fields[p->nfields-1][0] = '\0';
-					p->fields[p->nfields-2][0] = '\0';
-					p->nfields -= 2;
+					p->fields[j-1][strlen(p->fields[j+1])] = '\0';
+						       
 					++j;
 				}
+				p->fields[p->nfields-1][0] = '\0';
+				p->fields[p->nfields-2][0] = '\0';
+				p->nfields -= 2;
 			}
 			
 			/* Handle the "." path operator */
