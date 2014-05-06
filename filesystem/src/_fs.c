@@ -473,6 +473,7 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 			if (NULL == tail) return NULL;
 			tail->data.dir.next = dv->ino->data.dir.ino;
 			parent->ino->data.dir.tail = dv->ino->data.dir.ino;
+			parent->head->data.dir.prev = dv->ino->data.dir.ino;
 		}
 
 		parent->ndirs++;
@@ -491,8 +492,9 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 			dv->prev = parent->tail;
 			dv->next = parent->head;
 			dv->prev->datav.dir->next = dv->ino;
-			//parent->tail->datav.dir->next = dv->ino;	/* Updating the tail in-memory requires no disk write */
+			parent->tail->datav.dir->next = dv->ino;	/* Updating the tail in-memory requires no disk write */
 			parent->tail = dv->ino;
+			parent->head->datav.dir->prev = parent->tail;
 		}
 
 	} else {
@@ -518,13 +520,32 @@ static dentv* _new_dir(filesystem *fs, dentv* parent, const char* name) {
 }
 
 static int _rmdir(filesystem* fs, dentv* dv) {
+	int onlysubdir = false;
 
 	if (NULL == dv) return FS_ERR;
 
-	/* Update parent head. Ignoring tail. We're not using it anyway. */
+	/* Update parent head */
 	if (dv->parent->data.dir.head == dv->ino->num) {
-		dv->parent->data.dir.head = dv->ino->data.dir.next;
-		dv->parent->datav.dir->head = dv->ino->datav.dir->next;
+		
+		/* If the head is the only subdir */
+		if (dv->parent->data.dir.head == dv->ino->data.dir.next) {
+			onlysubdir = true;
+			dv->parent->data.dir.head = 0;
+			dv->parent->datav.dir->head = NULL;
+		}
+		else {
+			dv->parent->data.dir.head = dv->ino->data.dir.next;
+			dv->parent->datav.dir->head = dv->ino->datav.dir->next;
+		}
+	}
+
+	/* Update parent tail */
+	if (dv->parent->data.dir.tail == dv->ino->num) {
+		if (!onlysubdir) {	// If it's the only subdir, the tail == the head, 
+					// which we already set to null above, so skip this
+			dv->parent->data.dir.tail = dv->ino->data.dir.prev;
+			dv->parent->datav.dir->tail = dv->ino->datav.dir->prev;
+		}
 	}
 
 	dv->prev->datav.dir->next = dv->next;

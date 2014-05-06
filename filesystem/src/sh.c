@@ -1226,7 +1226,6 @@ int main() {
 
 		argsFree(cmd);
 		memset(buf, 0, SH_BUFLEN);
-		retv = 0;
  		prompt();
 	}
 	printf("exit()\n");
