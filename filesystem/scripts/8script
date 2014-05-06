@@ -1,0 +1,41 @@
+mkfs
+mkdir a 
+mkdir b
+mkdir c
+ls
+rmdir a
+ls
+mkdir a
+ls
+rmdir a
+ls
+mkdir a
+ls
+rmdir a
+ls
+mkdir a
+ls
+rmdir b
+ls
+rmdir a
+ls
+mkdir a
+ls
+rmdir a
+ls
+rmdir c
+ls
+mkdir a
+tree
+mkdir a/b
+tree
+mkdir a/b/c
+tree
+rmdir a/b/c
+tree
+mkdir a/b/c
+tree
+rmdir a/b
+tree
+rmdir a
+tree
