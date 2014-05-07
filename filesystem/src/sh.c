@@ -13,6 +13,9 @@
 dentv* cur_dv = NULL;
 char* current_path;
 
+#define NOFS 5
+#define TOOFEWARGS 6
+
 static fs_args* newArgs() {
 	uint i = 0;
 	fs_args* args = (fs_args*)malloc(sizeof(fs_args));
@@ -987,8 +990,180 @@ int sh_cp(char* src_file, char* dest_file){
 	return FS_OK;
 }
 
+void sh_do_command(fs_args* cmd, char* buf) {
+	int retv = FS_NORMAL;
+	
+	if (!strcmp(cmd->fields[0], "mkfs")) {
+		printf("mkfs() ... ");
+		
+		fs.mkfs();
+		retv = sh_getfsroot();
+		
+	} else if (NULL == current_path || current_path[0] == '\0') {
+		retv = NOFS;
+	}
+	else if (!strcmp(cmd->fields[0], "ls")) {
+		
+		if (1 < cmd->nfields) {	// If the user provided more than one field
+			char* abs_path;
+			abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+			
+			if (NULL != abs_path) {
+				retv = sh_ls(abs_path);
+				free(abs_path);
+			}
+			else retv = FS_ERR;
+		}
+		else retv = sh_ls(current_path);
+	}
+	
+	else if (!strcmp(cmd->fields[0], "cd")) {
+		
+		if (1 < cmd->nfields)	{
+			char* abs_path;
+			abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+			
+			if (NULL != abs_path) {
+				retv = sh_cd(abs_path);
+				free(abs_path);
+			}
+			else retv = FS_ERR;
+		}
+		else retv = sh_cd("/");
+	}
+	
+	else if (!strcmp(cmd->fields[0], "pwd")) {
+		printf("%s\n", current_path);
+	}
+	
+	else if (!strcmp(cmd->fields[0], "tree")) {
+		sh_tree(current_path);
+	}
+	
+	else if (!strcmp(cmd->fields[0], "mkdir")) {
+		if (1 < cmd->nfields)
+			retv = sh_mkdir(cmd->fields[1]);
+		else retv = TOOFEWARGS;
+	}
+	
+	else if (!strcmp(cmd->fields[0], "rmdir")) {
+		if (1 < cmd->nfields)
+			retv = sh_rmdir(cmd->fields[1]);
+		else retv = TOOFEWARGS;
+	}
+	
+	else if (!strcmp(cmd->fields[0], "stat")) {
+		if (1 < cmd->nfields) {
+			char* abs_path;
+			abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+			if (NULL != abs_path) {
+				retv = sh_stat(abs_path);
+				free(abs_path);
+			}
+			else retv = FS_ERR;
+		} else retv = TOOFEWARGS;
+	}
+	
+	else if (!strcmp(cmd->fields[0], "seek")) {
+		if(2 < cmd->nfields) {
+			fs.seek((fd_t)atoi(cmd->fields[1]), (size_t)atoi(cmd->fields[2]));
+			retv = FS_OK;
+		} else retv = TOOFEWARGS;
+		
+	} else if (!strcmp(cmd->fields[0], "open")) {
+		retv = sh_open(cmd);
+		
+	} else if (!strcmp(cmd->fields[0], "write")) {
+		
+		retv = sh_write(cmd);
+		
+	} else if (!strcmp(cmd->fields[0], "read")) {
+		
+		if (2 < cmd->nfields) {
+			char* rdbuf = NULL;
+			
+			rdbuf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
+			if (NULL == rdbuf) retv = FS_ERR;
+			else {
+				retv = FS_OK;
+				printf("%s\n",rdbuf);
+				free(rdbuf);
+			}
+		} else retv = TOOFEWARGS;
+		
+	} else if (!strcmp(cmd->fields[0], "close")) {
+		
+		if (1 < cmd->nfields) {
+			
+			fs.close(atoi(cmd->fields[1]));
+			retv = FS_OK;
+		}  else retv = TOOFEWARGS;
+		
+	} else if (!strcmp(cmd->fields[0], "link")) {
+		
+		if (2 < cmd->nfields) {
+			
+			char* abs_path, *abs_path2;
+			inode *val, *val2;
+			
+			abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+			abs_path2 = fs.getAbsolutePath(current_path, cmd->fields[2]);
+			
+			val = fs.stat(abs_path);
+			val2 = fs.stat(abs_path2);
+			
+			if (NULL != val2) {
+				printf("sh_link: target exists.\n");
+				return;
+			}
+			
+			if (NULL == val) {
+				printf("sh_link: Source does not exist \n");
+				return;
+			}
+			
+			retv = fs.link(abs_path, abs_path2);
+			
+			free(abs_path);
+			free(abs_path2);
+			
+		} else retv = TOOFEWARGS;
+		
+	} else if (!strcmp(cmd->fields[0], "unlink")) {
+		
+		if (1 < cmd->nfields) {
+			char* abs_path;
+			abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
+			
+			retv = fs.ulink(abs_path);
+			free(abs_path);
+		} else retv = TOOFEWARGS;
+		
+	} else if (!strcmp(cmd->fields[0], "export")) {
+		retv = sh_export(cmd);
+		
+	} else if (!strcmp(cmd->fields[0], "import")) {
+		retv = sh_import(cmd);
+		
+	} else if (!strcmp(cmd->fields[0], "cat")) {
+		retv = sh_cat(cmd);
+		
+	} else if (!strcmp(cmd->fields[0], "cp")) {
+		if(2 < cmd->nfields)
+			retv = sh_cp(cmd->fields[1], cmd->fields[2]);
+		else retv = TOOFEWARGS;
+	}
+	
+	else printf("Bad command \"%s\"", buf);
+	
+	if	(NOFS == retv)		printf("No filesystem. Type \"mkfs\"");
+	else if (TOOFEWARGS == retv)	printf("Not enough arguments");
+	else if (FS_OK == retv)		printf("SUCCESS");
+	else if (FS_ERR == retv)	printf("ERROR");
+	printf("\n");
+}
+
 int main() {
-	int retv = 0;
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
 
 	fs_args* cmd;
@@ -1001,7 +1176,6 @@ int main() {
 	prompt();
         memset(buf, 0, SH_BUFLEN); // Clean buffer before printing
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {	// Get user input
-		retv = FS_NORMAL;	/* Suppress end output*/
 
 		if (strlen(buf) == 0 || '\n' == buf[0]) { 
 			prompt(); 
@@ -1009,305 +1183,17 @@ int main() {
 		}		
 
 		buf[strlen(buf)-1] = '\0';	// Remove trailing newline
-
 		cmd = sh_parse_input(buf);
+		
 		if('#' == cmd->fields[0][0]) continue; /* Skip commented lines */
 
 		if (!strcmp(cmd->fields[0], "exit")) break;
 		
-		else if (!strcmp(cmd->fields[0], "ls")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			// If the user provided more than one field
-			if (1 < cmd->nfields)	{
-				char* abs_path;
-				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
-				
-				if (NULL != abs_path) {
-					retv = sh_ls(abs_path);
-					free(abs_path);
-				}
-				else retv = FS_ERR;
-			}
-			else retv = sh_ls(current_path);
-		}
-
-		else if (!strcmp(cmd->fields[0], "cd")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			if (1 < cmd->nfields)	{
-				char* abs_path;
-				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
-				
-				if (NULL != abs_path) {
-					retv = sh_cd(abs_path);
-					free(abs_path);
-				} 
-				else retv = FS_ERR;
-			}
-			else retv = sh_cd("/");
-		}
-
-		else if (!strcmp(cmd->fields[0], "pwd")) { 
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			printf("%s\n", current_path); 
-		}
-
-		else if (!strcmp(cmd->fields[0], "tree")) { 
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			sh_tree(current_path); 
-		}
-
-		else if (!strcmp(cmd->fields[0], "mkdir")) { 
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			if (1 < cmd->nfields)	retv = sh_mkdir(cmd->fields[1]);
-			else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-		}
-
-		else if (!strcmp(cmd->fields[0], "rmdir")) { 
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			if (1 < cmd->nfields)	retv = sh_rmdir(cmd->fields[1]);
-			else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-		}
-
-		else if (!strcmp(cmd->fields[0], "stat")) { 
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			if (1 < cmd->nfields) {
-				char* abs_path;
-				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
-				if (NULL != abs_path) {
-					retv = sh_stat(abs_path); 
-					free(abs_path);
-				}
-				else retv = FS_ERR;
-			} else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-		}
-
-		else if (!strcmp(cmd->fields[0], "mkfs")) {
-			printf("mkfs() ... ");
-
-			fs.mkfs();
-			retv = sh_getfsroot();
-
-		} else if (!strcmp(cmd->fields[0], "seek")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			if(2 < cmd->nfields) {
-				fs.seek((fd_t)atoi(cmd->fields[1]), (size_t)atoi(cmd->fields[2]));
-				retv = FS_OK;
-			} else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-			
-		} else if (!strcmp(cmd->fields[0], "open")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			retv = sh_open(cmd);
-
-		} else if (!strcmp(cmd->fields[0], "write")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			retv = sh_write(cmd);
-
-		} else if (!strcmp(cmd->fields[0], "read")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			if (2 < cmd->nfields) {
-				char* rdbuf = NULL;
-
-				rdbuf = fs.read(atoi(cmd->fields[1]), atoi(cmd->fields[2]));
-				if (NULL == rdbuf) retv = FS_ERR;
-				else {
-					retv = FS_OK;
-					printf("%s\n",rdbuf);
-					free(rdbuf);
-				}
-			}  else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-
-		} else if (!strcmp(cmd->fields[0], "close")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			if (1 < cmd->nfields) {
-
-				fs.close(atoi(cmd->fields[1]));
-				retv = FS_OK;
-			}  else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-			
-		} else if (!strcmp(cmd->fields[0], "link")) {
-			
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-			
-			if (2 < cmd->nfields) {
-				
-				char* abs_path, *abs_path2;
-				inode *val, *val2;
-				
-				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
-				abs_path2 = fs.getAbsolutePath(current_path, cmd->fields[2]);
-				
-				val = fs.stat(abs_path);
-				val2 = fs.stat(abs_path2);
-				
-				if (NULL != val2) {
-					printf("sh_link: target exists.\n");
-					prompt();
-					continue;
-				}
-				
-				if (NULL == val) {
-					printf("sh_link: Source does not exist \n");
-					prompt();
-					continue;
-				}
-				
-				retv = fs.link(abs_path, abs_path2);
-				
-				free(abs_path);
-				free(abs_path2);
-
-			} else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-			
-		} else if (!strcmp(cmd->fields[0], "unlink")) {
-			
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-			if (1 < cmd->nfields) {
-				char* abs_path;
-				abs_path = fs.getAbsolutePath(current_path, cmd->fields[1]);
-
-				retv = fs.ulink(abs_path);
-				free(abs_path);
-			} else {
-				printf("Not enough arguments\n");
-				retv = FS_ERR;
-			}
-	        } else if (!strcmp(cmd->fields[0], "export")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-			
-			retv = sh_export(cmd);
-			
-		} else if (!strcmp(cmd->fields[0], "import")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-			
-			retv = sh_import(cmd);
-			
-		} else if (!strcmp(cmd->fields[0], "cat")) {
-
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-
-			retv = sh_cat(cmd);
-		
-		} else if (!strcmp(cmd->fields[0], "cp")) {
-			if (NULL == current_path || current_path[0] == '\0') {
-				printf("No filesystem.\n");
-				prompt();
-				continue;
-			}
-			if(3 == cmd->nfields){
-				retv = sh_cp(cmd->fields[1], cmd->fields[2]);
-			}
-		}
-		
-		else printf("Bad command \"%s\"", buf); 
-
-		if (FS_OK == retv)		printf("SUCCESS");
-		else if (FS_ERR == retv)	printf("ERROR");
-		printf("\n");
+		sh_do_command(cmd, buf);
 
 		argsFree(cmd);
-		memset(buf, 0, SH_BUFLEN);
  		prompt();
+		memset(buf, 0, SH_BUFLEN);
 	}
 	printf("exit()\n");
 }

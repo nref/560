@@ -1426,7 +1426,7 @@ static char* _pathTrimSlashes(char* path) {
 	return path;
 }
 
-/* Split a string on "/" */
+/* Split a string on "/" and handle . and .. operators */
 static fs_path* _pathFromString(const char* str) {
 	int i, j;
 	fs_path *p  = NULL;
