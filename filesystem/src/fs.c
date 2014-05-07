@@ -144,6 +144,7 @@ static inode* stat(char* name) {
 	fs_path* dPath	= NULL;
 
 	if (NULL == shfs) return NULL;		// No filesystem yet, bail!
+	
 	if (NULL == name || 0 == strlen(name))
 		return NULL;
 
@@ -290,38 +291,31 @@ static int open(char* parent_dir, char* name, char* mode) {
 	return fd;
 }
 
-static void close(fd_t fd) { 
-	//inode* ino = NULL;
-
-	printf("Closing fd %d...\n", fd);
+static int close(fd_t fd) {
 
 	if (NULL == shfs) {
-		printf("No filesystem.\n");
-		return;
+		printf("No filesystem. Type \"mkfs\".\n");
+		return FS_ERR;
 	}
 
 	if (fd >= FS_MAXOPENFILES) {
 		printf("Invalid file descriptor.\n");
-		return;
+		return FS_ERR;
 	}
 
 	if (false == shfs->allocated_fds[fd]) {
 		printf("File descriptor \"%d\" not open. \n", fd);
-		return; /* fd not allocated */
+		return FS_ERR; /* fd not allocated */
 	}
 
 	if (shfs->fds[fd]) {
 
 		_fs._inode_unload(shfs, shfs->fds[fd]->ino);
 		shfs->fds[fd] = NULL;
-
-		//ino = shfs->fds[fd]->ino;
-		//if (ino->v_attached)
-		//	_fs._v_detach(shfs, ino);
 	}
 
-	printf("Closed fd %d\n", fd);
 	_fs._free_fd(shfs, fd);
+	return FS_OK;
 }
 
 static dentv* opendir(char* path) { 
@@ -335,13 +329,12 @@ static dentv* opendir(char* path) {
 
 	if (NULL == ino) {
 		if (!strcmp(path, "/"))
-			printf("No filesystem.\n");
+			printf("No filesystem. Type \"mkfs\".\n");
 		else printf("opendir: Could not stat \"%s\"\n", path);
 		return NULL;
 	}
 
 	if (!strcmp(path, "/")) parent = ino;
-//		return ino->datav.dir;
 	else	parent = stat(pathSkipLast(p));
 	free(p);
 
@@ -398,11 +391,6 @@ static dentv* opendir(char* path) {
 		printf("opendir: Could not load \"%s\".\n", path);
 		return NULL;
 	}
-//
-//	if (!ino->v_attached) {
-//		//printf("opendir: Attaching directory \"%s\".\n", ino->data.dir.name);
-//		_fs._v_attach(shfs, ino);
-//	}
 
 	return ino->datav.dir; 
 }
@@ -412,7 +400,6 @@ static void closedir (dentv* dv) {
 
 	/* Only free dir if it's not the root */
 	if (strcmp(dv->name, "/")) {
-		//printf("closedir: Detaching directory \"%s\".\n", dv->name);
 		_fs._v_detach(shfs, dv->ino);
 		dv = NULL;
 	}
@@ -427,7 +414,7 @@ static char* read(fd_t fd, size_t size) {
 	char* buf;
 	
 	if (NULL == shfs) {
-		printf("No filesystem.\n");
+		printf("No filesystem. Type \"mkfs\".\n");
 		return NULL;
 	}
 
@@ -469,7 +456,7 @@ static size_t write (fd_t fd, char* str) {
 	size_t slen;
 	
 	if (NULL == shfs) {
-		printf("No filesystem.\n");
+		printf("No filesystem. Type \"mkfs\".\n");
 		return 0;
 	}
 
@@ -513,7 +500,7 @@ static void seek(fd_t fd, size_t offset) {
 	
 	//Check if the file is open (fd is in the allocated
 	if (NULL == shfs) {
-		printf("No filesystem\n");
+		printf("No filesystem. Type \"mkfs\".\n");
 		return;
 	}
 	
@@ -573,21 +560,22 @@ static int ulink(char* target) {
 
 	fs_path* dst_path = NULL;
 	inode* src_ino = NULL;
-	inode* p_ino = NULL;
-	char* parent = NULL;
 
 	dst_path = fs.pathFromString(target);
-	parent = fs.pathSkipLast(dst_path);
 
 	src_ino = stat(target);
-	p_ino = stat(parent);
 
-	if (NULL == src_ino) return FS_ERR;
-	if (NULL == p_ino) return FS_ERR;
+	if (FS_LINK != src_ino->mode) {
+		printf("Not a link: \"%s\"\n", target);
+		return FS_ERR;
+	}
+	
+	if (NULL == src_ino) {
+		printf("Target doesn't exist: \"%s\"\n", target);
+		return FS_ERR;
+	}
 
-	_fs._rmlink(shfs, src_ino->datav.link);
-
-	return FS_OK;
+	return _fs._rmlink(shfs, src_ino->datav.link);
 }
 
 fs_public_interface const fs = 

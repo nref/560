@@ -356,7 +356,7 @@ void sh_tree(char* name) {
 	dentv* dv = NULL;
 
 	if (NULL == name) {
-		printf("No filesystem.\n");
+		printf("Bad directory name.\n");
 		return;
 	}
 
@@ -388,7 +388,7 @@ int sh_open(fs_args* cmd){
 	fs_path* p = NULL;
 	
 	if (cmd->nfields < 3) {
-		printf("sh_open: too few args, have %zu", cmd->nfields);
+		printf("sh_open: too few args, have %zu\n", cmd->nfields);
 		return FS_ERR;
 	}
 	
@@ -422,8 +422,8 @@ char* sh_read(int fd, size_t size){
 	return rdbuf;
 }
 
-void sh_close(int fd){
-	fs.close(fd);
+int sh_close(int fd){
+	return fs.close(fd);
 }
 
 int sh_write(fs_args* cmd) {
@@ -501,7 +501,7 @@ int sh_stat(char* name) {
 #else
 		printf("\tSize (bytes): %zu\n", ino->size);
 		printf("\tLink count: %zu\n", ino->nlinks);
-		printf("\tNumber of blocks: %zu\n", ino->ndatablocks);
+		printf("\tNumber of blocks: %zu\n", ino->nblocks);
 #endif
 		
 		printf("\tVolatile data attached: ");
@@ -518,13 +518,13 @@ int sh_stat(char* name) {
 		printf("\tName: ");
 		switch (ino->mode) {
 			case FS_FILE:
-				printf("%s\n", ino->data.file.name);
+				printf("\"%s\"\n", ino->data.file.name);
 				break;
 			case FS_DIR:
-				printf("%s\n", ino->data.dir.name);
+				printf("\"%s\"\n", ino->data.dir.name);
 				break;
 			case FS_LINK:
-				printf("%s\n", ino->data.link.name);
+				printf("\"%s\"\n", ino->data.link.name);
 				break;
 			default:
 				break;
@@ -992,6 +992,7 @@ int sh_cp(char* src_file, char* dest_file){
 
 void sh_do_command(fs_args* cmd, char* buf) {
 	int retv = FS_NORMAL;
+	printf("\n");
 	
 	if (!strcmp(cmd->fields[0], "mkfs")) {
 		printf("mkfs() ... ");
@@ -1015,6 +1016,9 @@ void sh_do_command(fs_args* cmd, char* buf) {
 			else retv = FS_ERR;
 		}
 		else retv = sh_ls(current_path);
+		
+		if (FS_OK == retv)
+			retv = FS_NORMAL;	/* Don't bother user with success messages */
 	}
 	
 	else if (!strcmp(cmd->fields[0], "cd")) {
@@ -1030,6 +1034,9 @@ void sh_do_command(fs_args* cmd, char* buf) {
 			else retv = FS_ERR;
 		}
 		else retv = sh_cd("/");
+		
+		if (FS_OK == retv)
+			retv = FS_NORMAL;
 	}
 	
 	else if (!strcmp(cmd->fields[0], "pwd")) {
@@ -1074,7 +1081,6 @@ void sh_do_command(fs_args* cmd, char* buf) {
 		retv = sh_open(cmd);
 		
 	} else if (!strcmp(cmd->fields[0], "write")) {
-		
 		retv = sh_write(cmd);
 		
 	} else if (!strcmp(cmd->fields[0], "read")) {
@@ -1090,6 +1096,9 @@ void sh_do_command(fs_args* cmd, char* buf) {
 				free(rdbuf);
 			}
 		} else retv = TOOFEWARGS;
+		
+		if (FS_OK == retv)
+			retv = FS_NORMAL;
 		
 	} else if (!strcmp(cmd->fields[0], "close")) {
 		
@@ -1148,6 +1157,9 @@ void sh_do_command(fs_args* cmd, char* buf) {
 	} else if (!strcmp(cmd->fields[0], "cat")) {
 		retv = sh_cat(cmd);
 		
+		if (FS_OK == retv)
+			retv = FS_NORMAL;
+		
 	} else if (!strcmp(cmd->fields[0], "cp")) {
 		if(2 < cmd->nfields)
 			retv = sh_cp(cmd->fields[1], cmd->fields[2]);
@@ -1156,7 +1168,7 @@ void sh_do_command(fs_args* cmd, char* buf) {
 	
 	else printf("Bad command \"%s\"", buf);
 	
-	if	(NOFS == retv)		printf("No filesystem. Type \"mkfs\"");
+	if	(NOFS == retv)		printf("No filesystem. Type \"mkfs\".");
 	else if (TOOFEWARGS == retv)	printf("Not enough arguments");
 	else if (FS_OK == retv)		printf("SUCCESS");
 	else if (FS_ERR == retv)	printf("ERROR");
@@ -1166,7 +1178,7 @@ void sh_do_command(fs_args* cmd, char* buf) {
 int main() {
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
 
-	fs_args* cmd;
+	fs_args* cmd = NULL;
 	current_path = NULL;
 
 	_fs._debug_print();
@@ -1174,19 +1186,18 @@ int main() {
 	sh_getfsroot();
 
 	prompt();
-        memset(buf, 0, SH_BUFLEN); // Clean buffer before printing
+        memset(buf, 0, SH_BUFLEN);				// Clean buffer before printing
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {	// Get user input
 
-		if (strlen(buf) == 0 || '\n' == buf[0]) { 
+		if (0 == strlen(buf) || '\n' == buf[0]) {
 			prompt(); 
-			continue;		// Repeat loop on empty input
+			continue;
 		}		
 
-		buf[strlen(buf)-1] = '\0';	// Remove trailing newline
+		buf[strlen(buf)-1] = '\0';			// Remove trailing newline
 		cmd = sh_parse_input(buf);
 		
-		if('#' == cmd->fields[0][0]) continue; /* Skip commented lines */
-
+		if('#' == cmd->fields[0][0]) continue;		// Skip commented lines //
 		if (!strcmp(cmd->fields[0], "exit")) break;
 		
 		sh_do_command(cmd, buf);

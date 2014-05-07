@@ -726,9 +726,42 @@ static hlinkv* _new_link(filesystem* fs, dentv* parent, inode* src_ino, const ch
 }
 
 static int _rmlink(filesystem* fs, hlinkv* hv) {
-
+	size_t i = 0;
+	size_t j = 0;
+	
 	if (NULL == hv) return FS_ERR;
-	return FS_ERR;
+	if (NULL == hv->parent) return FS_ERR;
+	
+	hv->ino->datav.link->dest->nlinks--;
+	
+	/* Find the matching link in the parent */
+	for (i = 0; i < hv->parent->datav.dir->nlinks; i++) {
+		
+		/* If we have a match */
+		if (hv->ino->num == hv->parent->datav.dir->links[i]->num) {
+			
+			/* Coalesce links in the list to fill the emptied spot */
+			for (j = i; j < hv->parent->datav.dir->nlinks-1; i++) {
+				hv->parent->datav.dir->links[i] = hv->parent->datav.dir->links[i+1];
+				hv->parent->data.dir.links[i] = hv->parent->data.dir.links[i+1];
+			}
+			/* Last entry now empty */
+			hv->parent->data.dir.links[i] = 0;
+			hv->parent->datav.dir->links[i] = NULL;
+			
+			/* Remove the link */
+			hv->parent->datav.dir->nlinks--;
+			hv->parent->data.dir.nlinks--;
+			
+			_fs._inode_unload(fs, hv->ino);
+			
+			hv = NULL;
+			
+			break;
+		}
+	}
+	
+	return FS_OK;
 }
 
 static inode* _new_inode() {
@@ -1021,15 +1054,15 @@ static hlinkv* _load_link(filesystem* fs, dentv* parent, inode_t num) {
 
 /* Free the memory allocated to an in-memory file structure */
 static int _unload_link(filesystem* fs, inode* ino) {
-	int status1;
+//	int status1;
 	
-	free(ino->datav.link);
-	ino->datav.link = NULL;
+	free(ino->datav.file);
+	ino->datav.file = NULL;
 	ino->v_attached = false;
-	status1 = _inode_unload(fs, ino);
 	
-	if (FS_ERR == status1)
-		return FS_ERR;
+//	status1 = _inode_unload(fs, ino);
+//	if (FS_ERR == status1)
+//		return FS_ERR;
 	return FS_OK;
 }
 
@@ -1053,16 +1086,15 @@ static filev* _load_file(filesystem* fs, dentv* parent, inode_t num) {
 
 /* Free the memory allocated to an in-memory file structure */
 static int _unload_file(filesystem* fs, inode* ino) {
-	int status1;
+//	int status1;
 
 	free(ino->datav.file);
 	ino->datav.file = NULL;
 	ino->v_attached = false;
 
-	status1 = _inode_unload(fs, ino);
-
-	if (FS_ERR == status1)
-		return FS_ERR;
+//	status1 = _inode_unload(fs, ino);
+//	if (FS_ERR == status1)
+//		return FS_ERR;
 	return FS_OK;
 }
 
@@ -1180,7 +1212,7 @@ static int _unload_dir(filesystem* fs, inode* ino) {
 		ino->datav.dir = NULL;
 	}
 	
-	_inode_unload(fs, ino);
+//	_inode_unload(fs, ino);
 
 	return FS_OK;
 }
@@ -1226,7 +1258,7 @@ static int _v_detach(filesystem* fs, inode* ino) {
 	
 	if (ino->v_attached) {
 		switch (ino->mode) {
-
+			
 			case FS_DIR:
 			{
 				_unload_dir(fs, ino);
@@ -1259,7 +1291,7 @@ static int _v_detach(filesystem* fs, inode* ino) {
  * Return the inode at the end of this path or NULL if not found.
  */ 
 static inode* _stat_recurse(filesystem* fs, dentv* dv, size_t current_depth, size_t max_depth, fs_path* p) {
-	uint i;									// Declarations go here to satisfy Visual C compiler
+	uint i;											// Declarations go here to satisfy Visual C compiler
 	dentv* iterator;
 	inode *tmp;
 	
@@ -1319,11 +1351,11 @@ static inode* _files_iterate(filesystem* fs, dentv* dv, fs_path* p, size_t curre
 				if (FS_ERR == _v_attach(fs, dv->files[i]))
 					break;
 			}
-			return dv->files[i]->datav.file->ino;
+			return dv->files[i];
 		}
-		//else _unload_file(fs, fv->ino);		// TODO: this _load_file, _unload_file pair results in disk writes. Make write-free.
+		//else _unload_file(fs, fv->ino);					/* Hack: not freeing, unloading, closing anything */
 	}
-	return NULL;
+	return NULL;									/* No matching inode found */
 }
 
 static inode* _links_iterate(filesystem* fs, dentv* dv, fs_path* p, size_t current_depth) {
@@ -1337,10 +1369,11 @@ static inode* _links_iterate(filesystem* fs, dentv* dv, fs_path* p, size_t curre
 				if (FS_ERR == _v_attach(fs, dv->links[i]))
 					break;
 			}
-			return dv->links[i]->datav.link->ino;
+			dv->links[i]->datav.link->parent = dv->ino; /* Hack */
+			return dv->links[i];
 		}
 	}
-	return NULL;	/* No matching inode found */
+	return NULL;									/* No matching inode found */
 	
 }
 

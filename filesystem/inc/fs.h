@@ -33,7 +33,7 @@ typedef struct {
 	inode*		(* stat)		(char*);
 	inode*		(* statI)		(inode_t);
 	int		(* open)		(char*, char*, char*);
-	void		(* close)		(fd_t);
+	int		(* close)		(fd_t);
 	dentv*		(* opendir)		(char*);
 	void		(* closedir)		(dentv*);
 	char*		(* read)		(fd_t, size_t);
