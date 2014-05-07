@@ -12,29 +12,29 @@ The project is written in C and is cross-platform and tested on OSX 10.9.2 / XCo
 We support all required commands: 
 
 mkfs
-open filename flag
-read fd size
-write fd size
-seek fd offset
-close fd
-mkdir name
-rmdir name
-cd
-cd name
-link src dst
-unlink name
-stat name
-ls
-ls name
-cp src dst
-tree
-tree name
-import src dst
-export src dst
+open filename flag<br>
+read fd size<br>
+write fd size<br>
+seek fd offset<br>
+close fd<br>
+mkdir name<br>
+rmdir name<br>
+cd<br>
+cd name<br>
+link src dst<br>
+unlink name<br>
+stat name<br>
+ls<br>
+ls name<br>
+cp src dst<br>
+tree<br>
+tree name<br>
+import src dst<br>
+export src dst<br>
 
-License is BSD
+License is BSD<br>
 
-Doug Slater and Christopher Craig
+Doug Slater and Christopher Craig<br>
 
 <a href="mailto:cds@utk.edu">mailto:cds@utk.edu</a><br>
 <a href="mailto:ccraig7@utk.edu">mailto:ccraig7@utk.edu</a>
