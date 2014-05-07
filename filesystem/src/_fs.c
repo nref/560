@@ -2044,7 +2044,7 @@ static size_t _inode_read_direct_blocks(char* buf, block** blocks, size_t offset
 //		printf("%s\n", &blocks[i]->data[offset]);
 //		fflush(stdout);
 		len = strlen(&blocks[i]->data[offset]);
-		cpysize = min(stride, len-1);
+		cpysize = min(stride, len);
 
 		memcpy(&buf[read_cnt], &blocks[i]->data[offset], cpysize);
 		
