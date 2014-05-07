@@ -438,10 +438,16 @@ static char* read(fd_t fd, size_t size) {
 		return NULL;
 	}
 	
+	if (NULL == fv || NULL == fv->ino)
+		return NULL;
 	/* No need to check file size; _inode_read_data
 	 * will read as many are are allocated */
 	_fs._inode_fill_blocks_from_disk(fv->ino);
 	buf = _fs._inode_read_data(fv->ino, fv->seek_pos, size);
+	
+	if (NULL == buf)
+		return NULL;
+	
 	fv->seek_pos += strlen(buf);
 
 	return buf;

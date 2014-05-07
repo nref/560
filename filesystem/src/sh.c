@@ -915,6 +915,41 @@ int sh_cat(fs_args* cmd){
  		return FS_ERR;
 	}
 	
+	if (FS_DIR == src->mode) {
+		printf("Target \"%s\" is a directory.\n", abs_path);
+		free(abs_path);
+ 		return FS_ERR;
+	}
+		
+	if (FS_LINK == src->mode) {
+		inode* ino = src;
+		
+		const size_t max_recursion = 8;
+		size_t recursion = 0;
+		
+		/* Follow a path of links */
+		while (FS_LINK == ino->mode) {
+			if (max_recursion == recursion) {
+				printf("opendir: Too many nested links (%zu).\n", recursion);
+				return FS_ERR;
+			}
+			
+			if (NULL == ino->datav.link) {
+				printf("opendir: Link \"%s\" leads to NULL datav.\n", src->datav.link->name);
+				return FS_ERR;
+			}
+			
+			ino = ino->datav.link->dest;
+			++recursion;
+		}
+		
+		if (FS_DIR == ino->mode) {
+			printf("Target \"%s\" links to a directory.\n", abs_path);
+			free(abs_path);
+			return FS_ERR;
+		}
+	}
+		
 	open_tmp = newArgs();
 	open_tmp->nfields = 3;
 	strcpy(open_tmp->fields[0], "open");
