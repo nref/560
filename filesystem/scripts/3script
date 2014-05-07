@@ -6,3 +6,4 @@ open test r
 read 0 89810 
 close 0 
 exit
+
