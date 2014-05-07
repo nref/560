@@ -7,7 +7,7 @@ Implemented is a basic user-level filesystem and shell. The filesystem exists in
 
 Only text files are supported in the filesystem. Binary files are not supported.
 
-The project is written in C and is cross-platform and tested on OSX 10.9.2 / XCode 5.1.1 Apple LLVM 5.1, Ubuntu 12.04 LTS / gcc-4.6.3, and Windows 8.1 / Visual Studio 2012 Visual C.
+The project is written in C and is cross-platform and tested on OSX 10.9.2 / XCode 5.1.1 Apple LLVM 5.1, Ubuntu 12.04 LTS / gcc-4.6.3, and Windows 8.1 / Visual Studio 2012 Visual C Compiler 17.0.61030.0.
 
 We support all required commands: 
 
