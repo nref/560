@@ -82,7 +82,7 @@ void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 			int found_closing_quote = false;
 			
 			/* Find index of opening quote */
-			for (j = k; j < len; j++) {
+			for (; j < len; j++) {
 				
 				if ('\"' == str[j]) {
 					k = j;
@@ -100,9 +100,9 @@ void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 			}
 		
 			if (found_closing_quote) {
-				/* k+1 to skip opening quote */
-				strncpy(args->fields[i], &str[k+1] , min(SH_MAXFIELDSIZE-1, j-k));
-				args->fields[i][j-k] = '\0';	/* We would have j-k if not skipping closing quote */
+				/* k+1 to skip opening quote, j-k-1 skip closing quote */
+				strncpy(args->fields[i], &str[k+1] , min(SH_MAXFIELDSIZE-1, j-k-1));
+				args->fields[i][j-k] = '\0';
 				args->nfields++;
 				
 				/* Reset str_cpy, continue from closing quote */
@@ -112,6 +112,7 @@ void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 				str_cpy[len] = '\0';
 				
 				next_field = strtok(&str_cpy[j+1], delim);
+				j++;
 				continue;
 			}
 		}
@@ -924,7 +925,7 @@ fs_args* sh_parse_input(char* buf) {
 	// Bring quoted fields into one field
 	sh_fs_args_quote_split(cmd);
 
-	// Hack to handle leading, traling whitespace in quote
+	// Hack to handle leading, trailing whitespace in quote
 	for (i = 0; i < cmd->nfields; i++)
 		if (cmd->quoted_fields[i])
 			strcpy(cmd->fields[i], cmd_quotes->fields[cmd->quoted_fields[i]]);

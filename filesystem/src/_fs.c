@@ -2081,7 +2081,7 @@ static char* _inode_read_data(inode* ino, size_t seek_pos, size_t len) {
 
 	max_seek = ino->size;
 	
-	buf = (char*)calloc(BLKSIZE*MAXBLOCKS_DIRECT, sizeof(char));
+	buf = (char*)calloc((len%stride)*BLKSIZE, sizeof(char));
 
 	offset = seek_pos % stride;
 	blk = (block_t)(seek_pos / stride);
@@ -2144,7 +2144,7 @@ static char* _inode_read_data(inode* ino, size_t seek_pos, size_t len) {
 
 	/* We may have read more than asked for; return just the part asked for */
 	output = (char*)malloc(len + 1);
-
+	
 	memcpy(output, buf, len);
 	output[len] = '\0';
 	
