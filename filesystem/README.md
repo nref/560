@@ -12,25 +12,25 @@ The project is written in C and is cross-platform and tested on OSX 10.9.2 / XCo
 We support all required commands: 
 
 mkfs
-open <filename> <flag>
-read <fd> <size>
-write <fd> <size>
-seek <fd> <offset>
-close <fd>
-mkdir <name>
-rmdir <name>
+open filename flag
+read fd size
+write fd size
+seek fd offset
+close fd
+mkdir name
+rmdir name
 cd
-cd <name>
-link <src> <dst>
-unlink <name>
-stat <name>
+cd name
+link src dst
+unlink name
+stat name
 ls
-ls <name>
-cp <src> <dst>
+ls name
+cp src dst
 tree
-tree <name>
-import <src> <dst>
-export <src> <dst>
+tree name
+import src dst
+export src dst
 
 License is BSD
 
