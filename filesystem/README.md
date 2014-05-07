@@ -11,7 +11,7 @@ The project is written in C and is cross-platform and tested on OSX 10.9.2 / XCo
 
 We support all required commands: 
 
-mkfs
+mkfs<br>
 open filename flag<br>
 read fd size<br>
 write fd size<br>
