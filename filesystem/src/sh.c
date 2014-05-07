@@ -991,6 +991,7 @@ int sh_cat(fs_args* cmd){
 			free(abs_path);
 			return FS_ERR;
 		}
+		src = ino;
 	}
 		
 	open_tmp = newArgs();

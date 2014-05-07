@@ -242,6 +242,7 @@ static int open(char* parent_dir, char* name, char* mode) {
 			}
 			
 			f_ino = f_ino->datav.link->dest;
+			
 			if (!f_ino->v_attached)
 				_fs._v_attach(shfs, f_ino);
 			++recursion;
