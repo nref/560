@@ -818,7 +818,7 @@ static void _free_inode(inode* ino) {
 		if (!ino->directblocks[i])
 			continue;
 
-		free(ino->directblocks[i]);
+//		free(ino->directblocks[i]);
 		ino->directblocks[i] = NULL;
 		
 		++blks_freed;
@@ -835,7 +835,7 @@ static void _free_inode(inode* ino) {
 			if (!ino->ib1->blocks[i])
 				continue;
 
-			free(ino->ib1->blocks[i]);
+//			free(ino->ib1->blocks[i]);
 			ino->ib1->blocks[i] = NULL;
 			
 			++blks_freed;
@@ -859,13 +859,13 @@ static void _free_inode(inode* ino) {
 				if (!ino->ib2->iblocks[i])
 					continue;
 
-				free(ino->ib2->iblocks[i]->blocks[j]);
+//				free(ino->ib2->iblocks[i]->blocks[j]);
 				ino->ib2->iblocks[i]->blocks[j] = NULL;
 				
 				++blks_freed;
 			}
 
-			free(ino->ib2->iblocks[i]);
+//			free(ino->ib2->iblocks[i]);
 			ino->ib2->iblocks[i] = NULL;
 		}
 //		free(ino->ib2);
@@ -894,16 +894,16 @@ static void _free_inode(inode* ino) {
 					if (!ino->ib3->iblocks[i]->iblocks[j]->blocks[k])
 						continue;
 					
-					free(ino->ib3->iblocks[i]->iblocks[j]->blocks[k]);
+//					free(ino->ib3->iblocks[i]->iblocks[j]->blocks[k]);
 					ino->ib3->iblocks[i]->iblocks[j]->blocks[k] = NULL;
 					
 					++blks_freed;
 				}
 
-				free(ino->ib3->iblocks[i]->iblocks[j]);
+//				free(ino->ib3->iblocks[i]->iblocks[j]);
 				ino->ib3->iblocks[i]->iblocks[j] = NULL;
 			}
-			free(ino->ib3->iblocks[i]);
+//			free(ino->ib3->iblocks[i]);
 			ino->ib3->iblocks[i] = NULL;
 		}
 //		free(ino->ib3);
@@ -1019,7 +1019,7 @@ static hlinkv* _ino_to_lv(filesystem* shfs, inode* ino) {
 	return lv;
 }
 
-static hlinkv* _load_link(filesystem* fs, dentv* parent, inode_t num) {
+static hlinkv* _load_link(filesystem* fs, /* dentv* parent, */ inode_t num) {
 	inode* ino = _inode_load(fs, num);
 	hlinkv* lv = NULL;
 	filev* fv = NULL;
@@ -1033,7 +1033,7 @@ static hlinkv* _load_link(filesystem* fs, dentv* parent, inode_t num) {
 //	}
 	
 	if (FS_FILE == ino->data.link.mode) {
-		fv = _fs._load_file(fs, NULL, ino->data.link.dest);
+		fv = _fs._load_file(fs, ino->data.link.dest);
 		ino->datav.link->dest = fv->ino;
 	}
 	
@@ -1044,7 +1044,7 @@ static hlinkv* _load_link(filesystem* fs, dentv* parent, inode_t num) {
 	
 	else if (FS_LINK == ino->data.link.mode) {
 		if (ino->data.link.dest != ino->num) {	/* Don't link a link to itself */
-			lv = _fs._load_link(fs, NULL, ino->data.link.dest);
+			lv = _fs._load_link(fs, ino->data.link.dest);
 			ino->datav.link->dest = lv->ino;
 		}
 	}
@@ -1053,7 +1053,7 @@ static hlinkv* _load_link(filesystem* fs, dentv* parent, inode_t num) {
 }
 
 /* Free the memory allocated to an in-memory file structure */
-static int _unload_link(filesystem* fs, inode* ino) {
+static int _unload_link(/* filesystem* fs, */ inode* ino) {
 //	int status1;
 	
 	free(ino->datav.file);
@@ -1068,7 +1068,7 @@ static int _unload_link(filesystem* fs, inode* ino) {
 
 /* Given an inode number, load the corresponding file structure. 
  * Wrap it in an inode which contains the in-memory version of the file */
-static filev* _load_file(filesystem* fs, dentv* parent, inode_t num) {
+static filev* _load_file(filesystem* fs, /* dentv* parent, */ inode_t num) {
 	inode* ino = _inode_load(fs, num);
 	
 	ino->datav.file = _ino_to_fv(fs, ino);
@@ -1085,7 +1085,7 @@ static filev* _load_file(filesystem* fs, dentv* parent, inode_t num) {
 }
 
 /* Free the memory allocated to an in-memory file structure */
-static int _unload_file(filesystem* fs, inode* ino) {
+static int _unload_file(/*filesystem* fs, */ inode* ino) {
 //	int status1;
 
 	free(ino->datav.file);
@@ -1159,12 +1159,12 @@ static dentv* _load_dir(filesystem* fs, inode_t num) {
 	}
 
 	for (i = 0; i < dv->nfiles; i++) {
-		filev* fv = _load_file(fs, dv, dv->ino->data.dir.files[i]);
+		filev* fv = _load_file(fs, /*dv,*/ dv->ino->data.dir.files[i]);
 		dv->files[i] = fv->ino;
 	}
 	
 	for (i = 0; i < dv->nlinks; i++) {
-		hlinkv* lv = _load_link(fs, dv, dv->ino->data.dir.links[i]);
+		hlinkv* lv = _load_link(fs, /*dv,*/ dv->ino->data.dir.links[i]);
 		dv->links[i] = lv->ino;
 	}
 	
@@ -1203,10 +1203,10 @@ static int _unload_dir(filesystem* fs, inode* ino) {
 		}
 
 		for (i = 0; i < dv->nfiles; i++)
-			_unload_file(fs, dv->files[i]);
+			_unload_file(dv->files[i]);
 		
 		for (i = 0; i < dv->nlinks; i++)
-			_unload_link(fs, dv->links[i]);
+			_unload_link(dv->links[i]);
 		
 		free(ino->datav.dir);
 		ino->datav.dir = NULL;
@@ -1236,12 +1236,12 @@ static int _v_attach(filesystem* fs, inode* ino) {
 			}
 			case FS_FILE:
 			{
-				ino->datav.file = _load_file(fs, NULL, ino->num);
+				ino->datav.file = _load_file(fs, ino->num);
 				break;
 			}
 			case FS_LINK:
 			{
-				ino->datav.link = _load_link(fs, NULL, ino->num);
+				ino->datav.link = _load_link(fs, ino->num);
 				break;
 			}
 		}
@@ -1266,12 +1266,12 @@ static int _v_detach(filesystem* fs, inode* ino) {
 			}
 			case FS_FILE:
 			{
-				_unload_file(fs, ino);
+				_unload_file(ino);
 				break;
 			}
 			case FS_LINK:
 			{
-				_unload_link(fs, ino);
+				_unload_link(ino);
 				break;
 			}
 		}
@@ -1342,7 +1342,7 @@ static inode* _files_iterate(filesystem* fs, dentv* dv, fs_path* p, size_t curre
 	/* Iterate over files */
 	for (i = 0; i < (int)dv->nfiles; i++) {						// For each file at this level
 		
-		filev* fv = _load_file(fs, dv, dv->ino->data.dir.files[i]);
+		filev* fv = _load_file(fs, /*dv,*/ dv->ino->data.dir.files[i]);
 		
 		if (!strcmp(fv->name, p->fields[current_depth])) {
 			dv->files[i] = fv->ino;
@@ -2031,7 +2031,8 @@ static size_t _inode_read_direct_blocks(char* buf, block** blocks, size_t offset
 	uint i;
 	size_t read_cnt = 0;
 	size_t cpysize = 0;
-
+	size_t len;
+	
 	if (NULL == blocks) return 0;
 	
 	for (i = 0; i < MAXBLOCKS_DIRECT; i++) {
@@ -2039,7 +2040,11 @@ static size_t _inode_read_direct_blocks(char* buf, block** blocks, size_t offset
 		if (NULL == blocks[i])
 			return read_cnt;
 
-		cpysize = min(stride, strlen(&blocks[i]->data[offset]));
+//		printf("i, offset: %d, %zu \n", i, offset);
+//		printf("%s\n", &blocks[i]->data[offset]);
+//		fflush(stdout);
+		len = strlen(&blocks[i]->data[offset]);
+		cpysize = min(stride, len-1);
 
 		memcpy(&buf[read_cnt], &blocks[i]->data[offset], cpysize);
 		
@@ -2074,8 +2079,8 @@ static char* _inode_read_data(inode* ino, size_t seek_pos, size_t len) {
 	
 	if (NULL == ino) return NULL;
 
-	max_seek = (ino->ndatablocks)*BLKSIZE;
-
+	max_seek = ino->size;
+	
 	buf = (char*)calloc(BLKSIZE*MAXBLOCKS_DIRECT, sizeof(char));
 
 	offset = seek_pos % stride;
@@ -2083,9 +2088,13 @@ static char* _inode_read_data(inode* ino, size_t seek_pos, size_t len) {
 
 	while (read_cnt < len) {
 		last_read_count = read_cnt;
-		if (seek_pos >= max_seek || seek_pos + len >= max_seek)
+		if (seek_pos >= max_seek)
 			break; /* Next read would go out-of-bounds */
 
+		if (seek_pos + read_cnt >= max_seek) {
+			break;
+		}
+		
 		if	(blk < MAXBLOCKS_DIRECT)					indirection = DIRECT;
 		else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1)			indirection = INDIRECT1;
 		else if (blk < MAXBLOCKS_DIRECT + MAXBLOCKS_IB1 + MAXBLOCKS_IB2)	indirection = INDIRECT2;
@@ -2420,7 +2429,7 @@ static void _debug_print() {
 	printf("%s", ANSI_COLOR_BLUE);
 #endif
 	
-	printf("Size of the filesystem (kB): %d \n\n", MAXBLOCKS*BLKSIZE/1024);
+	printf("Size of the filesystem (kB): %d \n", MAXBLOCKS*BLKSIZE/1024);
 	
 	printf("\tMaximum file size (kB): %d\n", MAXFILEBLOCKS*BLKSIZE/1024);
 	printf("\tMaximum path length (chars): %d\n", FS_MAXPATHLEN);

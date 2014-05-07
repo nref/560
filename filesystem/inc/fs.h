@@ -41,6 +41,8 @@ typedef struct {
 	void		(* seek)		(fd_t, size_t);
 	int		(* link)		(char* from, char* to);
 	int		(* ulink)		(char*);
+	
+	size_t		(* getNumUsedBlocks)	();
 
 } fs_public_interface;
 extern fs_public_interface const fs;

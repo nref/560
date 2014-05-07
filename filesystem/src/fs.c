@@ -409,7 +409,7 @@ static void closedir (dentv* dv) {
  * @ param fd file descriptor
  * @ param size number of bytes to read from file */
 static char* read(fd_t fd, size_t size) {
-	//printf("fs_read: %d %d\n", fd, size);
+
 	filev* fv = NULL;
 	char* buf;
 	
@@ -440,6 +440,7 @@ static char* read(fd_t fd, size_t size) {
 	
 	if (NULL == fv || NULL == fv->ino)
 		return NULL;
+	
 	/* No need to check file size; _inode_read_data
 	 * will read as many are are allocated */
 	_fs._inode_fill_blocks_from_disk(fv->ino);
@@ -561,13 +562,10 @@ static int link(char* from, char* to) {
 
 	return FS_OK;
 }
+
 static int ulink(char* target) {
-	// TODO
 
-	fs_path* dst_path = NULL;
 	inode* src_ino = NULL;
-
-	dst_path = fs.pathFromString(target);
 
 	src_ino = stat(target);
 
@@ -584,6 +582,16 @@ static int ulink(char* target) {
 	return _fs._rmlink(shfs, src_ino->datav.link);
 }
 
+static size_t getNumUsedBlocks() {
+	size_t i;
+	size_t total = 0;
+	
+	for (i = 0; i < MAXINODES; i++)
+		total += shfs->sb.inode_block_counts[i];
+
+	return total;
+}
+
 fs_public_interface const fs = 
 { 
 	pathFree, newPath, tokenize, pathFromString, stringFromPath,		/* Path management */
@@ -595,5 +603,7 @@ fs_public_interface const fs =
 	destruct, openfs, mkfs, mkdir, rmdir,
 	stat, statI, open, close, opendir, closedir,
 	read, write, seek,
-	link, ulink
+	link, ulink,
+	
+	getNumUsedBlocks
 };

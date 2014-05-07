@@ -13,18 +13,18 @@
 dentv* cur_dv = NULL;
 char* current_path;
 
-#define NOFS 5
-#define TOOFEWARGS 6
+#define NOFS -2
+#define TOOFEWARGS -3
 
 static fs_args* newArgs() {
 	uint i = 0;
 	fs_args* args = (fs_args*)malloc(sizeof(fs_args));
 	args->fieldSize = SH_MAXFIELDSIZE;
 
-	for (i = 0; i < SH_MAXFIELDS; i++) {
+	for (i = 0; i < SH_MAXFSARGS; i++)
 		memset(args->fields[i], 0, SH_MAXFIELDSIZE);
-	}
-	memset(args->quoted_fields, 0, sizeof(int)*SH_MAXFSARGS);
+
+	memset(args->quoted_fields, 0, sizeof(size_t)*SH_MAXFSARGS);
 
 	args->nfields = 0;
 	args->firstField = 0;
@@ -33,8 +33,12 @@ static fs_args* newArgs() {
 }
 
 static void argsFree(fs_args* p) {
+	size_t i;
 	if (NULL == p) return;
 
+	for (i = 0; i < SH_MAXFSARGS; i++) {
+		memset(p->fields[i], 0, SH_MAXFIELDSIZE);
+	}
 	free(p);
 	p = NULL;
 }
@@ -42,8 +46,12 @@ static void argsFree(fs_args* p) {
 /* Split a string on delimiter(s) */
 void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 	size_t i = 0;
+	size_t j = 0;
+	size_t k = 0;
+	
 	char* next_field	= NULL;
 	size_t len;
+	size_t next_len;
 	char* str_cpy;
 
 	if (NULL == str || '\0' == str[0]) return;
@@ -51,7 +59,7 @@ void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 	len = strlen(str);
 	str_cpy = (char*)malloc(len + 1);
 	
-	// Copy the input because strtok replaces delimieter with '\0'
+	// Copy the input because strtok replaces delimiter with '\0'
 	strncpy(str_cpy, str, min(SH_MAXFIELDSIZE-1, len+1));	
 	str_cpy[len] = '\0';
 
@@ -60,16 +68,56 @@ void sh_tokenize(const char* str, const char* delim, fs_args* args) {
 	while (NULL != next_field) {
 
 		i = args->nfields;
-		len = strlen(next_field);
-
-		/* Hack, I know */
+		next_len = strlen(next_field);
+		
+		/* Hack; TODO should check for arbitrary white space */
 		if (!strcmp(" ", next_field) || !strcmp("  ", next_field) ) {
 			next_field = strtok(NULL, delim);
 			continue;
 		}
 
-		strncpy(args->fields[i], next_field, min(SH_MAXFIELDSIZE-1, len+1));	
-		args->fields[i][len] = '\0';
+		/* Find opening, closing quote */
+		if ('\"' == next_field[0]) {
+		
+			int found_closing_quote = false;
+			
+			/* Find index of opening quote */
+			for (j = k; j < len; j++) {
+				
+				if ('\"' == str[j]) {
+					k = j;
+					break;
+				}
+			}
+			
+			/* Find index of closing quote */
+			for (j = k+1; j < len; j++) {
+				
+				if ('\"' == str[j]) {
+					found_closing_quote = true;
+					break;
+				}
+			}
+		
+			if (found_closing_quote) {
+				/* k+1 to skip opening quote */
+				strncpy(args->fields[i], &str[k+1] , min(SH_MAXFIELDSIZE-1, j-k));
+				args->fields[i][j-k] = '\0';	/* We would have j-k if not skipping closing quote */
+				args->nfields++;
+				
+				/* Reset str_cpy, continue from closing quote */
+				free(str_cpy);
+				str_cpy = (char*)malloc(len + 1);
+				strncpy(str_cpy, str, min(SH_MAXFIELDSIZE-1, len+1));
+				str_cpy[len] = '\0';
+				
+				next_field = strtok(&str_cpy[j+1], delim);
+				continue;
+			}
+		}
+	
+		strncpy(args->fields[i], next_field, min(SH_MAXFIELDSIZE-1, next_len));
+		args->fields[i][next_len] = '\0';
 
 		if (args->nfields + 1 == SH_MAXFSARGS)
 			break;
@@ -413,7 +461,7 @@ int sh_open(fs_args* cmd){
 	return fd;
 }
 
-char* sh_read(int fd, size_t size){
+char* sh_read(int fd, size_t size) {
 	char* rdbuf = NULL;
 	
 	rdbuf = fs.read(fd, size);
@@ -443,7 +491,7 @@ int sh_write(fs_args* cmd) {
 	write_expected_byte_count = strlen(cmd->fields[2]);
 	write_byte_count = fs.write(fd, cmd->fields[2]);
 
-	printf("Wrote %lu of %lu bytes to fd %d ",
+	printf("Wrote %lu of %lu bytes to fd %d \n",
 		write_byte_count, write_expected_byte_count, fd);
 
 	if (write_expected_byte_count != write_byte_count) 
@@ -869,23 +917,17 @@ fs_args* sh_parse_input(char* buf) {
 	cmd = newArgs();
 	sh_tokenize(buf, delimiter, cmd);
 		
-	//TODO issue here w/ treating every like as a newline
-	
-	/* Split input on quoted strings.
-		* First element will be the unquoted leading input,
-		* Second to n elements will be quoted fields, and the (n+1)th
-		* Element will be the trailing unquoted input
-		* e.g. write 0 "this is a long string   " works
-		*as well as "open "long file name" w */
+	// Split input on quote
 	cmd_quotes = newArgs();
 	sh_tokenize(buf, "\"", cmd_quotes);
+	
+	// Bring quoted fields into one field
 	sh_fs_args_quote_split(cmd);
 
+	// Hack to handle leading, traling whitespace in quote
 	for (i = 0; i < cmd->nfields; i++)
-	{
 		if (cmd->quoted_fields[i])
 			strcpy(cmd->fields[i], cmd_quotes->fields[cmd->quoted_fields[i]]);
-	}
 
 	argsFree(cmd_quotes);
 	return cmd;
@@ -955,12 +997,14 @@ int sh_cat(fs_args* cmd){
 	strcpy(open_tmp->fields[0], "open");
 	strcpy(open_tmp->fields[1], abs_path);
 	strcpy(open_tmp->fields[2], "r");
-	fd = sh_open(open_tmp); //should check if return null
+	fd = sh_open(open_tmp);
+	
+	if (FS_ERR != fd) {
+		out_buf = sh_read(fd, src->size); //memory was malloced for this
+		printf("%s\n",out_buf);
+	}
+	
 	argsFree(open_tmp);
-	
-	out_buf = sh_read(fd, src->size); //memory was malloced for this
-	printf("%s\n",out_buf);
-	
 	sh_close(fd);
 	free(out_buf);
 	free(abs_path);
@@ -968,10 +1012,6 @@ int sh_cat(fs_args* cmd){
 	return FS_OK;
  }
 
-/*ccraig7
- I openly admit this is not the 'best' way to 
- accomplish this goal by abusing sh_read/sh_write
-*/
 int sh_cp(char* src_file, char* dest_file){
 	int fd = 0;
 	char* src_buf = NULL;
@@ -1038,6 +1078,10 @@ void sh_do_command(fs_args* cmd, char* buf) {
 	} else if (NULL == current_path || current_path[0] == '\0') {
 		retv = NOFS;
 	}
+	else if (!strcmp(cmd->fields[0], "df")) {
+		printFreeSpace();
+	}
+	
 	else if (!strcmp(cmd->fields[0], "ls")) {
 		
 		if (1 < cmd->nfields) {	// If the user provided more than one field
@@ -1128,7 +1172,7 @@ void sh_do_command(fs_args* cmd, char* buf) {
 			else {
 				retv = FS_OK;
 				printf("%s\n",rdbuf);
-				free(rdbuf);
+//				free(rdbuf);
 			}
 		} else retv = TOOFEWARGS;
 		
@@ -1210,6 +1254,18 @@ void sh_do_command(fs_args* cmd, char* buf) {
 	printf("\n");
 }
 
+void printFreeSpace() {
+	int nused;
+	double percent;
+	
+	nused = (int)fs.getNumUsedBlocks();
+	percent = (double)nused / (double)MAXBLOCKS;
+	
+	printf("Space usage:\n");
+	printf("\tBlocks used: %d / %d\n", nused, MAXBLOCKS);
+	printf("\t%% used space: %lf)\n\n", percent);
+}
+
 int main() {
 	char buf[SH_BUFLEN] = "";	// Buffer for user input
 
@@ -1219,7 +1275,7 @@ int main() {
 	_fs._debug_print();
 	fs.openfs();
 	sh_getfsroot();
-
+	
 	prompt();
         memset(buf, 0, SH_BUFLEN);				// Clean buffer before printing
 	while (NULL != fgets(buf, SH_BUFLEN-1, stdin)) {	// Get user input

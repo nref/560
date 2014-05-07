@@ -205,8 +205,8 @@ typedef struct superblock {
 	size_t free_blocks_base;			// Index of lowest unallocated block
 	inode_t free_inodes_base;			// Index of lowest unallocated inode
 	inode_t root;					// Inode number of root directory entry
-	block_t inode_first_blocks[MAXBLOCKS];		// Index of first allocated block for each inode.
-	size_t inode_block_counts[MAXBLOCKS];		// How many allocated blocks for each inode.
+	block_t inode_first_blocks[MAXINODES];		// Index of first allocated block for each inode.
+	size_t inode_block_counts[MAXINODES];		// How many allocated blocks for each inode.
 
 } superblock;
 
@@ -273,14 +273,14 @@ typedef struct {
 	
 	dentv*			(* _mkroot)		(filesystem* , int);
 	
-	filev*			(* _load_file)		(filesystem*, dentv* parent, inode_t);
-	int			(* _unload_file)	(filesystem*, inode*);
+	filev*			(* _load_file)		(filesystem*, /*dentv* parent,*/ inode_t);
+	int			(* _unload_file)	(/*filesystem*,*/ inode*);
 
 	dentv*			(* _load_dir)		(filesystem* , inode_t);
 	int			(* _unload_dir)		(filesystem* , inode*);
 
-	hlinkv*			(* _load_link)		(filesystem*, dentv* parent, inode_t);
-	int			(* _unload_link)	(filesystem* , inode*);
+	hlinkv*			(* _load_link)		(filesystem*, /* dentv* parent, */ inode_t);
+	int			(* _unload_link)	(/*filesystem*,*/ inode*);
 	
 	dentv*			(* _new_dir)		(filesystem* , dentv*, const char*);
 	int			(* _rmdir)		(filesystem* , dentv*);
